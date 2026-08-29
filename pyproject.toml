@@ -1,0 +1,51 @@
+[project]
+name = "django-tunables"
+version = "0.1.0"
+requires-python = ">=3.12"
+description = "Runtime-tunable parameters for Django with change sets, versioned snapshots and schema-described forms."
+license = {text = "MIT"}
+readme = "README.md"
+dependencies = ["Django>=5.2", "djangorestframework>=3.15"]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-cov", "pytest-django", "jsonschema", "django-tunables[fixtures]", "ipdb"]
+fixtures = ["testcontainers[postgres]==4.12.0", "psycopg[binary]"]
+lint = ["ruff", "mypy", "django-stubs", "djangorestframework-stubs"]
+openapi = ["drf-spectacular"]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+[tool.setuptools.packages.find]
+where = ["src"]
+[tool.setuptools.package-data]
+tunables = ["py.typed", "schemas/*.json", "templates/**/*.html"]
+
+[tool.ruff]
+src = ["src"]
+line-length = 120
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "A", "ARG", "PTH", "SIM", "T20"]
+ignore = ["E501", "B008"]
+[tool.ruff.lint.per-file-ignores]
+"test_*.py" = ["ARG001", "ARG002"]
+"conftest.py" = ["ARG001", "ARG002"]
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+[tool.django-stubs]
+django_settings_module = "tests.settings"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+pythonpath = ["."]
+addopts = "--strict-markers"
+markers = ["postgres: needs a PostgreSQL testcontainer"]

@@ -1,0 +1,39 @@
+# Local notes
+_*.md
+
+# IDE-specific files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Dependency directories
+.venv/
+venv/
+env/
+
+# Python specific
+__pycache__/
+*.pyc
+*.log
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Local tool state
+.claude/settings.local.json
+.agents/
+AGENTS.md
+
+# Operating System files
+.DS_Store
+Thumbs.db
