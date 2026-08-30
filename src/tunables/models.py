@@ -3,6 +3,8 @@ from typing import Any
 from django.db import models
 from django.utils import timezone
 
+from tunables.errors import HistoryIsAppendOnly
+
 
 class ActorSource(models.TextChoices):
     VERIFIED = "verified"
@@ -19,7 +21,7 @@ class ChangeSource(models.TextChoices):
 
 
 class State(models.Model):
-    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    id = models.PositiveSmallIntegerField(primary_key=True, editable=False)
     current_version = models.PositiveIntegerField(default=0)
     catalogue_version = models.CharField(max_length=80, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -28,7 +30,7 @@ class State(models.Model):
         constraints = [models.CheckConstraint(condition=models.Q(id=1), name="tunables_state_single_row")]
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        # TODO: force pk 1
+        self.pk = 1
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
@@ -60,11 +62,11 @@ class TunableDefinition(models.Model):
 
 
 class AppendOnlyQuerySet(models.QuerySet["AppendOnlyModel"]):
-    def update(self, **kwargs: Any) -> int:
-        raise NotImplementedError  # TODO: raise HistoryIsAppendOnly
+    def update(self, **_: Any) -> int:
+        raise HistoryIsAppendOnly("history rows cannot be updated")
 
     def delete(self) -> tuple[int, dict[str, int]]:
-        raise NotImplementedError  # TODO: raise HistoryIsAppendOnly
+        raise HistoryIsAppendOnly("history rows cannot be deleted")
 
 
 class AppendOnlyModel(models.Model):
@@ -74,11 +76,13 @@ class AppendOnlyModel(models.Model):
         abstract = True
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        # TODO: refuse when not adding, force insert when adding
+        if not self._state.adding:
+            raise HistoryIsAppendOnly("history rows cannot be updated")
+        kwargs["force_insert"] = True
         super().save(*args, **kwargs)
 
-    def delete(self, *args: Any, **kwargs: Any) -> tuple[int, dict[str, int]]:
-        raise NotImplementedError  # TODO: raise HistoryIsAppendOnly
+    def delete(self, *_: Any, **__: Any) -> tuple[int, dict[str, int]]:
+        raise HistoryIsAppendOnly("history rows cannot be deleted")
 
 
 class ChangeSet(AppendOnlyModel):

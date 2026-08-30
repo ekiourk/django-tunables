@@ -132,7 +132,7 @@ class Migration(migrations.Migration):
             fields=[
                 (
                     "id",
-                    models.PositiveSmallIntegerField(default=1, editable=False, primary_key=True, serialize=False),
+                    models.PositiveSmallIntegerField(editable=False, primary_key=True, serialize=False),
                 ),
                 ("current_version", models.PositiveIntegerField(default=0)),
                 ("catalogue_version", models.CharField(blank=True, max_length=80)),
