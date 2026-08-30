@@ -5,6 +5,7 @@ import pytest
 from django import forms
 from django.core.exceptions import ValidationError
 
+from tests.catalogue import HexColour
 from tunables.errors import ConstraintError, TypeCoercionError
 from tunables.types import Boolean, Enum, Float, Integer, List, String, TunableType
 
@@ -248,31 +249,6 @@ def test_form_field_cleaning_enforces_validate(tunable_type: TunableType, raw: s
 )
 def test_describe(tunable_type: TunableType, expected: dict[str, Any]) -> None:
     assert tunable_type.describe() == expected
-
-
-class HexColour(TunableType):
-    name = "hex_colour"
-
-    def coerce(self, raw: Any) -> str:
-        if not isinstance(raw, str):
-            raise TypeCoercionError("expected a string")
-        return raw.lower()
-
-    def validate(self, value: Any) -> None:
-        if len(value) != 7 or not value.startswith("#"):
-            raise ConstraintError("format", "must look like #rrggbb")
-
-    def to_json(self, value: Any) -> str:
-        return str(value)
-
-    def json_schema(self) -> dict[str, Any]:
-        return {"type": "string", "pattern": "^#[0-9a-f]{6}$"}
-
-    def form_field(self, **kwargs: Any) -> forms.Field:
-        return forms.CharField(**kwargs)
-
-    def describe(self) -> dict[str, Any]:
-        return {"name": self.name, "params": {}}
 
 
 def test_custom_type_works_through_the_base_interface() -> None:
