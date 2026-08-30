@@ -33,9 +33,6 @@ class State(models.Model):
         self.pk = 1
         super().save(*args, **kwargs)
 
-    def __str__(self) -> str:
-        return f"version {self.current_version}"
-
 
 class TunableDefinition(models.Model):
     key = models.CharField(max_length=255, unique=True)
@@ -56,9 +53,6 @@ class TunableDefinition(models.Model):
 
     class Meta:
         ordering = ["group_name", "order", "name"]
-
-    def __str__(self) -> str:
-        return self.key
 
 
 class AppendOnlyQuerySet(models.QuerySet["AppendOnlyModel"]):
@@ -101,9 +95,6 @@ class ChangeSet(AppendOnlyModel):
     class Meta:
         ordering = ["-version"]
 
-    def __str__(self) -> str:
-        return f"change set {self.version}"
-
 
 class ChangeItem(AppendOnlyModel):
     changeset = models.ForeignKey(ChangeSet, on_delete=models.CASCADE, related_name="items")
@@ -117,9 +108,6 @@ class ChangeItem(AppendOnlyModel):
         ordering = ["key"]
         constraints = [models.UniqueConstraint(fields=["changeset", "key"], name="tunables_changeitem_unique_key")]
 
-    def __str__(self) -> str:
-        return self.key
-
 
 class TunableValue(models.Model):
     key = models.CharField(max_length=255, unique=True)
@@ -127,9 +115,6 @@ class TunableValue(models.Model):
     value = models.JSONField()
     changeset = models.ForeignKey(ChangeSet, on_delete=models.PROTECT)
     updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self) -> str:
-        return self.key
 
 
 class Snapshot(AppendOnlyModel):
@@ -142,6 +127,3 @@ class Snapshot(AppendOnlyModel):
 
     class Meta:
         ordering = ["-version"]
-
-    def __str__(self) -> str:
-        return f"snapshot {self.version}"
