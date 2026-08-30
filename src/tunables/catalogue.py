@@ -3,6 +3,7 @@ import json
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from functools import cached_property
 from typing import Any
 
 from django.utils.functional import Promise
@@ -93,7 +94,7 @@ class Catalogue:
             group.name: {tunable.name: tunable.default for tunable in group.tunables} for group in self.groups.values()
         }
 
-    @property
+    @cached_property
     def version(self) -> str:
         description: dict[str, Any] = {
             "groups": [
