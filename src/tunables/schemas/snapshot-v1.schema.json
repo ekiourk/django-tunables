@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:tunables:snapshot:v1",
+  "title": "Tunables snapshot document, format version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format_version",
+    "version",
+    "created_at",
+    "catalogue_version",
+    "environment",
+    "groups",
+    "overridden"
+  ],
+  "properties": {
+    "format_version": {"const": 1},
+    "version": {"type": "integer", "minimum": 0},
+    "created_at": {"type": "string", "format": "date-time"},
+    "catalogue_version": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "environment": {"type": "string"},
+    "groups": {
+      "type": "object",
+      "additionalProperties": {"type": "object"}
+    },
+    "overridden": {
+      "type": "array",
+      "items": {"type": "string"},
+      "uniqueItems": true
+    }
+  }
+}
