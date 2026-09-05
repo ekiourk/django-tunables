@@ -3,12 +3,25 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from django.db import transaction
+from django.utils import timezone
+
 from tunables.catalogue import Catalogue
 from tunables.changes import Actor, Change
 from tunables.conf import settings
 from tunables.document import FORMAT_VERSION, build_document
-from tunables.errors import CatalogueOutOfSync, FieldWarning
-from tunables.models import ChangeSet, Snapshot, State, TunableValue
+from tunables.errors import (
+    CatalogueOutOfSync,
+    ConstraintError,
+    FieldError,
+    FieldWarning,
+    GroupError,
+    NothingToChange,
+    UnknownKey,
+    ValidationFailed,
+    VersionConflict,
+)
+from tunables.models import ChangeItem, ChangeSet, Snapshot, State, TunableDefinition, TunableValue
 from tunables.registry import get_catalogue
 
 
@@ -20,11 +33,23 @@ class ChangeResult:
     warnings: Sequence[FieldWarning] = field(default_factory=tuple)
 
 
+@dataclass(frozen=True)
+class _Prepared:
+    """A change that survived validation: its key, JSON value or None for a reset, and the old override."""
+
+    key: str
+    reset: bool
+    new_value: Any
+    old_value: Any
+
+
 def validate(changes: Sequence[Change]) -> list[FieldWarning]:
     """Same checks as apply_changeset without lock or writes. Raises ValidationFailed or NothingToChange."""
-    raise NotImplementedError
+    _, warnings = _prepare(get_catalogue(), changes)
+    return warnings
 
 
+@transaction.atomic
 def apply_changeset(
     changes: Sequence[Change],
     *,
@@ -37,12 +62,123 @@ def apply_changeset(
     restores_version: int | None = None,
 ) -> ChangeResult:
     """Validate and apply changes as one versioned change set with its snapshot."""
-    raise NotImplementedError
+    catalogue = get_catalogue()
+    state = _locked_state(catalogue)
+    if expected_version is not None and expected_version != state.current_version:
+        raise VersionConflict(expected_version, state.current_version)
+    prepared, warnings = _prepare(catalogue, changes)
+    version = state.current_version + 1
+    now = timezone.now()
+    changeset = ChangeSet.objects.create(
+        version=version,
+        created_at=now,
+        actor=actor.identity,
+        actor_source=actor.source,
+        client=actor.client,
+        reason=reason,
+        source=source,
+        restores_version=restores_version,
+        request_id=request_id,
+        catalogue_version=catalogue.version,
+        metadata=dict(metadata or {}),
+    )
+    definitions = TunableDefinition.objects.in_bulk([item.key for item in prepared], field_name="key")
+    for item in prepared:
+        ChangeItem.objects.create(
+            changeset=changeset,
+            key=item.key,
+            definition=definitions[item.key],
+            old_value=item.old_value,
+            new_value=item.new_value,
+            reset=item.reset,
+        )
+        if item.reset:
+            TunableValue.objects.filter(key=item.key).delete()
+        else:
+            TunableValue.objects.update_or_create(
+                key=item.key,
+                defaults={"definition": definitions[item.key], "value": item.new_value, "changeset": changeset},
+            )
+    snapshot = write_snapshot(catalogue, version=version, changeset=changeset, created_at=now)
+    state.current_version = version
+    state.save()
+    return ChangeResult(version=version, changeset=changeset, snapshot=snapshot, warnings=tuple(warnings))
 
 
-def rollback(to_version: int, *, actor: Actor, reason: str = "", expected_version: int | None = None) -> ChangeResult:
-    """Apply the change set that restores the overrides of snapshot to_version."""
-    raise NotImplementedError
+def _locked_state(catalogue: Catalogue) -> State:
+    state = State.objects.select_for_update().filter(pk=1).first()
+    if state is None:
+        raise CatalogueOutOfSync("no tunables state; run tunables_sync")
+    if state.catalogue_version != catalogue.version:
+        raise CatalogueOutOfSync("catalogue changed since the last sync; run tunables_sync")
+    return state
+
+
+def _prepare(catalogue: Catalogue, changes: Sequence[Change]) -> tuple[list[_Prepared], list[FieldWarning]]:
+    overrides = stored_overrides(catalogue)
+    errors: list[FieldError | GroupError] = []
+    warnings: list[FieldWarning] = []
+    prepared: list[_Prepared] = []
+    seen: set[str] = set()
+    for change in changes:
+        if change.key in seen:
+            errors.append(FieldError(change.key, "duplicate", "key appears more than once"))
+            continue
+        seen.add(change.key)
+        try:
+            tunable = catalogue.get(change.key)
+        except UnknownKey as error:
+            errors.append(FieldError(change.key, "unknown_key", str(error)))
+            continue
+        if tunable.deprecated:
+            warnings.append(FieldWarning(change.key, "deprecated", f"deprecated: {tunable.deprecated}"))
+        old_value = overrides.get(change.key)
+        if change.reset:
+            if change.key in overrides:
+                prepared.append(_Prepared(change.key, True, None, old_value))
+            continue
+        try:
+            value = tunable.type.coerce(change.value)
+            tunable.type.validate(value)
+        except ConstraintError as error:
+            errors.append(FieldError(change.key, error.code, error.message))
+            continue
+        new_value = tunable.type.to_json(value)
+        current = overrides[change.key] if change.key in overrides else tunable.type.to_json(tunable.default)
+        if new_value != current:
+            prepared.append(_Prepared(change.key, False, new_value, old_value))
+    errors.extend(_group_errors(catalogue, overrides, prepared))
+    if errors:
+        raise ValidationFailed(errors)
+    if not prepared:
+        raise NothingToChange("no effective change")
+    return prepared, warnings
+
+
+def _group_errors(
+    catalogue: Catalogue, overrides: Mapping[str, Any], prepared: Sequence[_Prepared]
+) -> list[GroupError]:
+    proposed = dict(overrides)
+    for item in prepared:
+        if item.reset:
+            proposed.pop(item.key, None)
+        else:
+            proposed[item.key] = item.new_value
+    touched = {item.key.partition(".")[0] for item in prepared}
+    errors: list[GroupError] = []
+    for group in (group for group in catalogue.groups.values() if group.name in touched):
+        values = {
+            tunable.name: tunable.type.coerce(proposed[f"{group.name}.{tunable.name}"])
+            if f"{group.name}.{tunable.name}" in proposed
+            else tunable.default
+            for tunable in group.tunables
+        }
+        for validator in group.validators:
+            try:
+                validator(values)
+            except ConstraintError as error:
+                errors.append(GroupError(group.name, error.code, error.message))
+    return errors
 
 
 def current_version() -> int:
