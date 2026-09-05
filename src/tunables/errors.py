@@ -26,3 +26,7 @@ class UnknownKey(TunablesError):
 
 class HistoryIsAppendOnly(TunablesError):
     pass
+
+
+class CatalogueOutOfSync(TunablesError):
+    pass

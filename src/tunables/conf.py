@@ -3,7 +3,7 @@ from typing import Any
 from django.conf import settings as django_settings
 from django.core.exceptions import ImproperlyConfigured
 
-DEFAULTS: dict[str, Any] = {}
+DEFAULTS: dict[str, Any] = {"ENVIRONMENT": ""}
 
 
 class Settings:
