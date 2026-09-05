@@ -1,6 +1,7 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from functools import partial
 from typing import Any
 
 from django.db import transaction
@@ -23,6 +24,7 @@ from tunables.errors import (
     VersionConflict,
 )
 from tunables.models import ChangeItem, ChangeSet, Snapshot, State, TunableDefinition, TunableValue
+from tunables.publishers import publish
 from tunables.registry import get_catalogue
 
 
@@ -247,7 +249,7 @@ def write_snapshot(
         created_at=created_at,
         environment=settings.ENVIRONMENT,
     )
-    return Snapshot.objects.create(
+    snapshot = Snapshot.objects.create(
         version=version,
         changeset=changeset,
         created_at=created_at,
@@ -255,3 +257,5 @@ def write_snapshot(
         catalogue_version=catalogue.version,
         document=document,
     )
+    transaction.on_commit(partial(publish, snapshot))
+    return snapshot
