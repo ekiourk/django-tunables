@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 from django.db import transaction
 from django.utils import timezone
 
-from tunables.catalogue import Catalogue
+from tunables.catalogue import Catalogue, Group, Tunable
 from tunables.models import (
     ActorSource,
     ChangeItem,
@@ -66,29 +67,31 @@ def sync() -> SyncResult:
 def _mirror(catalogue: Catalogue, now: datetime) -> None:
     for group in catalogue.groups.values():
         for order, tunable in enumerate(group.tunables):
-            described = tunable.type.describe()
-            TunableDefinition.objects.update_or_create(
-                key=f"{group.name}.{tunable.name}",
-                defaults={
-                    "group_name": group.name,
-                    "name": tunable.name,
-                    "order": order,
-                    "type_name": described["name"],
-                    "type_params": described["params"],
-                    "default": tunable.type.to_json(tunable.default),
-                    "title": str(tunable.title),
-                    "description": str(tunable.description),
-                    "unit": tunable.unit,
-                    "ui": dict(tunable.ui),
-                    "metadata": dict(tunable.metadata),
-                    "deprecated": tunable.deprecated,
-                    "is_active": True,
-                    "synced_at": now,
-                },
-            )
+            key = f"{group.name}.{tunable.name}"
+            TunableDefinition.objects.update_or_create(key=key, defaults=_definition_fields(group, order, tunable, now))
     TunableDefinition.objects.filter(is_active=True).exclude(key__in=catalogue.keys()).update(
         is_active=False, synced_at=now
     )
+
+
+def _definition_fields(group: Group, order: int, tunable: Tunable, now: datetime) -> dict[str, Any]:
+    described = tunable.type.describe()
+    return {
+        "group_name": group.name,
+        "name": tunable.name,
+        "order": order,
+        "type_name": described["name"],
+        "type_params": described["params"],
+        "default": tunable.type.to_json(tunable.default),
+        "title": str(tunable.title),
+        "description": str(tunable.description),
+        "unit": tunable.unit,
+        "ui": dict(tunable.ui),
+        "metadata": dict(tunable.metadata),
+        "deprecated": tunable.deprecated,
+        "is_active": True,
+        "synced_at": now,
+    }
 
 
 def _drop_stale_overrides(catalogue: Catalogue, changeset: ChangeSet) -> None:
