@@ -148,45 +148,56 @@ def _locked_state(catalogue: Catalogue) -> State:
     return state
 
 
+@dataclass
+class _Report:
+    errors: list[FieldError | GroupError] = field(default_factory=list)
+    warnings: list[FieldWarning] = field(default_factory=list)
+
+
 def _prepare(catalogue: Catalogue, changes: Sequence[Change]) -> tuple[list[_Prepared], list[FieldWarning]]:
     overrides = stored_overrides(catalogue)
-    errors: list[FieldError | GroupError] = []
-    warnings: list[FieldWarning] = []
+    report = _Report()
     prepared: list[_Prepared] = []
     seen: set[str] = set()
     for change in changes:
         if change.key in seen:
-            errors.append(FieldError(change.key, "duplicate", "key appears more than once"))
+            report.errors.append(FieldError(change.key, "duplicate", "key appears more than once"))
             continue
         seen.add(change.key)
-        try:
-            tunable = catalogue.get(change.key)
-        except UnknownKey as error:
-            errors.append(FieldError(change.key, "unknown_key", str(error)))
-            continue
-        if tunable.deprecated:
-            warnings.append(FieldWarning(change.key, "deprecated", f"deprecated: {tunable.deprecated}"))
-        old_value = overrides.get(change.key)
-        if change.reset:
-            if change.key in overrides:
-                prepared.append(_Prepared(change.key, True, None, old_value))
-            continue
-        try:
-            value = tunable.type.coerce(change.value)
-            tunable.type.validate(value)
-        except ConstraintError as error:
-            errors.append(FieldError(change.key, error.code, error.message))
-            continue
-        new_value = tunable.type.to_json(value)
-        current = overrides[change.key] if change.key in overrides else tunable.type.to_json(tunable.default)
-        if new_value != current:
-            prepared.append(_Prepared(change.key, False, new_value, old_value))
-    errors.extend(_group_errors(catalogue, overrides, prepared))
-    if errors:
-        raise ValidationFailed(errors)
+        item = _prepare_one(catalogue, overrides, change, report)
+        if item is not None:
+            prepared.append(item)
+    report.errors.extend(_group_errors(catalogue, overrides, prepared))
+    if report.errors:
+        raise ValidationFailed(report.errors)
     if not prepared:
         raise NothingToChange("no effective change")
-    return prepared, warnings
+    return prepared, report.warnings
+
+
+def _prepare_one(
+    catalogue: Catalogue, overrides: Mapping[str, Any], change: Change, report: _Report
+) -> _Prepared | None:
+    """Coerce and validate one change. Returns None for a no-op or after recording an error."""
+    try:
+        tunable = catalogue.get(change.key)
+    except UnknownKey as error:
+        report.errors.append(FieldError(change.key, "unknown_key", str(error)))
+        return None
+    if tunable.deprecated:
+        report.warnings.append(FieldWarning(change.key, "deprecated", f"deprecated: {tunable.deprecated}"))
+    old_value = overrides.get(change.key)
+    if change.reset:
+        return _Prepared(change.key, True, None, old_value) if change.key in overrides else None
+    try:
+        value = tunable.type.coerce(change.value)
+        tunable.type.validate(value)
+    except ConstraintError as error:
+        report.errors.append(FieldError(change.key, error.code, error.message))
+        return None
+    new_value = tunable.type.to_json(value)
+    current = overrides[change.key] if change.key in overrides else tunable.type.to_json(tunable.default)
+    return _Prepared(change.key, False, new_value, old_value) if new_value != current else None
 
 
 def _group_errors(

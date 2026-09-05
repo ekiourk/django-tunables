@@ -5,13 +5,11 @@ import pytest
 from django.test import override_settings
 
 from tests.catalogue import catalogue, pricing, thermostat, weights
-from tunables import Catalogue, Float, Tunable
+from tunables import Actor, Catalogue, Change, Float, Tunable, services
 from tunables.document import FORMAT_VERSION, build_document
 from tunables.models import (
-    ActorSource,
     ChangeItem,
     ChangeSet,
-    ChangeSource,
     Snapshot,
     State,
     TunableDefinition,
@@ -37,19 +35,7 @@ def use(alternative: str) -> Any:
 
 
 def override(key: str, value: Any) -> ChangeSet:
-    version = State.objects.get().current_version + 1
-    changeset = ChangeSet.objects.create(
-        version=version,
-        actor="alice",
-        actor_source=ActorSource.VERIFIED,
-        source=ChangeSource.API,
-        catalogue_version=catalogue.version,
-    )
-    State.objects.update(current_version=version)
-    TunableValue.objects.create(
-        key=key, definition=TunableDefinition.objects.get(key=key), value=value, changeset=changeset
-    )
-    return changeset
+    return services.apply_changeset([Change(key, value)], actor=Actor("alice", "verified"), source="api").changeset
 
 
 def test_fresh_database_bootstraps_state_and_snapshot_zero() -> None:
@@ -130,8 +116,7 @@ def test_removed_tunable_deactivates_and_drops_its_override() -> None:
     assert definition.is_active is False
     assert not TunableValue.objects.filter(key="pricing.allow_backorders").exists()
     assert TunableValue.objects.get(key="pricing.vat_rate").value == 0.2
-    item = ChangeItem.objects.get()
-    assert item.changeset.version == 3
+    item = ChangeItem.objects.get(changeset__version=3)
     assert (item.key, item.definition) == ("pricing.allow_backorders", definition)
     assert (item.old_value, item.new_value, item.reset) == (True, None, True)
     document = Snapshot.objects.get(version=3).document
