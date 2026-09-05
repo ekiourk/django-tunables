@@ -1,11 +1,53 @@
+from datetime import datetime
 from typing import Any
+
+from tunables.catalogue import Catalogue
+from tunables.conf import settings
+from tunables.document import FORMAT_VERSION, build_document
+from tunables.errors import CatalogueOutOfSync
+from tunables.models import ChangeSet, Snapshot, State, TunableValue
+from tunables.registry import get_catalogue
 
 
 def current_version() -> int:
     """Version in the State row. Raises CatalogueOutOfSync when the row is missing."""
-    raise NotImplementedError
+    state = State.objects.filter(pk=1).first()
+    if state is None:
+        raise CatalogueOutOfSync("no tunables state; run tunables_sync")
+    return state.current_version
 
 
 def current_values() -> dict[str, dict[str, Any]]:
     """Effective Python values, defaults overlaid with stored overrides: {group: {name: value}}."""
-    raise NotImplementedError
+    catalogue = get_catalogue()
+    values = catalogue.defaults()
+    for key, raw in stored_overrides(catalogue).items():
+        group, _, name = key.partition(".")
+        values[group][name] = catalogue.get(key).type.coerce(raw)
+    return values
+
+
+def stored_overrides(catalogue: Catalogue) -> dict[str, Any]:
+    """{key: json value} for every override whose key is in the catalogue."""
+    known = set(catalogue.keys())
+    return {row.key: row.value for row in TunableValue.objects.all() if row.key in known}
+
+
+def write_snapshot(
+    catalogue: Catalogue, *, version: int, changeset: ChangeSet | None, created_at: datetime
+) -> Snapshot:
+    document = build_document(
+        catalogue,
+        stored_overrides(catalogue),
+        version=version,
+        created_at=created_at,
+        environment=settings.ENVIRONMENT,
+    )
+    return Snapshot.objects.create(
+        version=version,
+        changeset=changeset,
+        created_at=created_at,
+        format_version=FORMAT_VERSION,
+        catalogue_version=catalogue.version,
+        document=document,
+    )

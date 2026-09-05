@@ -2,6 +2,7 @@ import pytest
 from django.utils import timezone
 
 from tunables.models import ActorSource, ChangeSet, ChangeSource, TunableDefinition
+from tunables.sync import SyncResult, sync
 
 
 @pytest.fixture
@@ -28,3 +29,8 @@ def changeset() -> ChangeSet:
         source=ChangeSource.API,
         catalogue_version="sha256:test",
     )
+
+
+@pytest.fixture
+def synced(db: None) -> SyncResult:
+    return sync()
