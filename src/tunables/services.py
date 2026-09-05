@@ -1,12 +1,48 @@
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
 from tunables.catalogue import Catalogue
+from tunables.changes import Actor, Change
 from tunables.conf import settings
 from tunables.document import FORMAT_VERSION, build_document
-from tunables.errors import CatalogueOutOfSync
+from tunables.errors import CatalogueOutOfSync, FieldWarning
 from tunables.models import ChangeSet, Snapshot, State, TunableValue
 from tunables.registry import get_catalogue
+
+
+@dataclass(frozen=True)
+class ChangeResult:
+    version: int
+    changeset: ChangeSet
+    snapshot: Snapshot
+    warnings: Sequence[FieldWarning] = field(default_factory=tuple)
+
+
+def validate(changes: Sequence[Change]) -> list[FieldWarning]:
+    """Same checks as apply_changeset without lock or writes. Raises ValidationFailed or NothingToChange."""
+    raise NotImplementedError
+
+
+def apply_changeset(
+    changes: Sequence[Change],
+    *,
+    actor: Actor,
+    source: str,
+    reason: str = "",
+    expected_version: int | None = None,
+    request_id: str = "",
+    metadata: Mapping[str, Any] | None = None,
+    restores_version: int | None = None,
+) -> ChangeResult:
+    """Validate and apply changes as one versioned change set with its snapshot."""
+    raise NotImplementedError
+
+
+def rollback(to_version: int, *, actor: Actor, reason: str = "", expected_version: int | None = None) -> ChangeResult:
+    """Apply the change set that restores the overrides of snapshot to_version."""
+    raise NotImplementedError
 
 
 def current_version() -> int:
