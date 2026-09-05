@@ -18,6 +18,7 @@ from tunables.errors import (
     GroupError,
     NothingToChange,
     UnknownKey,
+    UnknownVersion,
     ValidationFailed,
     VersionConflict,
 )
@@ -103,6 +104,37 @@ def apply_changeset(
     state.current_version = version
     state.save()
     return ChangeResult(version=version, changeset=changeset, snapshot=snapshot, warnings=tuple(warnings))
+
+
+def rollback(to_version: int, *, actor: Actor, reason: str = "", expected_version: int | None = None) -> ChangeResult:
+    """Apply the change set that restores the overrides of snapshot to_version."""
+    catalogue = get_catalogue()
+    snapshot = Snapshot.objects.filter(version=to_version).first()
+    if snapshot is None:
+        raise UnknownVersion(to_version)
+    document = snapshot.document
+    known = set(catalogue.keys())
+    target: dict[str, Any] = {}
+    for key in document["overridden"]:
+        if key in known:
+            group, _, name = key.partition(".")
+            target[key] = document["groups"][group][name]
+    changes: list[Change] = []
+    for key, value in target.items():
+        tunable = catalogue.get(key)
+        if value == tunable.type.to_json(tunable.default):
+            changes.append(Change(key, reset=True))
+        else:
+            changes.append(Change(key, value))
+    changes.extend(Change(key, reset=True) for key in stored_overrides(catalogue) if key not in target)
+    return apply_changeset(
+        changes,
+        actor=actor,
+        source="rollback",
+        reason=reason,
+        expected_version=expected_version,
+        restores_version=to_version,
+    )
 
 
 def _locked_state(catalogue: Catalogue) -> State:

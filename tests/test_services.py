@@ -11,6 +11,7 @@ from tunables.errors import (
     FieldWarning,
     GroupError,
     NothingToChange,
+    UnknownVersion,
     ValidationFailed,
     VersionConflict,
 )
@@ -235,3 +236,69 @@ def test_validate(synced: SyncResult) -> None:
         services.validate([Change("pricing.vat_rate", 0.24)])
     assert counts() == before
     assert State.objects.get().current_version == 0
+
+
+def test_rollback_restores_overrides_of_target_version(synced: SyncResult) -> None:
+    apply(Change("pricing.vat_rate", 0.2), Change("thermostat.mode", "heat"))
+    apply(Change("pricing.vat_rate", 0.1), Change("pricing.currencies", ["USD"]))
+    result = services.rollback(1, actor=ALICE, reason="undo")
+    assert result.version == 3
+    changeset = result.changeset
+    assert (changeset.source, changeset.restores_version, changeset.reason) == ("rollback", 1, "undo")
+    assert (changeset.actor, changeset.actor_source, changeset.client) == ("alice", "verified", "cli")
+    items = {item.key: item for item in changeset.items.all()}
+    assert set(items) == {"pricing.vat_rate", "pricing.currencies"}
+    assert (items["pricing.vat_rate"].old_value, items["pricing.vat_rate"].new_value) == (0.1, 0.2)
+    assert (items["pricing.currencies"].old_value, items["pricing.currencies"].reset) == (["USD"], True)
+    target = Snapshot.objects.get(version=1).document
+    assert result.snapshot.document["groups"] == target["groups"]
+    assert result.snapshot.document["overridden"] == target["overridden"]
+    assert {row.key: row.value for row in TunableValue.objects.all()} == {
+        "pricing.vat_rate": 0.2,
+        "thermostat.mode": "heat",
+    }
+
+
+def test_rollback_to_zero_resets_everything(synced: SyncResult) -> None:
+    apply(Change("pricing.vat_rate", 0.2), Change("thermostat.mode", "heat"))
+    result = services.rollback(0, actor=ALICE)
+    assert all(item.reset for item in result.changeset.items.all())
+    assert result.changeset.items.count() == 2
+    assert TunableValue.objects.count() == 0
+    assert result.snapshot.document["overridden"] == []
+    assert result.snapshot.document["groups"] == catalogue.defaults()
+
+
+def test_rollback_to_current_or_unknown_version(synced: SyncResult) -> None:
+    apply(Change("pricing.vat_rate", 0.2))
+    with pytest.raises(NothingToChange):
+        services.rollback(1, actor=ALICE)
+    with pytest.raises(UnknownVersion) as info:
+        services.rollback(7, actor=ALICE)
+    assert info.value.version == 7
+    with pytest.raises(VersionConflict):
+        services.rollback(0, actor=ALICE, expected_version=0)
+    assert ChangeSet.objects.count() == 1
+
+
+def test_rollback_turns_pinned_default_into_reset(synced: SyncResult) -> None:
+    apply(Change("pricing.vat_rate", 0.2))
+    apply(Change("pricing.vat_rate", 0.24))
+    apply(Change("pricing.vat_rate", 0.3))
+    result = services.rollback(2, actor=ALICE)
+    item = result.changeset.items.get()
+    assert (item.key, item.reset, item.old_value) == ("pricing.vat_rate", True, 0.3)
+    assert TunableValue.objects.count() == 0
+    assert result.snapshot.document["overridden"] == []
+
+
+def test_rollback_ignores_keys_no_longer_in_catalogue(synced: SyncResult) -> None:
+    apply(Change("pricing.vat_rate", 0.2))
+    snapshot = Snapshot.objects.get(version=1)
+    document = dict(snapshot.document)
+    document["groups"] = {**document["groups"], "pricing": {**document["groups"]["pricing"], "gone": 1}}
+    document["overridden"] = [*document["overridden"], "pricing.gone"]
+    Snapshot._base_manager.filter(pk=snapshot.pk).update(document=document)
+    apply(Change("pricing.vat_rate", 0.1))
+    result = services.rollback(1, actor=ALICE)
+    assert [item.key for item in result.changeset.items.all()] == ["pricing.vat_rate"]

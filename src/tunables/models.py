@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, TypeVar
 
 from django.db import models
 from django.utils import timezone
@@ -55,7 +55,10 @@ class TunableDefinition(models.Model):
         ordering = ["group_name", "order", "name"]
 
 
-class AppendOnlyQuerySet(models.QuerySet["AppendOnlyModel"]):
+_M = TypeVar("_M", bound="AppendOnlyModel")
+
+
+class AppendOnlyQuerySet(models.QuerySet[_M]):
     def update(self, **_: Any) -> int:
         raise HistoryIsAppendOnly("history rows cannot be updated")
 
