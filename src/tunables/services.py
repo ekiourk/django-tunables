@@ -139,6 +139,11 @@ def rollback(to_version: int, *, actor: Actor, reason: str = "", expected_versio
     )
 
 
+def document_changes(document: Mapping[str, Any], *, strict: bool = False) -> tuple[list[Change], list[FieldWarning]]:
+    """Changes that set every value in a snapshot document's groups. Unknown keys are skipped, or errors when strict."""
+    raise NotImplementedError
+
+
 def _locked_state(catalogue: Catalogue) -> State:
     state = State.objects.select_for_update().filter(pk=1).first()
     if state is None:
