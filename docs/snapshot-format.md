@@ -54,6 +54,8 @@ Rules readers can rely on:
 - Group and tunable names are stable identifiers matching `^[a-z][a-z0-9_]*$`. Titles and
   descriptions are not in the document.
 - The document is a plain JSON object with no additional top-level keys.
+- Key order inside objects is not significant. Databases that store the document as
+  binary JSON return keys in their own order. Readers must look keys up by name.
 
 ## Schema
 

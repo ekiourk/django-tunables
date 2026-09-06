@@ -4,6 +4,7 @@ from typing import Any
 from django.core.management.base import CommandError, CommandParser
 
 from tunables.management.base import TunablesCommand
+from tunables.registry import get_catalogue
 from tunables.services import latest_snapshot
 
 
@@ -20,14 +21,19 @@ class Command(TunablesCommand):
             self.stdout.write(json.dumps(document, indent=2))
             return
         groups = document["groups"]
+        catalogue = get_catalogue()
+        names = list(catalogue.groups)
         if options["group"] is not None:
             if options["group"] not in groups:
                 raise CommandError(f"unknown group {options['group']!r}")
-            groups = {options["group"]: groups[options["group"]]}
+            names = [options["group"]]
         overridden = set(document["overridden"])
         self.stdout.write(f"version {document['version']}")
-        for group, values in groups.items():
-            for name, value in values.items():
-                key = f"{group}.{name}"
+        for name in names:
+            values = groups.get(name, {})
+            for tunable in catalogue.groups[name].tunables:
+                if tunable.name not in values:
+                    continue
+                key = f"{name}.{tunable.name}"
                 marker = "  (override)" if key in overridden else ""
-                self.stdout.write(f"{key} = {json.dumps(value)}{marker}")
+                self.stdout.write(f"{key} = {json.dumps(values[tunable.name])}{marker}")

@@ -43,7 +43,7 @@ def test_state_is_a_singleton() -> None:
 
 
 def test_state_check_constraint_rejects_other_pks() -> None:
-    with transaction.atomic(), pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError), transaction.atomic():
         State.objects.bulk_create([State(id=2, current_version=0)])
 
 
@@ -125,19 +125,19 @@ def test_queryset_delete_is_refused(make: Callable[[int], Model], field: str, ne
 
 def test_new_changeset_with_existing_version_is_an_integrity_error() -> None:
     make_changeset(1)
-    with transaction.atomic(), pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError), transaction.atomic():
         make_changeset(1)
 
 
 def test_new_snapshot_with_existing_pk_does_not_overwrite() -> None:
     first = make_snapshot(1)
-    with transaction.atomic(), pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError), transaction.atomic():
         Snapshot(pk=first.pk, version=2, format_version=1, catalogue_version="x", document={}).save()
     assert Snapshot.objects.get(pk=first.pk).version == 1
 
 
 def test_definition_key_is_unique(definition: TunableDefinition) -> None:
-    with transaction.atomic(), pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError), transaction.atomic():
         TunableDefinition.objects.create(
             key=definition.key,
             group_name="pricing",
@@ -152,7 +152,7 @@ def test_definition_key_is_unique(definition: TunableDefinition) -> None:
 
 def test_value_key_is_unique(definition: TunableDefinition, changeset: ChangeSet) -> None:
     TunableValue.objects.create(key=definition.key, definition=definition, value=0.2, changeset=changeset)
-    with transaction.atomic(), pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError), transaction.atomic():
         TunableValue.objects.create(key=definition.key, definition=definition, value=0.3, changeset=changeset)
 
 
@@ -170,7 +170,7 @@ def test_value_upsert(definition: TunableDefinition, changeset: ChangeSet) -> No
 
 def test_change_item_unique_per_changeset_and_key(changeset: ChangeSet) -> None:
     ChangeItem.objects.create(changeset=changeset, key="pricing.vat_rate", new_value=0.2)
-    with transaction.atomic(), pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError), transaction.atomic():
         ChangeItem.objects.create(changeset=changeset, key="pricing.vat_rate", new_value=0.3)
 
 
