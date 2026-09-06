@@ -302,3 +302,28 @@ def test_rollback_ignores_keys_no_longer_in_catalogue(synced: SyncResult) -> Non
     apply(Change("pricing.vat_rate", 0.1))
     result = services.rollback(1, actor=ALICE)
     assert [item.key for item in result.changeset.items.all()] == ["pricing.vat_rate"]
+
+
+def test_document_changes_lenient_and_strict(synced: SyncResult) -> None:
+    document = {"format_version": 1, "groups": {"pricing": {"vat_rate": 0.2, "discount": 5}, "shop": {"open": True}}}
+    changes, warnings = services.document_changes(document)
+    assert changes == [Change("pricing.vat_rate", 0.2)]
+    assert [(w.key, w.code) for w in warnings] == [("pricing.discount", "unknown_key"), ("shop.open", "unknown_key")]
+    with pytest.raises(ValidationFailed) as info:
+        services.document_changes(document, strict=True)
+    assert [(e.key, e.code) for e in info.value.errors if isinstance(e, FieldError)] == [
+        ("pricing.discount", "unknown_key"),
+        ("shop.open", "unknown_key"),
+    ]
+
+
+def test_document_changes_rejects_other_formats(synced: SyncResult) -> None:
+    with pytest.raises(ValidationFailed) as info:
+        services.document_changes({"format_version": 2, "groups": {}})
+    assert info.value.errors == [FieldError("format_version", "unsupported", "expected format_version 1")]
+    with pytest.raises(ValidationFailed) as info:
+        services.document_changes({"format_version": 1, "groups": {"pricing": [1, 2]}})
+    assert info.value.errors == [FieldError("groups.pricing", "type", "expected an object")]
+    with pytest.raises(ValidationFailed) as info:
+        services.document_changes({"format_version": 1, "groups": [1, 2]})
+    assert info.value.errors == [FieldError("groups", "type", "expected an object")]

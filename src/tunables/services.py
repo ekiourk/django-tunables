@@ -141,7 +141,37 @@ def rollback(to_version: int, *, actor: Actor, reason: str = "", expected_versio
 
 def document_changes(document: Mapping[str, Any], *, strict: bool = False) -> tuple[list[Change], list[FieldWarning]]:
     """Changes that set every value in a snapshot document's groups. Unknown keys are skipped, or errors when strict."""
-    raise NotImplementedError
+    if document.get("format_version") != FORMAT_VERSION:
+        raise ValidationFailed(
+            [FieldError("format_version", "unsupported", f"expected format_version {FORMAT_VERSION}")]
+        )
+    groups = document.get("groups", {})
+    if not isinstance(groups, Mapping):
+        raise ValidationFailed([FieldError("groups", "type", "expected an object")])
+    known = set(get_catalogue().keys())
+    changes: list[Change] = []
+    warnings: list[FieldWarning] = []
+    errors: list[FieldError | GroupError] = []
+    for group, values in groups.items():
+        if not isinstance(values, Mapping):
+            errors.append(FieldError(f"groups.{group}", "type", "expected an object"))
+            continue
+        for name, value in values.items():
+            key = f"{group}.{name}"
+            if key in known:
+                changes.append(Change(key, value))
+            elif strict:
+                errors.append(FieldError(key, "unknown_key", f"unknown tunable {key!r}"))
+            else:
+                warnings.append(FieldWarning(key, "unknown_key", f"unknown tunable {key!r}"))
+    if errors:
+        raise ValidationFailed(errors)
+    return changes, warnings
+
+
+def latest_snapshot() -> Snapshot:
+    """The snapshot at the current version. Raises CatalogueOutOfSync when the database was never synced."""
+    return Snapshot.objects.get(version=current_version())
 
 
 def _locked_state(catalogue: Catalogue) -> State:
