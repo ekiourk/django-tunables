@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from django.core.management import CommandError, call_command
+from django.db import connection
 from django.test import override_settings
 
 from tests import test_sync
@@ -154,3 +155,10 @@ def test_import_rejects_bad_documents(synced: SyncResult, tmp_path: Path) -> Non
     with pytest.raises(CommandError, match="not valid JSON"):
         run("tunables_import", str(path), "--actor", "deploy")
     assert ChangeSet.objects.count() == 0
+
+
+def test_protect_history_requires_postgresql(db: None) -> None:
+    if connection.vendor == "postgresql":
+        pytest.skip("runs on SQLite only")
+    with pytest.raises(CommandError, match="needs PostgreSQL.*sqlite"):
+        run("tunables_protect_history")
