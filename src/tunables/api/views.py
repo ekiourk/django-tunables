@@ -69,7 +69,6 @@ def _summary(group: Group) -> dict[str, Any]:
         "title": str(group.title),
         "description": str(group.description),
         "order": group.order,
-        "tunable_count": len(group.tunables),
         "validators": [validator_description(validator) for validator in group.validators],
     }
 
@@ -92,17 +91,17 @@ def _definition(group: Group, tunable: Tunable) -> dict[str, Any]:
 
 class GroupList(TunablesAPIView):
     def get(self, request: Request) -> Response:
-        return Response([_summary(group) for group in get_catalogue().groups.values()])
+        return Response(
+            [{**_summary(group), "tunable_count": len(group.tunables)} for group in get_catalogue().groups.values()]
+        )
 
 
 class GroupDetail(TunablesAPIView):
     def get(self, request: Request, group: str) -> Response:
         found = _group(get_catalogue(), group)
-        summary = _summary(found)
-        del summary["tunable_count"]
         return Response(
             {
-                **summary,
+                **_summary(found),
                 "ui": dict(found.ui),
                 "metadata": dict(found.metadata),
                 "definitions": [_definition(found, tunable) for tunable in found.tunables],
