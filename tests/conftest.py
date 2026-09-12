@@ -1,5 +1,6 @@
 import pytest
 from django.utils import timezone
+from rest_framework.test import APIClient
 
 from tunables.models import ActorSource, ChangeSet, ChangeSource, TunableDefinition
 from tunables.sync import SyncResult, sync
@@ -76,3 +77,8 @@ def django_db_modify_db_settings(
     connections._settings = None
     if hasattr(connections._connections, "default"):
         del connections["default"]
+
+
+@pytest.fixture
+def api(synced: SyncResult) -> APIClient:
+    return APIClient()

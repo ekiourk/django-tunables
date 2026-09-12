@@ -35,3 +35,5 @@ DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memor
 USE_TZ = True
 
 TUNABLES = {"CATALOGUE": "tests.catalogue.catalogue"}
+
+ROOT_URLCONF = "tests.urls"

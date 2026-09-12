@@ -3,7 +3,14 @@ from typing import Any
 from django.conf import settings as django_settings
 from django.core.exceptions import ImproperlyConfigured
 
-DEFAULTS: dict[str, Any] = {"ENVIRONMENT": "", "PUBLISHERS": [], "FILE_PUBLISHER_PATH": None}
+DEFAULTS: dict[str, Any] = {
+    "ENVIRONMENT": "",
+    "PUBLISHERS": [],
+    "FILE_PUBLISHER_PATH": None,
+    "PAGE_SIZE": 50,
+    "API_AUTHENTICATION_CLASSES": None,
+    "API_PERMISSION_CLASSES": None,
+}
 
 
 class Settings:
