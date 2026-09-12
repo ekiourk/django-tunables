@@ -17,4 +17,7 @@ urlpatterns = [
     path("snapshots/latest/", views.LatestSnapshot.as_view(), name="snapshot-latest"),
     path("snapshots/<int:version>/", views.SnapshotDetail.as_view(), name="snapshot"),
     path("export/", views.Export.as_view(), name="export"),
+    path("validate/", views.Validate.as_view(), name="validate"),
+    path("rollback/", views.Rollback.as_view(), name="rollback"),
+    path("import/", views.Import.as_view(), name="import"),
 ]

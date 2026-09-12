@@ -108,8 +108,8 @@ def apply_changeset(
     return ChangeResult(version=version, changeset=changeset, snapshot=snapshot, warnings=tuple(warnings))
 
 
-def rollback(to_version: int, *, actor: Actor, reason: str = "", expected_version: int | None = None) -> ChangeResult:
-    """Apply the change set that restores the overrides of snapshot to_version."""
+def rollback_changes(to_version: int) -> list[Change]:
+    """The changes that turn the current overrides into those of snapshot to_version."""
     catalogue = get_catalogue()
     snapshot = Snapshot.objects.filter(version=to_version).first()
     if snapshot is None:
@@ -121,16 +121,23 @@ def rollback(to_version: int, *, actor: Actor, reason: str = "", expected_versio
         if key in known:
             group, _, name = key.partition(".")
             target[key] = document["groups"][group][name]
+    overrides = stored_overrides(catalogue)
     changes: list[Change] = []
     for key, value in target.items():
         tunable = catalogue.get(key)
         if value == tunable.type.to_json(tunable.default):
-            changes.append(Change(key, reset=True))
-        else:
+            if key in overrides:
+                changes.append(Change(key, reset=True))
+        elif overrides.get(key) != value:
             changes.append(Change(key, value))
-    changes.extend(Change(key, reset=True) for key in stored_overrides(catalogue) if key not in target)
+    changes.extend(Change(key, reset=True) for key in overrides if key not in target)
+    return changes
+
+
+def rollback(to_version: int, *, actor: Actor, reason: str = "", expected_version: int | None = None) -> ChangeResult:
+    """Apply the change set that restores the overrides of snapshot to_version."""
     return apply_changeset(
-        changes,
+        rollback_changes(to_version),
         actor=actor,
         source="rollback",
         reason=reason,

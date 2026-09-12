@@ -1,4 +1,5 @@
 from datetime import UTC
+from typing import Any
 
 from rest_framework import serializers
 
@@ -38,3 +39,20 @@ class ChangeSetDetailSerializer(ChangeSetSerializer):
 
     class Meta(ChangeSetSerializer.Meta):
         fields = [*ChangeSetSerializer.Meta.fields, "items"]
+
+
+class ChangeSerializer(serializers.Serializer[dict[str, Any]]):
+    key = serializers.CharField()
+    value = serializers.JSONField(required=False, allow_null=True)
+    reset = serializers.BooleanField(default=False)
+
+
+class ChangesRequestSerializer(serializers.Serializer[dict[str, Any]]):
+    changes = serializers.ListField(child=ChangeSerializer())
+    reason = serializers.CharField(required=False, allow_blank=True, default="")
+    dry_run = serializers.BooleanField(default=False)
+
+
+class RollbackRequestSerializer(serializers.Serializer[dict[str, Any]]):
+    to_version = serializers.IntegerField(min_value=0)
+    reason = serializers.CharField(required=False, allow_blank=True, default="")

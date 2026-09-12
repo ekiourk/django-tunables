@@ -10,6 +10,11 @@ DEFAULTS: dict[str, Any] = {
     "PAGE_SIZE": 50,
     "API_AUTHENTICATION_CLASSES": None,
     "API_PERMISSION_CLASSES": None,
+    "ACTOR_RESOLVER": "tunables.api.actors.default_actor_resolver",
+    "EDITABLE_GROUPS": None,
+    "ACTOR_HEADER": "X-Tunables-Actor",
+    "CLIENT_HEADER": "X-Tunables-Client",
+    "REQUEST_ID_HEADER": "X-Request-ID",
 }
 
 

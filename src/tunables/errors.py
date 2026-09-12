@@ -78,3 +78,9 @@ class UnknownVersion(TunablesError):
     def __init__(self, version: int) -> None:
         super().__init__(f"no snapshot for version {version}")
         self.version = version
+
+
+class GroupNotEditable(TunablesError):
+    def __init__(self, group: str) -> None:
+        super().__init__(f"group {group!r} is not editable by this request")
+        self.group = group

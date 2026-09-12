@@ -327,3 +327,17 @@ def test_document_changes_rejects_other_formats(synced: SyncResult) -> None:
     with pytest.raises(ValidationFailed) as info:
         services.document_changes({"format_version": 1, "groups": [1, 2]})
     assert info.value.errors == [FieldError("groups", "type", "expected an object")]
+
+
+def test_rollback_changes_matches_what_rollback_applies(synced: SyncResult) -> None:
+    apply(Change("pricing.vat_rate", 0.2), Change("thermostat.mode", "heat"))
+    apply(Change("pricing.vat_rate", 0.1), Change("pricing.currencies", ["USD"]))
+    changes = services.rollback_changes(1)
+    assert sorted(changes, key=lambda c: c.key) == [
+        Change("pricing.currencies", reset=True),
+        Change("pricing.vat_rate", 0.2),
+    ]
+    result = services.rollback(1, actor=ALICE)
+    assert {item.key for item in result.changeset.items.all()} == {c.key for c in changes}
+    with pytest.raises(UnknownVersion):
+        services.rollback_changes(9)

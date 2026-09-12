@@ -143,6 +143,9 @@ class Values(TunablesAPIView):
 
 
 class GroupValues(TunablesAPIView):
+    def patch(self, request: Request, group: str) -> Response:
+        raise NotImplementedError
+
     def get(self, request: Request, group: str) -> Response:
         _group(get_catalogue(), group)
         document = latest_snapshot().document
@@ -161,6 +164,9 @@ class ChangeSetPagination(PageNumberPagination):
 
 
 class ChangeSetList(TunablesAPIView):
+    def post(self, request: Request) -> Response:
+        raise NotImplementedError
+
     def get(self, request: Request) -> Response:
         matching = ChangeSet.objects.all()
         if group := request.query_params.get("group"):
@@ -208,3 +214,18 @@ class Export(TunablesAPIView):
         response = HttpResponse(json.dumps(snapshot.document, indent=2), content_type="application/json")
         response["Content-Disposition"] = f'attachment; filename="tunables-v{snapshot.version}.json"'
         return response
+
+
+class Validate(TunablesAPIView):
+    def post(self, request: Request) -> Response:
+        raise NotImplementedError
+
+
+class Rollback(TunablesAPIView):
+    def post(self, request: Request) -> Response:
+        raise NotImplementedError
+
+
+class Import(TunablesAPIView):
+    def post(self, request: Request) -> Response:
+        raise NotImplementedError
