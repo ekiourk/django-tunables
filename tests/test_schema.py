@@ -182,8 +182,10 @@ def test_sections_layout() -> None:
         [{"title": "A", "tunables": ["x", "nope"]}],
         [{"title": "A", "tunables": ["x"]}, {"title": "B", "tunables": ["x"]}],
         [{"title": "A", "tunables": ["x", "x"]}],
+        [{"title": "A"}],
+        ["x"],
     ],
-    ids=["unknown", "repeated-across", "repeated-within"],
+    ids=["unknown", "repeated-across", "repeated-within", "no-tunables-key", "not-a-mapping"],
 )
 def test_bad_sections_rejected_at_construction(sections: list[dict[str, Any]]) -> None:
     with pytest.raises(CatalogueError):

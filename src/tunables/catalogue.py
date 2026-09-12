@@ -68,6 +68,8 @@ class Group:
         names = {tunable.name for tunable in self.tunables}
         placed: set[str] = set()
         for section in self.ui.get("sections", []):
+            if not isinstance(section, Mapping) or "tunables" not in section:
+                raise CatalogueError(f"each section of group {self.name!r} must be a mapping with a 'tunables' list")
             for name in section["tunables"]:
                 if name not in names:
                     raise CatalogueError(f"section in group {self.name!r} names unknown tunable {name!r}")
