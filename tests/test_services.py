@@ -196,6 +196,10 @@ def test_duplicate_key_and_null_value(synced: SyncResult) -> None:
     ]
 
 
+def test_deprecated_no_op_does_not_warn(synced: SyncResult) -> None:
+    assert services.validate([Change("thermostat.legacy_offset", 0.0), Change("pricing.vat_rate", 0.2)]) == []
+
+
 def test_deprecated_key_is_applied_with_a_warning(synced: SyncResult) -> None:
     result = apply(Change("thermostat.legacy_offset", 1.5))
     assert result.snapshot.document["groups"]["thermostat"]["legacy_offset"] == 1.5

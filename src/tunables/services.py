@@ -226,20 +226,22 @@ def _prepare_one(
     except UnknownKey as error:
         report.errors.append(FieldError(change.key, "unknown_key", str(error)))
         return None
-    if tunable.deprecated:
-        report.warnings.append(FieldWarning(change.key, "deprecated", f"deprecated: {tunable.deprecated}"))
     old_value = overrides.get(change.key)
     if change.reset:
-        return _Prepared(change.key, True, None, old_value) if change.key in overrides else None
-    try:
-        value = tunable.type.coerce(change.value)
-        tunable.type.validate(value)
-    except ConstraintError as error:
-        report.errors.append(FieldError(change.key, error.code, error.message))
-        return None
-    new_value = tunable.type.to_json(value)
-    current = overrides[change.key] if change.key in overrides else tunable.type.to_json(tunable.default)
-    return _Prepared(change.key, False, new_value, old_value) if new_value != current else None
+        prepared = _Prepared(change.key, True, None, old_value) if change.key in overrides else None
+    else:
+        try:
+            value = tunable.type.coerce(change.value)
+            tunable.type.validate(value)
+        except ConstraintError as error:
+            report.errors.append(FieldError(change.key, error.code, error.message))
+            return None
+        new_value = tunable.type.to_json(value)
+        current = overrides[change.key] if change.key in overrides else tunable.type.to_json(tunable.default)
+        prepared = _Prepared(change.key, False, new_value, old_value) if new_value != current else None
+    if prepared is not None and tunable.deprecated:
+        report.warnings.append(FieldWarning(change.key, "deprecated", f"deprecated: {tunable.deprecated}"))
+    return prepared
 
 
 def _group_errors(

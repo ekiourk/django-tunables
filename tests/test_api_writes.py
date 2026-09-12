@@ -208,3 +208,132 @@ def test_request_id(api: APIClient) -> None:
     body["changes"][0]["value"] = 0.4
     with settings_with(REQUEST_ID_HEADER="X-Trace"):
         assert post(api, "changesets/", body, HTTP_X_TRACE="t-9").json()["changeset"]["request_id"] == "t-9"
+
+
+def test_patch_group_values(api: APIClient) -> None:
+    apply(Change("pricing.currencies", ["USD"]))
+    response = api.patch(BASE + "groups/pricing/values/", {"vat_rate": 0.2, "currencies": None}, format="json")
+    assert response.status_code == 201
+    data = response.json()
+    assert data["version"] == 2
+    assert data["changeset"]["source"] == "api"
+    assert data["changeset"]["items"] == [
+        {"key": "pricing.currencies", "old_value": ["USD"], "new_value": None, "reset": True},
+        {"key": "pricing.vat_rate", "old_value": None, "new_value": 0.2, "reset": False},
+    ]
+    assert api.patch(BASE + "groups/shop/values/", {"x": 1}, format="json").status_code == 404
+    response = api.patch(BASE + "groups/pricing/values/", {"discount": 1}, format="json")
+    assert response.status_code == 422
+    assert response.json()["errors"][0]["code"] == "unknown_key"
+    response = api.patch(BASE + "groups/pricing/values/", [1, 2], format="json")
+    assert response.status_code == 400
+    assert response.json()["type"] == "urn:tunables:problem:invalid"
+    response = api.patch(BASE + "groups/pricing/values/", {"vat_rate": 0.1}, format="json", HTTP_IF_MATCH='"1"')
+    assert response.status_code == 412
+
+
+def test_rollback(api: APIClient) -> None:
+    apply(Change("pricing.vat_rate", 0.2), Change("thermostat.mode", "heat"))
+    apply(Change("pricing.vat_rate", 0.1), Change("pricing.currencies", ["USD"]))
+    response = post(api, "rollback/", {"to_version": 1, "reason": "undo"})
+    assert response.status_code == 201
+    changeset = response.json()["changeset"]
+    assert (changeset["version"], changeset["source"], changeset["restores_version"]) == (3, "rollback", 1)
+    assert changeset["reason"] == "undo"
+    assert (changeset["actor"], changeset["actor_source"]) == ("anonymous", "asserted")
+    assert {item["key"] for item in changeset["items"]} == {"pricing.vat_rate", "pricing.currencies"}
+    response = post(api, "rollback/", {"to_version": 9})
+    assert response.status_code == 422
+    assert response.json() == {
+        "type": "urn:tunables:problem:unknown-version",
+        "title": "Unknown version",
+        "status": 422,
+        "detail": "no snapshot for version 9",
+        "version": 9,
+    }
+    response = post(api, "rollback/", {"to_version": 3})
+    assert response.status_code == 400
+    assert response.json()["type"] == "urn:tunables:problem:nothing-to-change"
+    assert post(api, "rollback/", {"to_version": 0}, HTTP_IF_MATCH='"1"').status_code == 412
+    assert post(api, "rollback/", {"to_version": 0}, HTTP_IF_MATCH='"3"').status_code == 201
+    assert post(api, "rollback/", {"to_version": -1}).status_code == 400
+    assert post(api, "rollback/", {}).status_code == 400
+
+
+def document(**values: Any) -> dict[str, Any]:
+    body = api_document()
+    for dotted, value in values.items():
+        group, _, name = dotted.partition("__")
+        body["groups"].setdefault(group, {})[name] = value
+    return body
+
+
+def api_document() -> dict[str, Any]:
+    from tunables.services import latest_snapshot
+
+    return dict(latest_snapshot().document)
+
+
+def test_import(api: APIClient) -> None:
+    response = post(api, "import/", document(pricing__vat_rate=0.2, pricing__discount=5, shop__open=True))
+    assert response.status_code == 201
+    data = response.json()
+    assert data["changeset"]["source"] == "import"
+    assert [item["key"] for item in data["changeset"]["items"]] == ["pricing.vat_rate"]
+    assert data["warnings"] == [
+        {"key": "pricing.discount", "code": "unknown_key", "detail": "unknown tunable 'pricing.discount'"},
+        {"key": "shop.open", "code": "unknown_key", "detail": "unknown tunable 'shop.open'"},
+    ]
+    response = post(api, "import/?strict=1", document(pricing__vat_rate=0.3, pricing__discount=5))
+    assert response.status_code == 422
+    assert response.json()["errors"] == [
+        {"key": "pricing.discount", "code": "unknown_key", "detail": "unknown tunable 'pricing.discount'"}
+    ]
+    response = post(api, "import/", {**document(), "format_version": 2})
+    assert response.status_code == 422
+    assert response.json()["errors"][0]["key"] == "format_version"
+    response = post(api, "import/", document())
+    assert response.status_code == 400
+    assert response.json()["type"] == "urn:tunables:problem:nothing-to-change"
+    response = post(api, "import/", [1])
+    assert response.status_code == 400
+    assert response.json()["type"] == "urn:tunables:problem:invalid"
+    assert counts() == (1, 1)
+
+
+def only_pricing(request: Any) -> set[str]:
+    return {"pricing"}
+
+
+def everything(request: Any) -> None:
+    return None
+
+
+def test_editable_groups(api: APIClient) -> None:
+    apply(Change("thermostat.mode", "heat"))
+    forbidden = {
+        "type": "urn:tunables:problem:forbidden-group",
+        "title": "Forbidden group",
+        "status": 403,
+        "detail": "group 'thermostat' is not editable by this request",
+        "group": "thermostat",
+    }
+    with settings_with(EDITABLE_GROUPS=f"{__name__}.only_pricing"):
+        assert post(api, "changesets/", changes({"key": "pricing.vat_rate", "value": 0.2})).status_code == 201
+        before = counts()
+        response = post(api, "changesets/", changes({"key": "thermostat.mode", "value": "cool"}))
+        assert response.status_code == 403
+        assert response["Content-Type"] == PROBLEM
+        assert response.json() == forbidden
+        assert api.patch(BASE + "groups/thermostat/values/", {"mode": "cool"}, format="json").status_code == 403
+        assert post(api, "rollback/", {"to_version": 0}).json() == forbidden
+        assert post(api, "import/", document(thermostat__mode="cool")).status_code == 403
+        assert (
+            post(api, "changesets/", changes({"key": "thermostat.mode", "value": "cool"}, dry_run=True)).status_code
+            == 403
+        )
+        assert post(api, "validate/", changes({"key": "thermostat.mode", "value": "cool"})).status_code == 403
+        assert counts() == before
+        assert post(api, "rollback/", {"to_version": 1}).status_code == 201
+    with settings_with(EDITABLE_GROUPS=everything):
+        assert post(api, "changesets/", changes({"key": "thermostat.mode", "value": "cool"})).status_code == 201

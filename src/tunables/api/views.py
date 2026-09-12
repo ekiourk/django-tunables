@@ -1,5 +1,5 @@
 import json
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from django.db.models import Count
@@ -15,15 +15,20 @@ from rest_framework.views import APIView
 
 from tunables.api import problems
 from tunables.api.actors import request_id, resolve_actor
-from tunables.api.serializers import ChangeSetDetailSerializer, ChangeSetSerializer, ChangesRequestSerializer
+from tunables.api.serializers import (
+    ChangeSetDetailSerializer,
+    ChangeSetSerializer,
+    ChangesRequestSerializer,
+    RollbackRequestSerializer,
+)
 from tunables.catalogue import Catalogue, Group, Tunable
 from tunables.changes import Change
 from tunables.conf import settings
-from tunables.errors import CatalogueOutOfSync, FieldWarning
+from tunables.errors import CatalogueOutOfSync, FieldWarning, GroupNotEditable
 from tunables.models import ChangeSet, Snapshot, State
 from tunables.registry import get_catalogue
 from tunables.schema import describe_group, validator_description
-from tunables.services import apply_changeset, latest_snapshot, validate
+from tunables.services import apply_changeset, document_changes, latest_snapshot, rollback_changes, validate
 from tunables.sync import is_synced
 
 
@@ -149,6 +154,21 @@ def _parsed_changes(request: Request) -> tuple[list[Change], str, bool]:
     return changes, data["reason"], data["dry_run"]
 
 
+def _check_editable(request: Request, changes: Sequence[Change]) -> None:
+    hook = settings.EDITABLE_GROUPS
+    if hook is None:
+        return
+    if isinstance(hook, str):
+        hook = import_string(hook)
+    editable = hook(request)
+    if editable is None:
+        return
+    for change in changes:
+        group = change.key.partition(".")[0]
+        if group not in editable:
+            raise GroupNotEditable(group)
+
+
 def _write(
     request: Request,
     changes: Sequence[Change],
@@ -160,6 +180,7 @@ def _write(
     extra_warnings: Sequence[FieldWarning] = (),
 ) -> Response:
     expected_version = _expected_version(request)
+    _check_editable(request, changes)
     if dry_run:
         warnings = [*extra_warnings, *validate(changes)]
         return Response({"valid": True, "warnings": [problems.describe(w) for w in warnings]})
@@ -199,7 +220,14 @@ class Values(TunablesAPIView):
 
 class GroupValues(TunablesAPIView):
     def patch(self, request: Request, group: str) -> Response:
-        raise NotImplementedError
+        _group(get_catalogue(), group)
+        if not isinstance(request.data, Mapping):
+            raise ValidationError("expected an object mapping tunable names to values")
+        changes = [
+            Change(f"{group}.{name}", reset=True) if value is None else Change(f"{group}.{name}", value)
+            for name, value in request.data.items()
+        ]
+        return _write(request, changes, source="api", reason="")
 
     def get(self, request: Request, group: str) -> Response:
         _group(get_catalogue(), group)
@@ -280,9 +308,19 @@ class Validate(TunablesAPIView):
 
 class Rollback(TunablesAPIView):
     def post(self, request: Request) -> Response:
-        raise NotImplementedError
+        serializer = RollbackRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        to_version = serializer.validated_data["to_version"]
+        changes = rollback_changes(to_version)
+        return _write(
+            request, changes, source="rollback", reason=serializer.validated_data["reason"], restores_version=to_version
+        )
 
 
 class Import(TunablesAPIView):
     def post(self, request: Request) -> Response:
-        raise NotImplementedError
+        if not isinstance(request.data, Mapping):
+            raise ValidationError("expected a snapshot document")
+        strict = request.query_params.get("strict", "").lower() in ("1", "true", "yes")
+        changes, warnings = document_changes(request.data, strict=strict)
+        return _write(request, changes, source="import", reason="", extra_warnings=warnings)
