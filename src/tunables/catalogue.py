@@ -65,8 +65,15 @@ class Group:
         self._check_sections()
 
     def _check_sections(self) -> None:
-        # TODO: every name in ui["sections"] must be a tunable of this group, and appear once
-        pass
+        names = {tunable.name for tunable in self.tunables}
+        placed: set[str] = set()
+        for section in self.ui.get("sections", []):
+            for name in section["tunables"]:
+                if name not in names:
+                    raise CatalogueError(f"section in group {self.name!r} names unknown tunable {name!r}")
+                if name in placed:
+                    raise CatalogueError(f"tunable {name!r} appears in more than one section of group {self.name!r}")
+                placed.add(name)
 
 
 class Catalogue:

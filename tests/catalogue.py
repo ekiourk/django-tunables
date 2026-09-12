@@ -60,6 +60,12 @@ thermostat = Group(
     "thermostat",
     title="Thermostat",
     order=2,
+    ui={
+        "sections": [
+            {"title": "Control", "tunables": ["target_c", "mode"]},
+            {"title": "Sampling", "tunables": ["sample_interval"]},
+        ]
+    },
     tunables=[
         Tunable("target_c", Float(min=5.0, max=30.0), 21.0, title="Target temperature", unit="°C"),
         Tunable("mode", Enum(["auto", "heat", "cool", "off"]), "auto", title="Mode"),
