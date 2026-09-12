@@ -1,66 +1,25 @@
 import json
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping
 from typing import Any
 
 from django.db.models import Count
 from django.http import HttpResponse
 from django.utils.dateparse import parse_datetime
-from django.utils.module_loading import import_string
-from rest_framework.authentication import BaseAuthentication
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.views import APIView
 
-from tunables.api import problems
-from tunables.api.actors import request_id, resolve_actor
-from tunables.api.serializers import (
-    ChangeSetDetailSerializer,
-    ChangeSetSerializer,
-    ChangesRequestSerializer,
-    RollbackRequestSerializer,
-)
+from tunables.api.base import TunablesAPIView
+from tunables.api.serializers import ChangeSetDetailSerializer, ChangeSetSerializer
+from tunables.api.writes import parsed_changes, write
 from tunables.catalogue import Catalogue, Group, Tunable
 from tunables.changes import Change
 from tunables.conf import settings
-from tunables.errors import CatalogueOutOfSync, FieldWarning, GroupNotEditable
-from tunables.models import ChangeSet, Snapshot, State
+from tunables.models import ChangeSet, Snapshot
 from tunables.registry import get_catalogue
 from tunables.schema import describe_group, validator_description
-from tunables.services import apply_changeset, document_changes, latest_snapshot, rollback_changes, validate
-from tunables.sync import is_synced
-
-
-def _instantiate(entries: Sequence[Any]) -> list[Any]:
-    return [(import_string(entry) if isinstance(entry, str) else entry)() for entry in entries]
-
-
-class TunablesAPIView(APIView):
-    """Shared behaviour: settings-driven auth, sync check, X-Tunables-Version header, problem responses."""
-
-    def get_authenticators(self) -> list[BaseAuthentication]:
-        configured = settings.API_AUTHENTICATION_CLASSES
-        return super().get_authenticators() if configured is None else _instantiate(configured)
-
-    def get_permissions(self) -> Sequence[Any]:
-        configured = settings.API_PERMISSION_CLASSES
-        return super().get_permissions() if configured is None else _instantiate(configured)
-
-    def get_exception_handler(self) -> Callable[..., Response | None]:
-        return problems.exception_handler
-
-    def initial(self, request: Request, *args: Any, **kwargs: Any) -> None:
-        super().initial(request, *args, **kwargs)
-        if not is_synced():
-            raise CatalogueOutOfSync("catalogue changed since the last sync; run tunables_sync")
-
-    def finalize_response(self, request: Request, response: Response, *args: Any, **kwargs: Any) -> Response:
-        response = super().finalize_response(request, response, *args, **kwargs)
-        version = State.objects.filter(pk=1).values_list("current_version", flat=True).first()
-        if version is not None:
-            response["X-Tunables-Version"] = str(version)
-        return response
+from tunables.services import latest_snapshot
 
 
 def _group(catalogue: Catalogue, name: str) -> Group:
@@ -134,75 +93,6 @@ class DefinitionList(TunablesAPIView):
         return Response([_definition(group, t) for group in catalogue.groups.values() for t in group.tunables])
 
 
-def _expected_version(request: Request) -> int | None:
-    header = request.headers.get("If-Match")
-    if header is None or header.strip() == "*":
-        return None
-    tag = header.strip()
-    if len(tag) >= 2 and tag[0] == tag[-1] == '"':
-        tag = tag[1:-1]
-    if not tag.isdigit():
-        raise ValidationError({"If-Match": 'expected a quoted version number, for example "42"'})
-    return int(tag)
-
-
-def _parsed_changes(request: Request) -> tuple[list[Change], str, bool]:
-    serializer = ChangesRequestSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-    data = serializer.validated_data
-    changes = [Change(item["key"], item.get("value"), item["reset"]) for item in data["changes"]]
-    return changes, data["reason"], data["dry_run"]
-
-
-def _check_editable(request: Request, changes: Sequence[Change]) -> None:
-    hook = settings.EDITABLE_GROUPS
-    if hook is None:
-        return
-    if isinstance(hook, str):
-        hook = import_string(hook)
-    editable = hook(request)
-    if editable is None:
-        return
-    for change in changes:
-        group = change.key.partition(".")[0]
-        if group not in editable:
-            raise GroupNotEditable(group)
-
-
-def _write(
-    request: Request,
-    changes: Sequence[Change],
-    *,
-    source: str,
-    reason: str,
-    dry_run: bool = False,
-    restores_version: int | None = None,
-    extra_warnings: Sequence[FieldWarning] = (),
-) -> Response:
-    expected_version = _expected_version(request)
-    _check_editable(request, changes)
-    if dry_run:
-        warnings = [*extra_warnings, *validate(changes)]
-        return Response({"valid": True, "warnings": [problems.describe(w) for w in warnings]})
-    result = apply_changeset(
-        changes,
-        actor=resolve_actor(request),
-        source=source,
-        reason=reason,
-        expected_version=expected_version,
-        request_id=request_id(request),
-        restores_version=restores_version,
-    )
-    changeset = ChangeSet.objects.annotate(item_count=Count("items")).get(pk=result.changeset.pk)
-    warnings = [*extra_warnings, *result.warnings]
-    body = {
-        "version": result.version,
-        "changeset": ChangeSetDetailSerializer(changeset).data,
-        "warnings": [problems.describe(w) for w in warnings],
-    }
-    return Response(body, status=201)
-
-
 def _with_etag(request: Request, version: int, body: Any) -> Response:
     etag = f'"{version}"'
     offered = [tag.strip() for tag in request.headers.get("If-None-Match", "").split(",")]
@@ -227,7 +117,7 @@ class GroupValues(TunablesAPIView):
             Change(f"{group}.{name}", reset=True) if value is None else Change(f"{group}.{name}", value)
             for name, value in request.data.items()
         ]
-        return _write(request, changes, source="api", reason="")
+        return write(request, changes, source="api", reason="")
 
     def get(self, request: Request, group: str) -> Response:
         _group(get_catalogue(), group)
@@ -248,8 +138,8 @@ class ChangeSetPagination(PageNumberPagination):
 
 class ChangeSetList(TunablesAPIView):
     def post(self, request: Request) -> Response:
-        changes, reason, dry_run = _parsed_changes(request)
-        return _write(request, changes, source="api", reason=reason, dry_run=dry_run)
+        changes, reason, dry_run = parsed_changes(request)
+        return write(request, changes, source="api", reason=reason, dry_run=dry_run)
 
     def get(self, request: Request) -> Response:
         matching = ChangeSet.objects.all()
@@ -298,29 +188,3 @@ class Export(TunablesAPIView):
         response = HttpResponse(json.dumps(snapshot.document, indent=2), content_type="application/json")
         response["Content-Disposition"] = f'attachment; filename="tunables-v{snapshot.version}.json"'
         return response
-
-
-class Validate(TunablesAPIView):
-    def post(self, request: Request) -> Response:
-        changes, reason, _ = _parsed_changes(request)
-        return _write(request, changes, source="api", reason=reason, dry_run=True)
-
-
-class Rollback(TunablesAPIView):
-    def post(self, request: Request) -> Response:
-        serializer = RollbackRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        to_version = serializer.validated_data["to_version"]
-        changes = rollback_changes(to_version)
-        return _write(
-            request, changes, source="rollback", reason=serializer.validated_data["reason"], restores_version=to_version
-        )
-
-
-class Import(TunablesAPIView):
-    def post(self, request: Request) -> Response:
-        if not isinstance(request.data, Mapping):
-            raise ValidationError("expected a snapshot document")
-        strict = request.query_params.get("strict", "").lower() in ("1", "true", "yes")
-        changes, warnings = document_changes(request.data, strict=strict)
-        return _write(request, changes, source="import", reason="", extra_warnings=warnings)
