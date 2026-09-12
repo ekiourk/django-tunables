@@ -20,7 +20,7 @@ def json_schema(catalogue: Catalogue, group: Group) -> dict[str, Any]:
             "type": "object",
             "additionalProperties": False,
             "properties": {tunable.name: _property(group, tunable) for tunable in group.tunables},
-            "x-validators": [_describe_validator(validator) for validator in group.validators],
+            "x-validators": [validator_description(validator) for validator in group.validators],
             "x-catalogue-version": catalogue.version,
         }
     )
@@ -41,7 +41,7 @@ def _property(group: Group, tunable: Tunable) -> dict[str, Any]:
     return prop
 
 
-def _describe_validator(validator: GroupValidator) -> str:
+def validator_description(validator: GroupValidator) -> str:
     description = getattr(validator, "description", None)
     if description:
         return str(description)
