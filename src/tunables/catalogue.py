@@ -62,6 +62,11 @@ class Group:
             if tunable.name in seen:
                 raise CatalogueError(f"duplicate tunable {tunable.name!r} in group {self.name!r}")
             seen.add(tunable.name)
+        self._check_sections()
+
+    def _check_sections(self) -> None:
+        # TODO: every name in ui["sections"] must be a tunable of this group, and appear once
+        pass
 
 
 class Catalogue:
