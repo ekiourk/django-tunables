@@ -1,3 +1,5 @@
+from datetime import UTC
+
 from rest_framework import serializers
 
 from tunables.models import ChangeItem, ChangeSet
@@ -10,6 +12,7 @@ class ChangeItemSerializer(serializers.ModelSerializer[ChangeItem]):
 
 
 class ChangeSetSerializer(serializers.ModelSerializer[ChangeSet]):
+    created_at = serializers.DateTimeField(default_timezone=UTC, read_only=True)
     item_count = serializers.IntegerField(read_only=True)
 
     class Meta:

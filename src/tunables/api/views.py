@@ -1,20 +1,27 @@
+import json
 from collections.abc import Callable, Sequence
 from typing import Any
 
+from django.db.models import Count
+from django.http import HttpResponse
+from django.utils.dateparse import parse_datetime
 from django.utils.module_loading import import_string
 from rest_framework.authentication import BaseAuthentication
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from tunables.api import problems
+from tunables.api.serializers import ChangeSetDetailSerializer, ChangeSetSerializer
 from tunables.catalogue import Catalogue, Group, Tunable
 from tunables.conf import settings
 from tunables.errors import CatalogueOutOfSync
-from tunables.models import State
+from tunables.models import ChangeSet, Snapshot, State
 from tunables.registry import get_catalogue
 from tunables.schema import describe_group, validator_description
+from tunables.services import latest_snapshot
 from tunables.sync import is_synced
 
 
@@ -121,36 +128,84 @@ class DefinitionList(TunablesAPIView):
         return Response([_definition(group, t) for group in catalogue.groups.values() for t in group.tunables])
 
 
+def _with_etag(request: Request, version: int, body: Any) -> Response:
+    etag = f'"{version}"'
+    offered = [tag.strip() for tag in request.headers.get("If-None-Match", "").split(",")]
+    response = Response(status=304) if etag in offered else Response(body)
+    response["ETag"] = etag
+    return response
+
+
 class Values(TunablesAPIView):
     def get(self, request: Request) -> Response:
-        raise NotImplementedError
+        document = latest_snapshot().document
+        body = {key: document[key] for key in ("version", "groups", "overridden")}
+        return _with_etag(request, document["version"], body)
 
 
 class GroupValues(TunablesAPIView):
     def get(self, request: Request, group: str) -> Response:
-        raise NotImplementedError
+        _group(get_catalogue(), group)
+        document = latest_snapshot().document
+        prefix = f"{group}."
+        body = {
+            "version": document["version"],
+            "values": document["groups"][group],
+            "overridden": [key.removeprefix(prefix) for key in document["overridden"] if key.startswith(prefix)],
+        }
+        return _with_etag(request, document["version"], body)
+
+
+class ChangeSetPagination(PageNumberPagination):
+    def get_page_size(self, request: Request) -> int:
+        return int(settings.PAGE_SIZE)
 
 
 class ChangeSetList(TunablesAPIView):
     def get(self, request: Request) -> Response:
-        raise NotImplementedError
+        matching = ChangeSet.objects.all()
+        if group := request.query_params.get("group"):
+            matching = matching.filter(items__key__startswith=f"{group}.")
+        if key := request.query_params.get("key"):
+            matching = matching.filter(items__key=key)
+        if actor := request.query_params.get("actor"):
+            matching = matching.filter(actor=actor)
+        if since := request.query_params.get("since"):
+            parsed = parse_datetime(since)
+            if parsed is None:
+                raise ValidationError({"since": "expected an ISO 8601 datetime"})
+            matching = matching.filter(created_at__gte=parsed)
+        queryset = ChangeSet.objects.filter(pk__in=matching.values("pk")).annotate(item_count=Count("items"))
+        paginator = ChangeSetPagination()
+        page = paginator.paginate_queryset(queryset.order_by("-version"), request, view=self)
+        return paginator.get_paginated_response(ChangeSetSerializer(page, many=True).data)
 
 
 class ChangeSetDetail(TunablesAPIView):
     def get(self, request: Request, version: int) -> Response:
-        raise NotImplementedError
+        changeset = ChangeSet.objects.annotate(item_count=Count("items")).filter(version=version).first()
+        if changeset is None:
+            raise NotFound(f"unknown version {version}")
+        return Response(ChangeSetDetailSerializer(changeset).data)
 
 
 class LatestSnapshot(TunablesAPIView):
     def get(self, request: Request) -> Response:
-        raise NotImplementedError
+        snapshot = latest_snapshot()
+        return _with_etag(request, snapshot.version, snapshot.document)
 
 
 class SnapshotDetail(TunablesAPIView):
     def get(self, request: Request, version: int) -> Response:
-        raise NotImplementedError
+        snapshot = Snapshot.objects.filter(version=version).first()
+        if snapshot is None:
+            raise NotFound(f"unknown version {version}")
+        return _with_etag(request, snapshot.version, snapshot.document)
 
 
 class Export(TunablesAPIView):
-    def get(self, request: Request) -> Response:
-        raise NotImplementedError
+    def get(self, request: Request) -> HttpResponse:
+        snapshot = latest_snapshot()
+        response = HttpResponse(json.dumps(snapshot.document, indent=2), content_type="application/json")
+        response["Content-Disposition"] = f'attachment; filename="tunables-v{snapshot.version}.json"'
+        return response
