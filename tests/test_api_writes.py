@@ -337,3 +337,13 @@ def test_editable_groups(api: APIClient) -> None:
         assert post(api, "rollback/", {"to_version": 1}).status_code == 201
     with settings_with(EDITABLE_GROUPS=everything):
         assert post(api, "changesets/", changes({"key": "thermostat.mode", "value": "cool"})).status_code == 201
+
+
+def test_patch_reason_header(api: APIClient) -> None:
+    response = api.patch(
+        BASE + "groups/pricing/values/", {"vat_rate": 0.2}, format="json", HTTP_X_TUNABLES_REASON="spring sale"
+    )
+    assert response.status_code == 201
+    assert response.json()["changeset"]["reason"] == "spring sale"
+    response = api.patch(BASE + "groups/pricing/values/", {"vat_rate": 0.1}, format="json")
+    assert response.json()["changeset"]["reason"] == ""

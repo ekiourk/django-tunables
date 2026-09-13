@@ -117,7 +117,7 @@ class GroupValues(TunablesAPIView):
             Change(f"{group}.{name}", reset=True) if value is None else Change(f"{group}.{name}", value)
             for name, value in request.data.items()
         ]
-        return write(request, changes, source="api", reason="")
+        return write(request, changes, source="api", reason=request.headers.get("X-Tunables-Reason", ""))
 
     def get(self, request: Request, group: str) -> Response:
         _group(get_catalogue(), group)
