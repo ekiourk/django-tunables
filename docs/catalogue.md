@@ -72,6 +72,7 @@ invalid:
 ```python
 from tunables.errors import ConstraintError
 
+
 def weights_sum_to_one(values):
     """The three weights must sum to 1."""
     if abs(values["alpha"] + values["beta"] + values["gamma"] - 1.0) > 1e-9:
