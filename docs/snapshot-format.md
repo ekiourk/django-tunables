@@ -1,8 +1,8 @@
 # Snapshot format
 
 Every version of the tunables produces one snapshot: a JSON document holding the
-complete effective parameter set. Readers are separate programs. They depend on this
-document and on the two tables described below, and never on the Python package.
+complete effective parameter set. Readers are separate programs that depend on this
+document and on the two tables described below. They do not import the Python package.
 
 The format is versioned by `format_version`. Any change to the shape of the document
 is a new format version. This page describes format version 1.
@@ -44,8 +44,8 @@ is a new format version. This page describes format version 1.
 Rules readers can rely on:
 
 - `groups` is complete. Every group and every tunable that exists in the catalogue at
-  the time of the snapshot is present, whether or not it was ever changed. A reader never
-  needs the catalogue to know what exists.
+  the time of the snapshot is present, whether or not it was ever changed, so a reader
+  can learn what exists from the document alone.
 - A tunable removed from the catalogue is absent from the next snapshot. A tunable added
   to the catalogue appears with its default.
 - Values are the JSON representation of the tunable's type. The built-in types produce

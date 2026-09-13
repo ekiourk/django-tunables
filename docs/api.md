@@ -128,8 +128,8 @@ effective value is dropped silently, and a request that changes nothing is
 | `POST import/` | a snapshot document | applies its `groups` as changes; `?strict=1` rejects unknown keys |
 
 Each element of `changes` is either `{"key": "pricing.vat_rate", "value": 0.2}` or
-`{"key": "pricing.vat_rate", "reset": true}`. A `value` of `null` is never a value: it
-is a `type` validation error, and `reset` is the only way to return to the default.
+`{"key": "pricing.vat_rate", "reset": true}`. A `value` of `null` is a `type` validation
+error. To return a key to its default, send `reset`.
 
 A successful write answers `201`:
 
@@ -209,6 +209,6 @@ code and its `detail` starts with the index, such as `[1]: must be >= 0`.
 
 ## OpenAPI
 
-The package does not ship an OpenAPI document or annotations. The views are plain
-`APIView` subclasses, so a host that already uses drf-spectacular gets a basic schema
-for them by mounting its schema view as usual. This page is the reference.
+The package does not ship an OpenAPI document or annotations, and this page is the
+reference. The views are plain `APIView` subclasses, so a host that already uses
+drf-spectacular gets a basic schema for them by mounting its schema view as usual.

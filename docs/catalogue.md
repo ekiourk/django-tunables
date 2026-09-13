@@ -114,7 +114,7 @@ Duplicate group names raise `CatalogueError`.
 
 Every type also has the code `type` for input that is not of the right JSON kind.
 
-Rules worth knowing:
+Coercion and validation rules:
 
 - Coercion from JSON is strict. `"30"` is not an integer, `"true"` is not a boolean,
   and `true` is not an integer or a number even though Python's `bool` is a subclass of
@@ -131,8 +131,8 @@ Rules worth knowing:
 
 ## Custom types
 
-Subclass `TunableType` and implement its six methods. Nothing else is needed; the
-definition mirror stores `describe()` so the API can show the type to clients.
+Subclass `TunableType` and implement its six methods. No registration step exists:
+the definition mirror stores `describe()`, which is how the API shows the type to clients.
 
 ```python
 from typing import Any, ClassVar
@@ -177,8 +177,8 @@ class HexColour(TunableType):
 | `form_field(**kwargs)` | A Django form field. Pass `kwargs` through; they carry `label`, `help_text`, `initial` and `required`. |
 | `describe()` | `{"name": ..., "params": {...}}` with every parameter present even when unset. It feeds the catalogue version hash, so keep it stable. |
 
-Making the subclass a frozen dataclass, as the built-ins are, gives it equality and a
-readable `repr` for free.
+The built-in types are frozen dataclasses, which gives them equality and a readable
+`repr`. A custom type can do the same.
 
 ## Sections and UI hints
 
