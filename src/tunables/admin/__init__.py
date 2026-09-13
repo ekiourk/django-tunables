@@ -1,18 +1,27 @@
+import json
 from typing import TYPE_CHECKING, Any
 
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
+from django.db.models import Count, QuerySet
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path, reverse
+from django.utils.html import format_html
 
 from tunables.admin.forms import GroupForm, build_group_form
 from tunables.changes import Actor
-from tunables.errors import FieldError, NothingToChange, ValidationFailed, VersionConflict
+from tunables.errors import (
+    CatalogueOutOfSync,
+    FieldError,
+    NothingToChange,
+    ValidationFailed,
+    VersionConflict,
+)
 from tunables.models import ChangeItem, ChangeSet, Snapshot, TunableDefinition
 from tunables.registry import get_catalogue
 from tunables.schema import validator_description
-from tunables.services import apply_changeset, latest_snapshot
+from tunables.services import apply_changeset, latest_snapshot, rollback
 from tunables.sync import is_synced
 
 if TYPE_CHECKING:
@@ -148,17 +157,65 @@ class ChangeItemInline(ItemInline):
 
 @admin.register(ChangeSet)
 class ChangeSetAdmin(ReadOnlyAdmin):
+    list_display = ["version", "created_at", "actor", "source", "reason", "item_count"]
+    list_filter = ["source", "actor_source"]
+    search_fields = ["reason", "actor", "items__key"]
     inlines = [ChangeItemInline]
     actions = ["rollback"]
 
-    @admin.action(description="Roll back to this version", permissions=["rollback"])
-    def rollback(self, request: HttpRequest, queryset: Any) -> HttpResponse | None:
-        raise NotImplementedError
+    def get_queryset(self, request: HttpRequest) -> QuerySet[ChangeSet]:
+        queryset: QuerySet[ChangeSet] = super().get_queryset(request)
+        return queryset.annotate(item_count=Count("items"))
+
+    @admin.display(description="Items", ordering="item_count")
+    def item_count(self, changeset: ChangeSet) -> int:
+        return int(getattr(changeset, "item_count", 0))
 
     def has_rollback_permission(self, request: HttpRequest) -> bool:
-        raise NotImplementedError
+        return bool(request.user.has_perm("tunables.add_changeset"))
+
+    @admin.action(description="Roll back to this version", permissions=["rollback"])
+    def rollback(self, request: HttpRequest, queryset: QuerySet[ChangeSet]) -> HttpResponse | None:
+        if queryset.count() != 1:
+            self.message_user(request, "Select exactly one change set to roll back to.", messages.ERROR)
+            return None
+        changeset = queryset.get()
+        error = ""
+        if request.POST.get("confirm"):
+            reason = request.POST.get("reason", "").strip()
+            if reason:
+                self._roll_back(request, changeset.version, reason)
+                return None
+            error = "A reason is required."
+        context = {
+            **self.admin_site.each_context(request),
+            "title": f"Roll back to version {changeset.version}",
+            "opts": self.model._meta,
+            "changeset": changeset,
+            "error": error,
+        }
+        return TemplateResponse(request, "tunables/admin/rollback_confirm.html", context)
+
+    def _roll_back(self, request: HttpRequest, version: int, reason: str) -> None:
+        actor = Actor(request.user.get_username(), "verified")
+        try:
+            result = rollback(version, actor=actor, reason=reason)
+        except NothingToChange:
+            self.message_user(
+                request, f"Nothing to change: the values already match version {version}.", messages.WARNING
+            )
+        except (ValidationFailed, CatalogueOutOfSync) as failure:
+            self.message_user(request, f"Rollback failed: {failure}", messages.ERROR)
+        else:
+            self.message_user(request, f"Rolled back to version {version} as version {result.version}.")
 
 
 @admin.register(Snapshot)
 class SnapshotAdmin(ReadOnlyAdmin):
-    pass
+    list_display = ["version", "created_at", "catalogue_version", "changeset"]
+    fields = ["version", "changeset", "created_at", "format_version", "catalogue_version", "pretty_document"]
+    readonly_fields = ["pretty_document"]
+
+    @admin.display(description="Document")
+    def pretty_document(self, snapshot: Snapshot) -> str:
+        return format_html("<pre>{}</pre>", json.dumps(snapshot.document, indent=2))
