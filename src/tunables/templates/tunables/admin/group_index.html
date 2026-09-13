@@ -1,1 +1,31 @@
 {% extends "admin/base_site.html" %}
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Home</a> &rsaquo;
+  <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a> &rsaquo;
+  Tunables
+</div>
+{% endblock %}
+{% block content %}
+{% if not synced %}
+<p class="errornote">The catalogue in code differs from the database. Run <code>manage.py tunables_sync</code> before editing.</p>
+{% endif %}
+<div id="content-main">
+  <table>
+    <thead>
+      <tr><th>Group</th><th>Description</th><th>Tunables</th><th>Rules</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for row in groups %}
+      <tr>
+        <td>{{ row.title }}</td>
+        <td>{{ row.description }}</td>
+        <td>{{ row.count }}</td>
+        <td>{% for rule in row.validators %}{{ rule }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+        <td>{% if can_edit and synced %}<a href="{{ row.edit_url }}">Edit</a>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -140,7 +140,8 @@ class Boolean(TunableType):
         return {"type": "boolean"}
 
     def form_field(self, **kwargs: Any) -> forms.Field:
-        return self._field(forms.BooleanField, required=False, **kwargs)
+        kwargs.setdefault("required", False)
+        return self._field(forms.BooleanField, **kwargs)
 
     def describe(self) -> dict[str, Any]:
         return {"name": self.name, "params": {}}
