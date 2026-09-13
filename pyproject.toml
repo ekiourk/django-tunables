@@ -11,7 +11,6 @@ dependencies = ["Django>=5.2", "djangorestframework>=3.15"]
 dev = ["pytest", "pytest-cov", "pytest-django", "jsonschema[format]", "django-tunables[fixtures]", "ipdb"]
 fixtures = ["testcontainers[postgres]==4.12.0", "psycopg[binary]"]
 lint = ["ruff", "mypy", "django-stubs", "djangorestframework-stubs"]
-openapi = ["drf-spectacular"]
 
 [build-system]
 requires = ["setuptools>=61.0"]
