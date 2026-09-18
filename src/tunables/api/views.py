@@ -16,10 +16,11 @@ from tunables.api.writes import parsed_changes, write
 from tunables.catalogue import Catalogue, Group, Tunable
 from tunables.changes import Change
 from tunables.conf import settings
+from tunables.errors import UnknownVersion
 from tunables.models import ChangeSet, PublisherState, Snapshot, State
 from tunables.registry import get_catalogue
 from tunables.schema import describe_group, document_schema, validator_description
-from tunables.services import latest_snapshot
+from tunables.services import diff_versions, latest_snapshot
 
 
 def _group(catalogue: Catalogue, name: str) -> Group:
@@ -203,6 +204,24 @@ class Export(TunablesAPIView):
         response = HttpResponse(json.dumps(snapshot.document, indent=2), content_type="application/json")
         response["Content-Disposition"] = f'attachment; filename="tunables-v{snapshot.version}.json"'
         return response
+
+
+class Diff(TunablesAPIView):
+    reads_need_sync = False
+
+    def get(self, request: Request) -> Response:
+        versions = {}
+        for name in ("from", "to"):
+            raw = request.query_params.get(name, "")
+            if not raw.isdigit():
+                raise ValidationError({name: "expected a version number"})
+            versions[name] = int(raw)
+        try:
+            entries = diff_versions(versions["from"], versions["to"])
+        except UnknownVersion as error:
+            raise NotFound(str(error)) from error
+        changes = [{"key": entry.key, "old": entry.old, "new": entry.new} for entry in entries]
+        return Response({"from": versions["from"], "to": versions["to"], "changes": changes})
 
 
 class Status(TunablesAPIView):

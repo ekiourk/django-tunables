@@ -444,3 +444,30 @@ def test_status_lists_publisher_states(api: APIClient) -> None:
         },
         {"publisher": "x.Broken", "last_version": None, "last_published_at": None, "last_error": "disk full"},
     ]
+
+
+def test_diff_endpoint(api: APIClient) -> None:
+    apply(Change("pricing.vat_rate", 0.2), Change("thermostat.mode", "heat"))
+    apply(Change("pricing.vat_rate", 0.1))
+    response = api.get(BASE + "diff/?from=0&to=2")
+    assert response.status_code == 200
+    assert response.json() == {
+        "from": 0,
+        "to": 2,
+        "changes": [
+            {"key": "pricing.vat_rate", "old": 0.24, "new": 0.1},
+            {"key": "thermostat.mode", "old": "auto", "new": "heat"},
+        ],
+    }
+    assert api.get(BASE + "diff/?from=2&to=1").json()["changes"] == [
+        {"key": "pricing.vat_rate", "old": 0.1, "new": 0.2}
+    ]
+    for query in ("from=0", "to=1", "from=a&to=1", ""):
+        response = api.get(BASE + "diff/?" + query)
+        assert response.status_code == 400, query
+        assert response.json()["type"] == "urn:tunables:problem:invalid"
+    response = api.get(BASE + "diff/?from=0&to=9")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "no snapshot for version 9"
+    State.objects.update(catalogue_version="sha256:stale")
+    assert api.get(BASE + "diff/?from=0&to=2").status_code == 200

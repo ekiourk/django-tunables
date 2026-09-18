@@ -112,10 +112,7 @@ def apply_changeset(
 def rollback_changes(to_version: int) -> list[Change]:
     """The changes that turn the current overrides into those of snapshot to_version."""
     catalogue = get_catalogue()
-    snapshot = Snapshot.objects.filter(version=to_version).first()
-    if snapshot is None:
-        raise UnknownVersion(to_version)
-    document = snapshot.document
+    document = _snapshot(to_version).document
     known = set(catalogue.keys())
     target: dict[str, Any] = {}
     for key in document["overridden"]:
@@ -177,6 +174,35 @@ def document_changes(
         named = {change.key for change in changes}
         changes.extend(Change(key, reset=True) for key in stored_overrides(catalogue) if key not in named)
     return changes, warnings
+
+
+@dataclass(frozen=True)
+class DiffEntry:
+    key: str
+    old: Any
+    new: Any
+
+
+def diff_versions(from_version: int, to_version: int) -> list[DiffEntry]:
+    """Per-key differences between two stored documents. A key in only one document has None on the other side."""
+    before = _flat_values(_snapshot(from_version).document)
+    after = _flat_values(_snapshot(to_version).document)
+    return [
+        DiffEntry(key, before.get(key), after.get(key))
+        for key in sorted(before.keys() | after.keys())
+        if before.get(key) != after.get(key) or (key in before) != (key in after)
+    ]
+
+
+def _snapshot(version: int) -> Snapshot:
+    snapshot = Snapshot.objects.filter(version=version).first()
+    if snapshot is None:
+        raise UnknownVersion(version)
+    return snapshot
+
+
+def _flat_values(document: Mapping[str, Any]) -> dict[str, Any]:
+    return {f"{group}.{name}": value for group, values in document["groups"].items() for name, value in values.items()}
 
 
 def latest_snapshot() -> Snapshot:
