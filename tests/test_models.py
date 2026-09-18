@@ -177,3 +177,41 @@ def test_change_item_unique_per_changeset_and_key(changeset: ChangeSet) -> None:
 def test_snapshot_version_zero_has_no_changeset() -> None:
     snapshot = Snapshot.objects.create(version=0, format_version=1, catalogue_version="sha256:test", document={})
     assert snapshot.changeset is None
+
+
+def test_tag_names_are_unique_and_validated() -> None:
+    from django.core.exceptions import ValidationError
+
+    from tunables.models import Tag
+
+    Tag.objects.create(name="money")
+    with pytest.raises(IntegrityError), transaction.atomic():
+        Tag.objects.create(name="money")
+    for bad in ("Money", "-x", "a b", ""):
+        with pytest.raises(ValidationError):
+            Tag(name=bad).full_clean()
+    Tag(name="q3-2026_a").full_clean()
+    assert Tag.objects.get(name="money").from_catalogue is False
+
+
+def test_definition_defaults_to_the_general_category(definition: TunableDefinition) -> None:
+    assert definition.category_name == "general"
+    assert list(definition.tags.all()) == []
+
+
+def test_tag_assignments_through_the_seeded_flag(definition: TunableDefinition) -> None:
+    from tunables.models import Tag, TunableDefinitionTag
+
+    money = Tag.objects.create(name="money", from_catalogue=True)
+    manual = Tag.objects.create(name="review")
+    TunableDefinitionTag.objects.create(definition=definition, tag=money, seeded=True)
+    TunableDefinitionTag.objects.create(definition=definition, tag=manual)
+    assert sorted(definition.tags.values_list("name", flat=True)) == ["money", "review"]
+    assert list(money.definitions.all()) == [definition]
+    assert TunableDefinitionTag.objects.get(tag=money).seeded is True
+    assert TunableDefinitionTag.objects.get(tag=manual).seeded is False
+    with pytest.raises(IntegrityError), transaction.atomic():
+        TunableDefinitionTag.objects.create(definition=definition, tag=money)
+    manual.delete()
+    assert list(definition.tags.values_list("name", flat=True)) == ["money"]
+    assert TunableDefinitionTag.objects.count() == 1
