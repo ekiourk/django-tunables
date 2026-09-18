@@ -74,7 +74,8 @@ against it. Obtain it with `manage.py tunables_export --schema`, which needs no
 database, or from `GET snapshots/schema/` on the API, which answers only while the
 deployment is in sync. Its `$id` is `urn:tunables:snapshot:v1:<catalogue hash>`, so a
 reader can check that the schema it holds matches the documents it receives by
-comparing the hash with `catalogue_version`.
+comparing the hash with `catalogue_version`. Its top-level `x-validators` lists the
+catalogue-level rules that the server enforces and the schema cannot express.
 
 ## The version-zero document without a database
 

@@ -7,6 +7,7 @@ from tests.test_sync import override
 from tunables import Actor, Change, services
 from tunables.errors import (
     CatalogueOutOfSync,
+    CatalogueValidationError,
     FieldError,
     FieldWarning,
     GroupError,
@@ -370,3 +371,32 @@ def test_group_errors_report_an_uncoercible_stored_override(synced: SyncResult) 
     assert info.value.errors == [GroupError("weights", "type", "expected a number")]
     with pytest.raises(ValidationFailed):
         apply(Change("weights.beta", 0.2))
+
+
+def test_catalogue_validator_sees_effective_values_across_groups(synced: SyncResult) -> None:
+    apply(Change("pricing.currencies", ["EUR", "USD"]))
+    before = counts()
+    with pytest.raises(ValidationFailed) as info:
+        apply(Change("limits.max_currencies", 1))
+    assert info.value.errors == [
+        CatalogueValidationError("catalogue", "accepted currencies exceed limits.max_currencies")
+    ]
+    assert counts() == before
+    with pytest.raises(ValidationFailed) as info:
+        services.validate([Change("limits.max_currencies", 1)])
+    assert isinstance(info.value.errors[0], CatalogueValidationError)
+    apply(Change("limits.max_currencies", 2))
+
+
+def test_catalogue_validator_runs_on_a_multi_group_write(synced: SyncResult) -> None:
+    with pytest.raises(ValidationFailed) as info:
+        apply(Change("pricing.currencies", ["EUR", "USD", "GBP"]), Change("limits.max_currencies", 2))
+    assert [type(e) for e in info.value.errors] == [CatalogueValidationError]
+    apply(Change("pricing.currencies", ["EUR", "USD", "GBP"]), Change("limits.max_currencies", 3))
+
+
+def test_group_and_catalogue_errors_report_together(synced: SyncResult) -> None:
+    apply(Change("pricing.currencies", ["EUR", "USD"]))
+    with pytest.raises(ValidationFailed) as info:
+        apply(Change("weights.alpha", 0.9), Change("limits.max_currencies", 1))
+    assert [type(e) for e in info.value.errors] == [GroupError, CatalogueValidationError]

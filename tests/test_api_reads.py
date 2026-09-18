@@ -67,6 +67,7 @@ def test_groups_list(api: APIClient) -> None:
             "tunable_count": 3,
             "validators": ["The three weights must sum to 1."],
         },
+        {"name": "limits", "title": "Limits", "description": "", "order": 4, "tunable_count": 1, "validators": []},
     ]
 
 
@@ -94,7 +95,7 @@ def test_group_detail(api: APIClient) -> None:
 def test_group_schema(api: APIClient) -> None:
     assert get(api, "groups/pricing/schema/").json() == describe_group(catalogue, pricing)
     body = get(api, "schema/").json()
-    assert list(body) == ["pricing", "thermostat", "weights"]
+    assert list(body) == ["pricing", "thermostat", "weights", "limits"]
     assert body["thermostat"] == describe_group(catalogue, thermostat)
 
 
@@ -392,6 +393,7 @@ def test_status(api: APIClient) -> None:
         "version": 0,
         "catalogue_version": catalogue.version,
         "code_catalogue_version": catalogue.version,
+        "validators": ["The number of accepted currencies must not exceed limits.max_currencies."],
     }
     State.objects.update(catalogue_version="sha256:stale")
     body = api.get(BASE + "status/").json()
@@ -411,6 +413,7 @@ def test_status_before_the_first_sync(db: None) -> None:
         "version": None,
         "catalogue_version": None,
         "code_catalogue_version": catalogue.version,
+        "validators": ["The number of accepted currencies must not exceed limits.max_currencies."],
     }
 
 

@@ -10,7 +10,7 @@ already has if it uses the admin at all.
 `Tunable definitions` in the admin menu opens the group index at
 `admin/tunables/tunabledefinition/` instead of a changelist. It lists every group in
 catalogue order with its title, description, number of tunables, and the descriptions
-of its validators. Each row has an Edit link when the user may write and the database is
+of its validators, and below the table the rules that span groups. Each row has an Edit link when the user may write and the database is
 in sync with the code.
 
 When the catalogue in code differs from the database, the index shows a warning asking
@@ -37,8 +37,8 @@ form is refused with "Nothing changed." On success the admin returns to the inde
 message naming the new version. The change
 set records `source: admin` and the logged-in user's username as a verified actor.
 
-Errors appear where you would expect: a bad value on its field, a group validator's
-message at the top of the form, and "Enter a value or tick reset to default." on a
+Errors appear where you would expect: a bad value on its field, a group or catalogue
+validator's message at the top of the form, and "Enter a value or tick reset to default." on a
 field that was emptied without its reset box.
 
 If someone else saved the group while the form was open, the save is refused. The page

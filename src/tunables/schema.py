@@ -95,6 +95,7 @@ def document_schema(catalogue: Catalogue) -> dict[str, Any]:
     schema: dict[str, Any] = dict(envelope)
     schema["$id"] = f"urn:tunables:snapshot:v1:{catalogue.version}"
     schema["x-catalogue-version"] = catalogue.version
+    schema["x-validators"] = [validator_description(validator) for validator in catalogue.validators]
     schema["properties"] = {
         **envelope["properties"],
         "catalogue_version": {"const": catalogue.version},

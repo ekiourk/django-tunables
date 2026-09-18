@@ -74,6 +74,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             "title": "Tunables",
             "opts": self.model._meta,
             "groups": groups,
+            "validators": [validator_description(v) for v in get_catalogue().validators],
             "synced": is_synced(),
             "can_edit": self.has_write_permission(request),
         }

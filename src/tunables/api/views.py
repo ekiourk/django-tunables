@@ -217,6 +217,7 @@ class Status(TunablesAPIView):
                 "version": None if state is None else state.current_version,
                 "catalogue_version": None if state is None else state.catalogue_version,
                 "code_catalogue_version": code_version,
+                "validators": [validator_description(v) for v in get_catalogue().validators],
             }
         )
 

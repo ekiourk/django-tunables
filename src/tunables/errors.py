@@ -57,8 +57,16 @@ class FieldWarning:
     message: str
 
 
+@dataclass(frozen=True)
+class CatalogueValidationError:
+    """A catalogue-level validator rejected the proposed state; reported with scope "catalogue"."""
+
+    code: str
+    message: str
+
+
 class ValidationFailed(TunablesError):
-    def __init__(self, errors: Sequence[FieldError | GroupError]) -> None:
+    def __init__(self, errors: Sequence[FieldError | GroupError | CatalogueValidationError]) -> None:
         super().__init__(f"{len(errors)} error{'s' if len(errors) != 1 else ''}")
         self.errors = list(errors)
 

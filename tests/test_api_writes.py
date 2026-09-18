@@ -387,3 +387,12 @@ def test_patch_reason_header_name_is_a_setting(api: APIClient) -> None:
         )
     assert response.status_code == 201
     assert response.json()["changeset"]["reason"] == "renamed header"
+
+
+def test_catalogue_validation_error_in_the_problem_body(api: APIClient) -> None:
+    apply(Change("pricing.currencies", ["EUR", "USD"]))
+    response = post(api, "changesets/", changes({"key": "limits.max_currencies", "value": 1}))
+    assert response.status_code == 422
+    assert response.json()["errors"] == [
+        {"scope": "catalogue", "code": "catalogue", "detail": "accepted currencies exceed limits.max_currencies"}
+    ]

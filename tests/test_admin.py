@@ -62,7 +62,8 @@ def test_group_index(admin_client: Client, synced: SyncResult) -> None:
         assert title in content
     assert edit_url("pricing") in content
     assert "Prices and shipping rules for the web shop." in content
-    assert [row["name"] for row in response.context["groups"]] == ["pricing", "thermostat", "weights"]
+    assert [row["name"] for row in response.context["groups"]] == ["pricing", "thermostat", "weights", "limits"]
+    assert "must not exceed limits.max_currencies" in content
     assert response.context["groups"][0]["count"] == 5
     assert INDEX in admin_client.get("/admin/").content.decode()
 
@@ -268,3 +269,11 @@ def test_snapshot_admin(admin_client: Client, synced: SyncResult) -> None:
     assert "format_version&quot;: 1" in content
     assert "pricing.vat_rate" in content
     assert admin_client.get(f"{SNAPSHOTS}add/").status_code == 403
+
+
+def test_catalogue_validator_error_is_a_non_field_error(admin_client: Client, synced: SyncResult) -> None:
+    apply(Change("pricing.currencies", ["EUR", "USD"]))
+    response = admin_client.post(edit_url("limits"), form_data("limits", max_currencies="1"))
+    assert response.status_code == 200
+    assert response.context["form"].non_field_errors() == ["accepted currencies exceed limits.max_currencies"]
+    assert ChangeSet.objects.count() == 1

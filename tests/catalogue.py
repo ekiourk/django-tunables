@@ -3,7 +3,7 @@ from typing import Any
 
 from django import forms
 
-from tunables import Boolean, Catalogue, Enum, Float, Group, List, Mapping, Tunable, TunableType
+from tunables import Boolean, Catalogue, Enum, Float, Group, Integer, List, Mapping, Tunable, TunableType
 from tunables.errors import ConstraintError, TypeCoercionError
 
 
@@ -94,4 +94,18 @@ weights = Group(
     validators=[weights_sum_to_one],
 )
 
-catalogue = Catalogue([pricing, thermostat, weights])
+limits = Group(
+    "limits",
+    title="Limits",
+    order=4,
+    tunables=[Tunable("max_currencies", Integer(min=1), 3, title="Maximum accepted currencies")],
+)
+
+
+def currencies_within_limit(values: ValueMapping[str, ValueMapping[str, Any]]) -> None:
+    """The number of accepted currencies must not exceed limits.max_currencies."""
+    if len(values["pricing"]["currencies"]) > values["limits"]["max_currencies"]:
+        raise ConstraintError("catalogue", "accepted currencies exceed limits.max_currencies")
+
+
+catalogue = Catalogue([pricing, thermostat, weights, limits], validators=[currencies_within_limit])

@@ -3,7 +3,7 @@ from typing import Any
 
 import pytest
 
-from tests.catalogue import catalogue, pricing, thermostat, weights
+from tests.catalogue import catalogue, currencies_within_limit, limits, pricing, thermostat, weights
 from tunables import Catalogue, Float, Group, Integer, Tunable
 from tunables.errors import CatalogueError, UnknownKey
 
@@ -66,7 +66,7 @@ def test_groups_ordered_by_order_then_name() -> None:
 
 
 def test_shared_catalogue_group_order() -> None:
-    assert list(catalogue.groups) == ["pricing", "thermostat", "weights"]
+    assert list(catalogue.groups) == ["pricing", "thermostat", "weights", "limits"]
     assert catalogue.groups["pricing"] is pricing
 
 
@@ -102,6 +102,7 @@ def test_keys_follow_group_then_tunable_order() -> None:
         "weights.alpha",
         "weights.beta",
         "weights.gamma",
+        "limits.max_currencies",
     ]
 
 
@@ -122,6 +123,7 @@ def test_defaults() -> None:
             "legacy_offset": 0.0,
         },
         "weights": {"alpha": 0.5, "beta": 0.3, "gamma": 0.2},
+        "limits": {"max_currencies": 3},
     }
 
 
@@ -132,7 +134,7 @@ def test_defaults_returns_a_fresh_dict() -> None:
 
 def test_version_format_and_stability() -> None:
     assert re.fullmatch(r"sha256:[0-9a-f]{64}", catalogue.version)
-    assert Catalogue([pricing, thermostat, weights]).version == catalogue.version
+    assert Catalogue([pricing, thermostat, weights, limits]).version == catalogue.version
 
 
 def make(**changes: Any) -> Catalogue:
@@ -185,3 +187,9 @@ def test_version_depends_on_group_order() -> None:
 
 def test_version_ignores_declaration_order() -> None:
     assert Catalogue([pricing, thermostat]).version == Catalogue([thermostat, pricing]).version
+
+
+def test_catalogue_validators_are_stored_and_do_not_affect_the_version() -> None:
+    assert Catalogue([pricing]).validators == ()
+    assert catalogue.validators == (currencies_within_limit,)
+    assert Catalogue([pricing, thermostat, weights, limits]).version == catalogue.version

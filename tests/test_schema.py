@@ -244,7 +244,8 @@ def test_document_schema_identifies_the_catalogue() -> None:
     assert schema["$id"] == f"urn:tunables:snapshot:v1:{catalogue.version}"
     assert schema["x-catalogue-version"] == catalogue.version
     assert schema["properties"]["catalogue_version"] == {"const": catalogue.version}
-    assert schema["properties"]["groups"]["required"] == ["pricing", "thermostat", "weights"]
+    assert schema["properties"]["groups"]["required"] == ["pricing", "thermostat", "weights", "limits"]
+    assert schema["x-validators"] == ["The number of accepted currencies must not exceed limits.max_currencies."]
     pricing_schema = schema["properties"]["groups"]["properties"]["pricing"]
     assert pricing_schema["required"] == [
         "vat_rate",
