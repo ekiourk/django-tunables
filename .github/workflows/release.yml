@@ -61,8 +61,21 @@ jobs:
       - run: uv sync --all-extras --frozen
       - run: uv run pytest --postgres
 
+  quickstart:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: QUICKSTART_PYTHON=3.13 scripts/quickstart_check.sh
+
   publish:
-    needs: [test, test-postgres]
+    needs: [test, test-postgres, quickstart]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
