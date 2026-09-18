@@ -12,10 +12,10 @@
 <p class="errornote">{% blocktranslate %}The catalogue in code differs from the database. Run <code>manage.py tunables_sync</code> before editing.{% endblocktranslate %}</p>
 {% endif %}
 {% if violations %}
-<p class="errornote">
+<div class="errornote">
   {% translate "The stored values break these rules. Fix them with one change set through the API, or edit the groups involved." %}
   <ul>{% for violation in violations %}<li>{{ violation }}</li>{% endfor %}</ul>
-</p>
+</div>
 {% endif %}
 <div id="content-main">
   <table>

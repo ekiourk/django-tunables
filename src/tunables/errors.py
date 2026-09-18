@@ -94,3 +94,11 @@ class GroupNotEditable(TunablesError):
     def __init__(self, group: str) -> None:
         super().__init__(_("group %(group)r is not editable by this request") % {"group": group})
         self.group = group
+
+
+def format_error(error: "FieldError | GroupError | CatalogueValidationError") -> str:
+    """One line of plain text for a validation error: subject, code and message."""
+    if isinstance(error, CatalogueValidationError):
+        return f"catalogue: {error.code}: {error.message}"
+    subject = error.key if isinstance(error, FieldError) else f"group {error.group}"
+    return f"{subject}: {error.code}: {error.message}"
