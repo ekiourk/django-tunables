@@ -417,3 +417,48 @@ def test_document_changes_replace_resets_omitted_overrides(synced: SyncResult) -
     changes, _ = services.document_changes(complete, replace=True)
     with pytest.raises(NothingToChange):
         apply(*changes)
+
+
+def test_diff_versions(synced: SyncResult) -> None:
+    from tunables.services import DiffEntry, diff_versions
+
+    apply(Change("pricing.vat_rate", 0.2), Change("thermostat.mode", "heat"))
+    apply(
+        Change("pricing.vat_rate", 0.1),
+        Change("thermostat.mode", reset=True),
+        Change("weights.alpha", 0.6),
+        Change("weights.beta", 0.2),
+    )
+    assert diff_versions(1, 2) == [
+        DiffEntry("pricing.vat_rate", 0.2, 0.1),
+        DiffEntry("thermostat.mode", "heat", "auto"),
+        DiffEntry("weights.alpha", 0.5, 0.6),
+        DiffEntry("weights.beta", 0.3, 0.2),
+    ]
+    assert diff_versions(2, 1) == [
+        DiffEntry("pricing.vat_rate", 0.1, 0.2),
+        DiffEntry("thermostat.mode", "auto", "heat"),
+        DiffEntry("weights.alpha", 0.6, 0.5),
+        DiffEntry("weights.beta", 0.2, 0.3),
+    ]
+    assert diff_versions(0, 1) == [
+        DiffEntry("pricing.vat_rate", 0.24, 0.2),
+        DiffEntry("thermostat.mode", "auto", "heat"),
+    ]
+    assert diff_versions(2, 2) == []
+    with pytest.raises(UnknownVersion) as info:
+        diff_versions(1, 9)
+    assert info.value.version == 9
+
+
+def test_diff_versions_across_a_catalogue_change(synced: SyncResult) -> None:
+    from django.test import override_settings
+
+    from tests import test_sync
+    from tunables.services import DiffEntry, diff_versions
+    from tunables.sync import sync
+
+    with override_settings(TUNABLES={"CATALOGUE": f"{test_sync.__name__}.extended"}):
+        sync()
+        assert diff_versions(0, 1) == [DiffEntry("pricing.discount", None, 0.0)]
+        assert diff_versions(1, 0) == [DiffEntry("pricing.discount", 0.0, None)]

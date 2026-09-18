@@ -88,6 +88,7 @@ keeps serving the previous state. Every write requires sync.
 | `GET snapshots/{version}/` | the same for one version |
 | `GET snapshots/schema/` | JSON Schema of snapshot documents for this catalogue, see `snapshot-format.md`; requires sync |
 | `GET export/` | the latest document as a download, `Content-Disposition: attachment; filename="tunables-v42.json"` |
+| `GET diff/?from=40&to=47` | `{"from", "to", "changes": [{key, old, new}]}` over the two stored documents, keys sorted, equal values omitted; a key present in only one document has `null` on the other side; both parameters required, unknown version is `404` |
 | `GET status/` | `{"synced", "version", "catalogue_version", "code_catalogue_version", "validators"}`, always `200`; `version` and `catalogue_version` are `null` before the first sync; `validators` lists the catalogue-level rules; `publishers` lists each configured publisher with `last_version`, `last_published_at` and `last_error` |
 
 Shapes:

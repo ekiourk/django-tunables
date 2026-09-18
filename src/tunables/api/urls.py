@@ -18,6 +18,7 @@ urlpatterns = [
     path("snapshots/schema/", views.SnapshotSchema.as_view(), name="snapshot-schema"),
     path("snapshots/<int:version>/", views.SnapshotDetail.as_view(), name="snapshot"),
     path("export/", views.Export.as_view(), name="export"),
+    path("diff/", views.Diff.as_view(), name="diff"),
     path("status/", views.Status.as_view(), name="status"),
     path("validate/", writes.Validate.as_view(), name="validate"),
     path("rollback/", writes.Rollback.as_view(), name="rollback"),
