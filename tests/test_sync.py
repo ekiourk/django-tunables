@@ -210,3 +210,15 @@ def test_snapshot_zero_equals_the_defaults_document() -> None:
     sync()
     snapshot = Snapshot.objects.get(version=0)
     assert snapshot.document == defaults_document(catalogue, created_at=snapshot.created_at)
+
+
+def test_written_snapshots_validate_against_the_document_schema() -> None:
+    from jsonschema import Draft202012Validator
+
+    from tunables.schema import document_schema
+
+    sync()
+    override("pricing.vat_rate", 0.2)
+    validator = Draft202012Validator(document_schema(catalogue), format_checker=Draft202012Validator.FORMAT_CHECKER)
+    for snapshot in Snapshot.objects.all():
+        validator.validate(snapshot.document)

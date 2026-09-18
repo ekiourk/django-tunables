@@ -1,4 +1,6 @@
 import inspect
+import json
+from importlib import resources
 from typing import Any
 
 from tunables.catalogue import Catalogue, Group, GroupValidator, Tunable
@@ -78,3 +80,30 @@ def _control(tunable: Tunable) -> dict[str, Any]:
 
 def describe_group(catalogue: Catalogue, group: Group) -> dict[str, Any]:
     return {"json_schema": json_schema(catalogue, group), "ui_schema": ui_schema(group)}
+
+
+def document_schema(catalogue: Catalogue) -> dict[str, Any]:
+    """The snapshot envelope schema made specific to this catalogue: every group and tunable typed and required."""
+    envelope = json.loads(resources.files("tunables").joinpath("schemas/snapshot-v1.schema.json").read_text())
+    groups: dict[str, Any] = {}
+    for group in catalogue.groups.values():
+        group_schema = json_schema(catalogue, group)
+        for key in ("$schema", "$id", "x-catalogue-version"):
+            del group_schema[key]
+        group_schema["required"] = [tunable.name for tunable in group.tunables]
+        groups[group.name] = group_schema
+    schema: dict[str, Any] = dict(envelope)
+    schema["$id"] = f"urn:tunables:snapshot:v1:{catalogue.version}"
+    schema["x-catalogue-version"] = catalogue.version
+    schema["properties"] = {
+        **envelope["properties"],
+        "catalogue_version": {"const": catalogue.version},
+        "groups": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": list(catalogue.groups),
+            "properties": groups,
+        },
+        "overridden": {**envelope["properties"]["overridden"], "items": {"enum": list(catalogue.keys())}},
+    }
+    return schema

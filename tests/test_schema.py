@@ -197,3 +197,88 @@ def test_describe_group() -> None:
     assert set(described_group) == {"json_schema", "ui_schema"}
     assert described_group["json_schema"] == json_schema(catalogue, pricing)
     assert described_group["ui_schema"] == ui_schema(pricing)
+
+
+def snapshot_validator() -> Draft202012Validator:
+    from tunables.schema import document_schema
+
+    schema = document_schema(catalogue)
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema, format_checker=Draft202012Validator.FORMAT_CHECKER)
+
+
+def defaults() -> dict[str, Any]:
+    from datetime import UTC, datetime
+
+    from tunables.document import build_document
+
+    return build_document(catalogue, {}, version=0, created_at=datetime(2026, 9, 5, tzinfo=UTC))
+
+
+def test_document_schema_accepts_documents_of_this_catalogue() -> None:
+    from datetime import UTC, datetime
+
+    from tunables.document import build_document
+
+    validator = snapshot_validator()
+    validator.validate(defaults())
+    overrides = {"pricing.vat_rate": 0.2, "pricing.currencies": ["USD", "GBP"], "thermostat.mode": "heat"}
+    validator.validate(build_document(catalogue, overrides, version=3, created_at=datetime(2026, 9, 5, tzinfo=UTC)))
+
+
+def test_document_schema_identifies_the_catalogue() -> None:
+    from tunables.schema import document_schema
+
+    schema = document_schema(catalogue)
+    assert schema["$id"] == f"urn:tunables:snapshot:v1:{catalogue.version}"
+    assert schema["x-catalogue-version"] == catalogue.version
+    assert schema["properties"]["catalogue_version"] == {"const": catalogue.version}
+    assert schema["properties"]["groups"]["required"] == ["pricing", "thermostat", "weights"]
+    pricing_schema = schema["properties"]["groups"]["properties"]["pricing"]
+    assert pricing_schema["required"] == ["vat_rate", "free_shipping_over", "currencies", "allow_backorders"]
+    assert "$schema" not in pricing_schema
+    assert "$id" not in pricing_schema
+    assert "x-catalogue-version" not in pricing_schema
+    assert schema["properties"]["overridden"]["items"] == {"enum": list(catalogue.keys())}
+
+
+def replace_in(document: dict[str, Any], path: list[str], value: Any) -> dict[str, Any]:
+    import copy
+
+    document = copy.deepcopy(document)
+    target = document
+    for step in path[:-1]:
+        target = target[step]
+    if value is ...:
+        del target[path[-1]]
+    else:
+        target[path[-1]] = value
+    return document
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (["groups", "pricing", "vat_rate"], "0.2"),
+        (["groups", "pricing", "vat_rate"], 7.0),
+        (["groups", "thermostat", "mode"], "eco"),
+        (["groups", "shop"], {"open": True}),
+        (["groups", "pricing", "vat_rate"], ...),
+        (["groups", "weights"], ...),
+        (["catalogue_version"], "sha256:" + "0" * 64),
+        (["overridden"], ["pricing.discount"]),
+    ],
+    ids=[
+        "wrong-type",
+        "out-of-range",
+        "bad-enum",
+        "unknown-group",
+        "missing-tunable",
+        "missing-group",
+        "other-catalogue",
+        "unknown-overridden-key",
+    ],
+)
+def test_document_schema_rejects(path: list[str], value: Any) -> None:
+    with pytest.raises(ValidationError):
+        snapshot_validator().validate(replace_in(defaults(), path, value))

@@ -15,6 +15,7 @@ urlpatterns = [
     path("changesets/", views.ChangeSetList.as_view(), name="changesets"),
     path("changesets/<int:version>/", views.ChangeSetDetail.as_view(), name="changeset"),
     path("snapshots/latest/", views.LatestSnapshot.as_view(), name="snapshot-latest"),
+    path("snapshots/schema/", views.SnapshotSchema.as_view(), name="snapshot-schema"),
     path("snapshots/<int:version>/", views.SnapshotDetail.as_view(), name="snapshot"),
     path("export/", views.Export.as_view(), name="export"),
     path("status/", views.Status.as_view(), name="status"),

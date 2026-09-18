@@ -86,6 +86,7 @@ keeps serving the previous state. Every write requires sync.
 | `GET changesets/{version}/` | change set with `items` |
 | `GET snapshots/latest/` | the snapshot document, see `snapshot-format.md`, with `ETag` |
 | `GET snapshots/{version}/` | the same for one version |
+| `GET snapshots/schema/` | JSON Schema of snapshot documents for this catalogue, see `snapshot-format.md`; requires sync |
 | `GET export/` | the latest document as a download, `Content-Disposition: attachment; filename="tunables-v42.json"` |
 | `GET status/` | `{"synced", "version", "catalogue_version", "code_catalogue_version"}`, always `200`; `version` and `catalogue_version` are `null` before the first sync |
 

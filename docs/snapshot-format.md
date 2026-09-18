@@ -57,13 +57,24 @@ Rules readers can rely on:
 - Key order inside objects is not significant. Databases that store the document as
   binary JSON return keys in their own order. Readers must look keys up by name.
 
-## Schema
+## Schemas
 
-The package ships a JSON Schema (draft 2020-12) of the document at
-`tunables/schemas/snapshot-v1.schema.json`. Copy it into a reader to validate documents
-in tests. The schema constrains the top-level fields, the `catalogue_version` pattern,
-and the uniqueness of `overridden`. It does not know the catalogue, so it does not
-constrain which groups and tunables exist or what their value types are.
+Two JSON Schemas (draft 2020-12) describe the document.
+
+The envelope schema ships with the package at `tunables/schemas/snapshot-v1.schema.json`.
+It constrains the top-level fields, the `catalogue_version` pattern, and the uniqueness
+of `overridden`. It does not know the catalogue, so it does not constrain which groups
+and tunables exist or what their value types are. It is the same for every host.
+
+The catalogue schema is generated from a host's catalogue. It has the same envelope,
+but `catalogue_version` is fixed to that catalogue's hash, `groups` names every group
+and every tunable as a required, typed property with its bounds and choices, and
+`overridden` only admits keys that exist. A document from a different catalogue fails
+against it. Obtain it with `manage.py tunables_export --schema`, which needs no
+database, or from `GET snapshots/schema/` on the API, which answers only while the
+deployment is in sync. Its `$id` is `urn:tunables:snapshot:v1:<catalogue hash>`, so a
+reader can check that the schema it holds matches the documents it receives by
+comparing the hash with `catalogue_version`.
 
 ## The version-zero document without a database
 

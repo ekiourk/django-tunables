@@ -406,3 +406,13 @@ def test_status_before_the_first_sync(db: None) -> None:
         "catalogue_version": None,
         "code_catalogue_version": catalogue.version,
     }
+
+
+def test_snapshot_schema_endpoint(api: APIClient) -> None:
+    from tunables.schema import document_schema
+
+    response = api.get(BASE + "snapshots/schema/")
+    assert response.status_code == 200
+    assert response.json() == document_schema(catalogue)
+    State.objects.update(catalogue_version="sha256:stale")
+    assert api.get(BASE + "snapshots/schema/").status_code == 503
