@@ -345,3 +345,18 @@ def test_rollback_changes_matches_what_rollback_applies(synced: SyncResult) -> N
     assert {item.key for item in result.changeset.items.all()} == {c.key for c in changes}
     with pytest.raises(UnknownVersion):
         services.rollback_changes(9)
+
+
+def test_group_errors_report_an_uncoercible_stored_override(synced: SyncResult) -> None:
+    changeset = apply(Change("pricing.vat_rate", 0.2)).changeset
+    TunableValue.objects.create(
+        key="weights.alpha",
+        definition=TunableDefinition.objects.get(key="weights.alpha"),
+        value="oops",
+        changeset=changeset,
+    )
+    with pytest.raises(ValidationFailed) as info:
+        services.validate([Change("weights.beta", 0.2)])
+    assert info.value.errors == [GroupError("weights", "type", "expected a number")]
+    with pytest.raises(ValidationFailed):
+        apply(Change("weights.beta", 0.2))

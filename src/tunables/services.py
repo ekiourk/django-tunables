@@ -256,17 +256,17 @@ def _group_errors(
     touched = {item.key.partition(".")[0] for item in prepared}
     errors: list[GroupError] = []
     for group in (group for group in catalogue.groups.values() if group.name in touched):
-        values = {
-            tunable.name: tunable.type.coerce(proposed[f"{group.name}.{tunable.name}"])
-            if f"{group.name}.{tunable.name}" in proposed
-            else tunable.default
-            for tunable in group.tunables
-        }
-        for validator in group.validators:
-            try:
+        try:
+            values = {
+                tunable.name: tunable.type.coerce(proposed[f"{group.name}.{tunable.name}"])
+                if f"{group.name}.{tunable.name}" in proposed
+                else tunable.default
+                for tunable in group.tunables
+            }
+            for validator in group.validators:
                 validator(values)
-            except ConstraintError as error:
-                errors.append(GroupError(group.name, error.code, error.message))
+        except ConstraintError as error:
+            errors.append(GroupError(group.name, error.code, error.message))
     return errors
 
 

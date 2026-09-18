@@ -5,7 +5,7 @@ import pytest
 from django.test import override_settings
 
 from tests.catalogue import catalogue, pricing, thermostat, weights
-from tunables import Actor, Catalogue, Change, Float, Tunable, services
+from tunables import Actor, Catalogue, Change, Float, Group, Integer, Tunable, services
 from tunables.document import FORMAT_VERSION, build_document
 from tunables.models import (
     ChangeItem,
@@ -28,6 +28,14 @@ extended = Catalogue(
     ]
 )
 reduced = Catalogue([replace(pricing, tunables=pricing.tunables[:-1]), thermostat, weights])
+
+
+def retype(group: Group, tunable: Tunable) -> Group:
+    return replace(group, tunables=[tunable if t.name == tunable.name else t for t in group.tunables])
+
+
+retyped = Catalogue([retype(pricing, Tunable("vat_rate", Integer(min=0, max=10), 0)), thermostat, weights])
+narrowed = Catalogue([pricing, retype(thermostat, Tunable("target_c", Float(min=5.0, max=25.0), 21.0)), weights])
 
 
 def use(alternative: str) -> Any:
@@ -142,3 +150,38 @@ def test_is_synced() -> None:
         sync()
         assert is_synced() is True
     assert is_synced() is False
+
+
+def test_retyped_tunable_resets_its_invalid_override_and_keeps_valid_ones() -> None:
+    sync()
+    override("pricing.vat_rate", 0.2)
+    override("thermostat.mode", "heat")
+    with use("retyped"):
+        assert sync() == SyncResult(created=False, rebuilt=True, version=3)
+        item = ChangeItem.objects.get(changeset__version=3)
+        assert (item.key, item.reset, item.old_value, item.new_value) == ("pricing.vat_rate", True, 0.2, None)
+        assert item.definition == TunableDefinition.objects.get(key="pricing.vat_rate")
+        assert not TunableValue.objects.filter(key="pricing.vat_rate").exists()
+        assert TunableValue.objects.get(key="thermostat.mode").value == "heat"
+        document = Snapshot.objects.get(version=3).document
+        assert document["groups"]["pricing"]["vat_rate"] == 0
+        assert document["overridden"] == ["thermostat.mode"]
+        values = services.current_values()
+        assert (values["pricing"]["vat_rate"], values["thermostat"]["mode"]) == (0, "heat")
+        sibling = services.apply_changeset(
+            [Change("pricing.allow_backorders", True)], actor=Actor("alice", "verified"), source="api"
+        )
+        assert sibling.version == 4
+
+
+def test_narrowed_bound_resets_out_of_range_override() -> None:
+    sync()
+    override("thermostat.target_c", 28.0)
+    with use("narrowed"):
+        assert sync() == SyncResult(created=False, rebuilt=True, version=2)
+        item = ChangeItem.objects.get(changeset__version=2)
+        assert (item.key, item.reset, item.old_value) == ("thermostat.target_c", True, 28.0)
+        document = Snapshot.objects.get(version=2).document
+        assert document["groups"]["thermostat"]["target_c"] == 21.0
+        assert document["overridden"] == []
+        assert services.current_values()["thermostat"]["target_c"] == 21.0
