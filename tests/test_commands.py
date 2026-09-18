@@ -9,6 +9,7 @@ from django.db import connection
 from django.test import override_settings
 
 from tests import test_sync
+from tests.catalogue import catalogue
 from tests.test_services import apply
 from tunables import Change
 from tunables.models import ChangeSet, Snapshot, State
@@ -179,3 +180,21 @@ def test_export_defaults_needs_no_database(db: None, tmp_path: Path) -> None:
     assert (document["version"], document["overridden"]) == (0, [])
     assert document["groups"]["pricing"]["vat_rate"] == 0.24
     assert json.loads(run("tunables_export", "--defaults"))["version"] == 0
+
+
+def test_export_schema_needs_no_database(db: None, tmp_path: Path) -> None:
+    from jsonschema import Draft202012Validator
+
+    from tunables.schema import document_schema
+
+    target = tmp_path / "schema.json"
+    assert run("tunables_export", "--schema", "--output", str(target)) == f"wrote {target}\n"
+    schema = json.loads(target.read_text())
+    Draft202012Validator.check_schema(schema)
+    assert schema == document_schema(catalogue)
+    assert json.loads(run("tunables_export", "--schema"))["$id"] == f"urn:tunables:snapshot:v1:{catalogue.version}"
+
+
+def test_export_defaults_and_schema_are_exclusive(db: None) -> None:
+    with pytest.raises(CommandError, match="cannot be combined"):
+        run("tunables_export", "--defaults", "--schema")

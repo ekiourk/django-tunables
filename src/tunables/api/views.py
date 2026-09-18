@@ -18,7 +18,7 @@ from tunables.changes import Change
 from tunables.conf import settings
 from tunables.models import ChangeSet, Snapshot, State
 from tunables.registry import get_catalogue
-from tunables.schema import describe_group, validator_description
+from tunables.schema import describe_group, document_schema, validator_description
 from tunables.services import latest_snapshot
 
 
@@ -219,3 +219,8 @@ class Status(TunablesAPIView):
                 "code_catalogue_version": code_version,
             }
         )
+
+
+class SnapshotSchema(TunablesAPIView):
+    def get(self, request: Request) -> Response:
+        return Response(document_schema(get_catalogue()))
