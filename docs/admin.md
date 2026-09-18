@@ -8,10 +8,11 @@ already has if it uses the admin at all.
 ## Group index
 
 `Tunable definitions` in the admin menu opens the group index at
-`admin/tunables/tunabledefinition/` instead of a changelist. It lists every group in
-catalogue order with its title, description, number of tunables, and the descriptions
-of its validators, and below the table the rules that span groups. Each row has an Edit link when the user may write and the database is
-in sync with the code.
+`admin/tunables/tunabledefinition/` instead of a changelist. It lists every group under
+its category, categories and groups in catalogue order, with each group's title,
+description, number of tunables, and the descriptions of its validators. The rules that
+span groups follow the last category. Each row has an Edit link when the user may write
+and the database is in sync with the code. A link at the top opens the definitions page.
 
 When the catalogue in code differs from the database, the index shows a warning asking
 for `tunables_sync`, the Edit links disappear, and the edit page redirects back here
@@ -21,6 +22,26 @@ When the stored values break a group or catalogue rule, which happens when a rul
 added or tightened in code after the values were set, the index shows the broken rules
 in a red note above the table. Nothing is changed automatically; someone has to set
 values that satisfy the rule.
+
+## Browsing definitions
+
+`admin/tunables/tunabledefinition/definitions/` lists every tunable with its key, title,
+category, group, type and tags. Selects narrow the list by category, group and tag, and a
+search box matches the key, title or description. The same matching serves the API's
+`definitions/` filters. Users who may write see an "Edit tags" link per row, limited by
+`EDITABLE_GROUPS` to the groups they may change.
+
+## Tags
+
+The tags page of one definition shows the tags that come from the catalogue, which only
+the code can change, and one field with the manual tags as comma-separated names. Saving
+replaces the manual tags: names that do not exist yet become new tags. Tag edits change
+no value and create no change set.
+
+`Tags` in the admin menu lists every tag with the number of definitions carrying it.
+Tags can be created and their descriptions edited by hand; the flag that marks a tag as
+coming from the catalogue is read only. A tag the catalogue seeds cannot be deleted, and
+there is no bulk delete action. Deleting a manual tag removes its assignments.
 
 ## Editing a group
 
@@ -97,8 +118,9 @@ The admin uses Django's standard permissions with one addition:
 
 | To | The user needs |
 |---|---|
-| see the group index | `tunables.view_tunabledefinition` |
-| open the edit form and save | `tunables.add_changeset` |
+| see the group index and the definitions page | `tunables.view_tunabledefinition` |
+| open the edit form and save, or edit a definition's tags | `tunables.add_changeset` |
+| see, create, edit and delete tags in the tag admin | Django's `view`, `add`, `change` and `delete` permissions on `Tag` |
 | see the change set history | `tunables.view_changeset` |
 | roll back | `tunables.view_changeset` and `tunables.add_changeset` |
 | see snapshots | `tunables.view_snapshot` |

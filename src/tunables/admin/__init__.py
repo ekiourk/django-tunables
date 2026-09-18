@@ -12,8 +12,8 @@ from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
 from tunables.access import check_editable, editable_groups
-from tunables.admin.forms import GroupForm, build_group_form
-from tunables.changes import Actor
+from tunables.admin.forms import DefinitionTagsForm, GroupForm, build_group_form
+from tunables.changes import Actor, Change
 from tunables.errors import (
     CatalogueOutOfSync,
     FieldError,
@@ -23,11 +23,13 @@ from tunables.errors import (
     VersionConflict,
     format_error,
 )
-from tunables.models import ChangeItem, ChangeSet, Snapshot, TunableDefinition
+from tunables.models import ChangeItem, ChangeSet, Snapshot, Tag, TunableDefinition, TunableDefinitionTag
 from tunables.registry import get_catalogue
 from tunables.schema import validator_description
+from tunables.search import match_definitions, tags_by_key
 from tunables.services import apply_changeset, latest_snapshot, rollback, rollback_changes, rule_violations
 from tunables.sync import is_synced
+from tunables.tags import set_manual_tags
 
 if TYPE_CHECKING:
     ModelAdmin = admin.ModelAdmin[Any]
@@ -53,8 +55,96 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
     """The app's entry in the admin: a group index and a per-group edit form instead of a changelist."""
 
     def get_urls(self) -> list[URLPattern]:
-        edit = path("edit/<str:group>/", self.admin_site.admin_view(self.edit_group), name="tunables_group_edit")
-        return [edit, *super().get_urls()]
+        view = self.admin_site.admin_view
+        return [
+            path("edit/<str:group>/", view(self.edit_group), name="tunables_group_edit"),
+            path("definitions/", view(self.definitions), name="tunables_definitions"),
+            path("definitions/<str:key>/tags/", view(self.definition_tags), name="tunables_definition_tags"),
+            *super().get_urls(),
+        ]
+
+    def definitions(self, request: HttpRequest) -> HttpResponse:
+        """Browse every definition with its category, group and tags; filter and search."""
+        if not self.has_view_or_change_permission(request):
+            raise PermissionDenied
+        catalogue = get_catalogue()
+        category = request.GET.get("category") or None
+        if category is not None and category not in catalogue.categories:
+            raise Http404(f"unknown category {category!r}")
+        group = request.GET.get("group") or None
+        if group is not None and group not in catalogue.groups:
+            raise Http404(f"unknown group {group!r}")
+        matches = match_definitions(
+            catalogue,
+            tags_by_key(),
+            category=category,
+            group=group,
+            wanted_tags=request.GET.getlist("tag"),
+            query=request.GET.get("q", ""),
+        )
+        can_tag = self.has_write_permission(request)
+        editable = editable_groups(request)
+        rows = [
+            {
+                "key": f"{g.name}.{tunable.name}",
+                "title": str(tunable.title) or tunable.name,
+                "category": g.category,
+                "group": g.name,
+                "type": tunable.type.name,
+                "tags": sorted(own_tags),
+                "tags_url": reverse("admin:tunables_definition_tags", args=[f"{g.name}.{tunable.name}"])
+                if can_tag and (editable is None or g.name in editable)
+                else "",
+            }
+            for g, tunable, own_tags in matches
+        ]
+        context = {
+            **self.admin_site.each_context(request),
+            "title": _("Definitions"),
+            "opts": self.model._meta,
+            "rows": rows,
+            "categories": list(catalogue.categories.values()),
+            "groups": list(catalogue.groups.values()),
+            "tag_names": sorted(Tag.objects.values_list("name", flat=True)),
+            "filters": {k: request.GET.get(k, "") for k in ("category", "group", "tag", "q")},
+            "index_url": reverse("admin:tunables_tunabledefinition_changelist"),
+        }
+        return TemplateResponse(request, "tunables/admin/definitions.html", context)
+
+    def definition_tags(self, request: HttpRequest, key: str) -> HttpResponse:
+        """Edit the manual tags of one definition; seeded tags are shown read-only."""
+        if not self.has_write_permission(request):
+            raise PermissionDenied
+        catalogue = get_catalogue()
+        if key not in set(catalogue.keys()):
+            raise Http404(f"unknown tunable {key!r}")
+        try:
+            check_editable(request, [Change(key, reset=True)])
+        except GroupNotEditable as refused:
+            raise PermissionDenied(str(refused)) from refused
+        rows = TunableDefinitionTag.objects.filter(definition__key=key).select_related("tag")
+        seeded = sorted(row.tag.name for row in rows if row.seeded)
+        manual = sorted(row.tag.name for row in rows if not row.seeded)
+        definitions_url = reverse("admin:tunables_definitions")
+        if request.method == "POST":
+            form = DefinitionTagsForm(request.POST)
+            if form.is_valid():
+                set_manual_tags(key, form.cleaned_data["tags"])
+                messages.success(request, _("Saved the tags of %(key)s.") % {"key": key})
+                return HttpResponseRedirect(definitions_url)
+        else:
+            form = DefinitionTagsForm(initial={"tags": ", ".join(manual)})
+        context = {
+            **self.admin_site.each_context(request),
+            "title": _("Tags of %(key)s") % {"key": key},
+            "opts": self.model._meta,
+            "key": key,
+            "tunable": catalogue.get(key),
+            "seeded": seeded,
+            "form": form,
+            "definitions_url": definitions_url,
+        }
+        return TemplateResponse(request, "tunables/admin/definition_tags.html", context)
 
     def has_write_permission(self, request: HttpRequest) -> bool:
         return bool(request.user.has_perm("tunables.add_changeset"))
@@ -62,9 +152,11 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
     def changelist_view(self, request: HttpRequest, extra_context: dict[str, Any] | None = None) -> HttpResponse:
         if not self.has_view_or_change_permission(request):
             raise PermissionDenied
+        catalogue = get_catalogue()
         editable = editable_groups(request)
-        groups = [
-            {
+
+        def row(group: Any) -> dict[str, Any]:
+            return {
                 "name": group.name,
                 "title": str(group.title) or group.name,
                 "description": str(group.description),
@@ -73,15 +165,26 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
                 "edit_url": reverse("admin:tunables_group_edit", args=[group.name]),
                 "can_edit": self.has_write_permission(request) and (editable is None or group.name in editable),
             }
-            for group in get_catalogue().groups.values()
+
+        categories = [
+            {
+                "name": category.name,
+                "title": str(category.title) or category.name,
+                "description": str(category.description),
+                "groups": [row(group) for group in catalogue.groups_in(category.name)],
+            }
+            for category in catalogue.categories.values()
+            if catalogue.groups_in(category.name)
         ]
         context = {
             **self.admin_site.each_context(request),
             **(extra_context or {}),
             "title": _("Tunables"),
             "opts": self.model._meta,
-            "groups": groups,
-            "validators": [validator_description(v) for v in get_catalogue().validators],
+            "categories": categories,
+            "groups": [group for category in categories for group in category["groups"]],
+            "definitions_url": reverse("admin:tunables_definitions"),
+            "validators": [validator_description(v) for v in catalogue.validators],
             "violations": [format_error(v) for v in rule_violations()] if is_synced() else [],
             "synced": is_synced(),
         }
@@ -237,6 +340,29 @@ class ChangeSetAdmin(ReadOnlyAdmin):
                 _("Rolled back to version %(version)s as version %(new)s.")
                 % {"version": version, "new": result.version},
             )
+
+
+@admin.register(Tag)
+class TagAdmin(ModelAdmin):
+    """Tags by hand: create and edit; seeded tags cannot be deleted."""
+
+    list_display = ["name", "description", "from_catalogue", "definition_count"]
+    readonly_fields = ["from_catalogue", "created_at"]
+    search_fields = ["name", "description"]
+    actions = None
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[Tag]:
+        queryset: QuerySet[Tag] = super().get_queryset(request)
+        return queryset.annotate(definition_count=Count("definitions"))
+
+    @admin.display(description=gettext_lazy("Definitions"), ordering="definition_count")
+    def definition_count(self, tag: Tag) -> int:
+        return int(getattr(tag, "definition_count", 0))
+
+    def has_delete_permission(self, request: HttpRequest, obj: Any = None) -> bool:
+        if obj is not None and obj.from_catalogue:
+            return False
+        return bool(super().has_delete_permission(request, obj))
 
 
 @admin.register(Snapshot)

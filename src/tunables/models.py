@@ -44,6 +44,9 @@ class Tag(models.Model):
     from_catalogue = models.BooleanField(default=False)
     created_at = models.DateTimeField(default=timezone.now)
 
+    def __str__(self) -> str:
+        return self.name
+
 
 class TunableDefinition(models.Model):
     key = models.CharField(max_length=255, unique=True)
