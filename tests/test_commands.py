@@ -267,3 +267,19 @@ def test_export_defaults_with_a_fixed_timestamp_is_reproducible(db: None) -> Non
 def test_export_created_at_is_validated(db: None, args: list[str], match: str) -> None:
     with pytest.raises(CommandError, match=match):
         run("tunables_export", *args)
+
+
+def test_sync_command_warns_about_rule_violations(synced: SyncResult) -> None:
+    from tests.test_sync import use
+
+    apply(Change("pricing.currencies", ["EUR", "USD"]))
+    with use("strict_limits"):
+        err = StringIO()
+        assert run("tunables_sync", stderr=err) == "in sync at version 1\n"
+        assert err.getvalue().splitlines() == ["warning: catalogue: catalogue: only one currency may be accepted"]
+        err = StringIO()
+        assert run("tunables_sync", "--check", stderr=err) == "in sync at version 1\n"
+        assert err.getvalue().splitlines() == ["warning: catalogue: catalogue: only one currency may be accepted"]
+    err = StringIO()
+    run("tunables_sync", stderr=err)
+    assert err.getvalue() == ""

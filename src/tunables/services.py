@@ -310,16 +310,37 @@ def _group_values(group: Group, proposed: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _validate_group(group: Group, proposed: Mapping[str, Any]) -> dict[str, Any] | GroupError:
+    """Build a group's effective values and run its validators. Returns the values, or the first error."""
+    try:
+        values = _group_values(group, proposed)
+        for validator in group.validators:
+            validator(values)
+    except ConstraintError as error:
+        return GroupError(group.name, error.code, error.message)
+    return values
+
+
+def _validate_catalogue(
+    catalogue: Catalogue, values: Mapping[str, Mapping[str, Any]]
+) -> list[CatalogueValidationError]:
+    """Run the catalogue validators over already-built effective values of every group."""
+    errors: list[CatalogueValidationError] = []
+    for validator in catalogue.validators:
+        try:
+            validator(values)
+        except ConstraintError as error:
+            errors.append(CatalogueValidationError(error.code, error.message))
+    return errors
+
+
 def _group_errors(catalogue: Catalogue, proposed: Mapping[str, Any], prepared: Sequence[_Prepared]) -> list[GroupError]:
     touched = {item.key.partition(".")[0] for item in prepared}
     errors: list[GroupError] = []
     for group in (group for group in catalogue.groups.values() if group.name in touched):
-        try:
-            values = _group_values(group, proposed)
-            for validator in group.validators:
-                validator(values)
-        except ConstraintError as error:
-            errors.append(GroupError(group.name, error.code, error.message))
+        result = _validate_group(group, proposed)
+        if isinstance(result, GroupError):
+            errors.append(result)
     return errors
 
 
@@ -336,13 +357,24 @@ def _catalogue_errors(
         except ConstraintError as error:
             # A touched group's coercion failure is already reported by _group_errors.
             return [] if group.name in touched else [GroupError(group.name, error.code, error.message)]
-    errors: list[GroupError | CatalogueValidationError] = []
-    for validator in catalogue.validators:
-        try:
-            validator(values)
-        except ConstraintError as error:
-            errors.append(CatalogueValidationError(error.code, error.message))
-    return errors
+    return list(_validate_catalogue(catalogue, values))
+
+
+def rule_violations() -> list[GroupError | CatalogueValidationError]:
+    """Every group and catalogue rule the stored state breaks, from stored overrides and defaults. Raises nothing."""
+    catalogue = get_catalogue()
+    overrides = stored_overrides(catalogue)
+    violations: list[GroupError | CatalogueValidationError] = []
+    values: dict[str, dict[str, Any]] = {}
+    for group in catalogue.groups.values():
+        result = _validate_group(group, overrides)
+        if isinstance(result, GroupError):
+            violations.append(result)
+        else:
+            values[group.name] = result
+    if len(values) == len(catalogue.groups):
+        violations.extend(_validate_catalogue(catalogue, values))
+    return violations
 
 
 def current_version() -> int:

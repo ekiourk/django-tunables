@@ -4,9 +4,10 @@ from typing import Any
 import pytest
 from django.test import override_settings
 
-from tests.catalogue import catalogue, limits, pricing, thermostat, weights
+from tests.catalogue import catalogue, currencies_within_limit, limits, pricing, thermostat, weights
 from tunables import Actor, Catalogue, Change, Float, Group, Integer, Tunable, services
 from tunables.document import FORMAT_VERSION, build_document
+from tunables.errors import CatalogueValidationError, ConstraintError, GroupError
 from tunables.models import (
     ChangeItem,
     ChangeSet,
@@ -38,6 +39,36 @@ def retype(group: Group, tunable: Tunable) -> Group:
 retyped = Catalogue([retype(pricing, Tunable("vat_rate", Integer(min=0, max=10), 0)), thermostat, weights, limits])
 narrowed = Catalogue(
     [pricing, retype(thermostat, Tunable("target_c", Float(min=5.0, max=25.0), 21.0)), weights, limits]
+)
+
+
+def alpha_below_point_four(values: Any) -> None:
+    """alpha must stay below 0.4."""
+    if values["alpha"] >= 0.4:
+        raise ConstraintError("group", "alpha must be below 0.4")
+
+
+def at_most_one_currency(values: Any) -> None:
+    """At most one currency may be accepted."""
+    if len(values["pricing"]["currencies"]) > 1:
+        raise ConstraintError("catalogue", "only one currency may be accepted")
+
+
+strict_weights = Catalogue(
+    [pricing, thermostat, replace(weights, validators=[*weights.validators, alpha_below_point_four]), limits],
+    validators=[currencies_within_limit],
+)
+strict_limits = Catalogue(
+    [pricing, thermostat, weights, limits], validators=[currencies_within_limit, at_most_one_currency]
+)
+strict_limits_extended = Catalogue(
+    [
+        replace(pricing, tunables=[*pricing.tunables, Tunable("discount", Float(min=0.0, max=1.0), 0.0)]),
+        thermostat,
+        weights,
+        limits,
+    ],
+    validators=[currencies_within_limit, at_most_one_currency],
 )
 
 
@@ -225,3 +256,17 @@ def test_written_snapshots_validate_against_the_document_schema() -> None:
     validator = Draft202012Validator(document_schema(catalogue), format_checker=Draft202012Validator.FORMAT_CHECKER)
     for snapshot in Snapshot.objects.all():
         validator.validate(snapshot.document)
+
+
+def test_sync_result_reports_rule_violations() -> None:
+    assert sync().violations == ()
+    assert sync().violations == ()
+    with use("strict_weights"):
+        result = sync()
+    assert (result.rebuilt, result.violations) == (False, (GroupError("weights", "group", "alpha must be below 0.4"),))
+    override("pricing.currencies", ["EUR", "USD"])
+    with use("strict_limits_extended"):
+        result = sync()
+    assert result.rebuilt is True
+    assert result.violations == (CatalogueValidationError("catalogue", "only one currency may be accepted"),)
+    assert Snapshot.objects.get(version=result.version).document["groups"]["pricing"]["currencies"] == ["EUR", "USD"]

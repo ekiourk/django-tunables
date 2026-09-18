@@ -462,3 +462,25 @@ def test_diff_versions_across_a_catalogue_change(synced: SyncResult) -> None:
         sync()
         assert diff_versions(0, 1) == [DiffEntry("pricing.discount", None, 0.0)]
         assert diff_versions(1, 0) == [DiffEntry("pricing.discount", 0.0, None)]
+
+
+def test_rule_violations(synced: SyncResult) -> None:
+    from tests.test_sync import use
+
+    assert services.rule_violations() == []
+    apply(Change("pricing.currencies", ["EUR", "USD"]))
+    with use("strict_weights"):
+        assert services.rule_violations() == [GroupError("weights", "group", "alpha must be below 0.4")]
+    with use("strict_limits"):
+        assert services.rule_violations() == [
+            CatalogueValidationError("catalogue", "only one currency may be accepted")
+        ]
+    changeset = ChangeSet.objects.get(version=1)
+    TunableValue.objects.create(
+        key="weights.alpha",
+        definition=TunableDefinition.objects.get(key="weights.alpha"),
+        value="oops",
+        changeset=changeset,
+    )
+    with use("strict_limits"):
+        assert services.rule_violations() == [GroupError("weights", "type", "expected a number")]

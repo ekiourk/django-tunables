@@ -17,6 +17,11 @@ When the catalogue in code differs from the database, the index shows a warning 
 for `tunables_sync`, the Edit links disappear, and the edit page redirects back here
 with the same message.
 
+When the stored values break a group or catalogue rule, which happens when a rule is
+added or tightened in code after the values were set, the index shows the broken rules
+in a red note above the table. Nothing is changed automatically; someone has to set
+values that satisfy the rule.
+
 ## Editing a group
 
 `admin/tunables/tunabledefinition/edit/<group>/` shows one form for the whole group:

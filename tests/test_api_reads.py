@@ -395,6 +395,7 @@ def test_status(api: APIClient) -> None:
         "code_catalogue_version": catalogue.version,
         "validators": ["The number of accepted currencies must not exceed limits.max_currencies."],
         "publishers": [],
+        "rule_violations": [],
     }
     State.objects.update(catalogue_version="sha256:stale")
     body = api.get(BASE + "status/").json()
@@ -416,6 +417,7 @@ def test_status_before_the_first_sync(db: None) -> None:
         "code_catalogue_version": catalogue.version,
         "validators": ["The number of accepted currencies must not exceed limits.max_currencies."],
         "publishers": [],
+        "rule_violations": [],
     }
 
 
@@ -471,3 +473,11 @@ def test_diff_endpoint(api: APIClient) -> None:
     assert response.json()["detail"] == "no snapshot for version 9"
     State.objects.update(catalogue_version="sha256:stale")
     assert api.get(BASE + "diff/?from=0&to=2").status_code == 200
+
+
+def test_status_reports_rule_violations(api: APIClient) -> None:
+    from tests.test_sync import use
+
+    with use("strict_weights"):
+        body = api.get(BASE + "status/").json()
+    assert body["rule_violations"] == [{"group": "weights", "code": "group", "detail": "alpha must be below 0.4"}]
