@@ -135,3 +135,28 @@ def test_schema_rejects_broken_documents(break_document: Callable[[dict[str, Any
     validator = Draft202012Validator(schema(), format_checker=Draft202012Validator.FORMAT_CHECKER)
     with pytest.raises(ValidationError):
         validator.validate(break_document(overrides_document()))
+
+
+def test_defaults_document_matches_build_document_with_no_overrides() -> None:
+    from django.test import override_settings
+
+    from tunables.document import defaults_document
+
+    assert defaults_document(catalogue, created_at=CREATED_AT) == build_document(
+        catalogue, {}, version=0, created_at=CREATED_AT
+    )
+    with override_settings(TUNABLES={"CATALOGUE": "tests.catalogue.catalogue", "ENVIRONMENT": "staging"}):
+        assert defaults_document(catalogue, created_at=CREATED_AT)["environment"] == "staging"
+
+
+def test_defaults_document_stamps_now_by_default() -> None:
+    from datetime import timedelta
+
+    from django.utils import timezone
+
+    from tunables.document import defaults_document
+
+    before = timezone.now()
+    created_at = datetime.fromisoformat(defaults_document(catalogue)["created_at"])
+    assert created_at.tzinfo is not None
+    assert before - timedelta(seconds=5) <= created_at <= timezone.now()

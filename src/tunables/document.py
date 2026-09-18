@@ -2,7 +2,10 @@ from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
+from django.utils import timezone
+
 from tunables.catalogue import Catalogue
+from tunables.conf import settings
 
 FORMAT_VERSION = 1
 
@@ -39,3 +42,14 @@ def build_document(
         "groups": groups,
         "overridden": sorted(overridden),
     }
+
+
+def defaults_document(catalogue: Catalogue, *, created_at: datetime | None = None) -> dict[str, Any]:
+    """The version-zero document from the catalogue alone: every default, nothing overridden."""
+    return build_document(
+        catalogue,
+        {},
+        version=0,
+        created_at=created_at or timezone.now(),
+        environment=settings.ENVIRONMENT,
+    )

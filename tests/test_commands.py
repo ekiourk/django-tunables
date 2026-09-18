@@ -162,3 +162,20 @@ def test_protect_history_requires_postgresql(db: None) -> None:
         pytest.skip("runs on SQLite only")
     with pytest.raises(CommandError, match="needs PostgreSQL.*sqlite"):
         run("tunables_protect_history")
+
+
+def test_export_defaults_needs_no_database(db: None, tmp_path: Path) -> None:
+    from importlib import resources
+
+    from jsonschema import Draft202012Validator
+
+    with pytest.raises(CommandError, match="tunables_sync"):
+        run("tunables_export")
+    target = tmp_path / "defaults.json"
+    assert run("tunables_export", "--defaults", "--output", str(target)) == f"wrote {target}\n"
+    document = json.loads(target.read_text())
+    schema = json.loads(resources.files("tunables").joinpath("schemas/snapshot-v1.schema.json").read_text())
+    Draft202012Validator(schema, format_checker=Draft202012Validator.FORMAT_CHECKER).validate(document)
+    assert (document["version"], document["overridden"]) == (0, [])
+    assert document["groups"]["pricing"]["vat_rate"] == 0.24
+    assert json.loads(run("tunables_export", "--defaults"))["version"] == 0
