@@ -3,8 +3,8 @@ from typing import Any
 
 from django.core.management.base import CommandError, CommandParser
 
-from tunables.errors import CatalogueValidationError, GroupError
-from tunables.management.base import TunablesCommand, describe
+from tunables.errors import CatalogueValidationError, GroupError, format_error
+from tunables.management.base import TunablesCommand
 from tunables.services import current_version, rule_violations
 from tunables.sync import is_synced, sync
 
@@ -37,4 +37,4 @@ class Command(TunablesCommand):
 
     def _warn(self, violations: Sequence[GroupError | CatalogueValidationError]) -> None:
         for violation in violations:
-            self.stderr.write(f"warning: {describe(violation)}")
+            self.stderr.write(f"warning: {format_error(violation)}")

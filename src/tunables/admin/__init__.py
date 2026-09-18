@@ -21,8 +21,8 @@ from tunables.errors import (
     NothingToChange,
     ValidationFailed,
     VersionConflict,
+    format_error,
 )
-from tunables.management.base import describe
 from tunables.models import ChangeItem, ChangeSet, Snapshot, TunableDefinition
 from tunables.registry import get_catalogue
 from tunables.schema import validator_description
@@ -82,7 +82,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             "opts": self.model._meta,
             "groups": groups,
             "validators": [validator_description(v) for v in get_catalogue().validators],
-            "violations": [describe(v) for v in rule_violations()] if is_synced() else [],
+            "violations": [format_error(v) for v in rule_violations()] if is_synced() else [],
             "synced": is_synced(),
         }
         return TemplateResponse(request, "tunables/admin/group_index.html", context)
