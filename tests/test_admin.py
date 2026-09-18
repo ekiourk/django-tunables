@@ -370,3 +370,106 @@ def test_group_index_shows_rule_violations(admin_client: Client, synced: SyncRes
     content = response.content.decode()
     assert "alpha must be below 0.4" in content
     assert 'class="errornote"' in content
+
+
+DEFINITIONS = f"{INDEX}definitions/"
+
+
+def tags_url(key: str) -> str:
+    return f"{DEFINITIONS}{key}/tags/"
+
+
+def test_group_index_is_organised_by_category(admin_client: Client, synced: SyncResult) -> None:
+    response = admin_client.get(INDEX)
+    assert [(c["name"], [g["name"] for g in c["groups"]]) for c in response.context["categories"]] == [
+        ("shop", ["pricing"]),
+        ("building", ["thermostat"]),
+        ("general", ["weights", "limits"]),
+    ]
+    content = response.content.decode()
+    assert content.index("<h2>Shop</h2>") < content.index("<h2>Building</h2>") < content.index("<h2>General</h2>")
+    assert "Everything else." in content
+
+
+def test_definitions_page_lists_filters_and_searches(admin_client: Client, synced: SyncResult) -> None:
+    response = admin_client.get(DEFINITIONS)
+    assert response.status_code == 200
+    rows = response.context["rows"]
+    assert len(rows) == 14
+    by_key = {row["key"]: row for row in rows}
+    assert by_key["pricing.vat_rate"]["tags"] == ["money"]
+    assert (by_key["weights.alpha"]["category"], by_key["weights.alpha"]["group"]) == ("general", "weights")
+    assert [r["key"] for r in admin_client.get(DEFINITIONS + "?category=shop").context["rows"]] == [
+        "pricing.vat_rate",
+        "pricing.free_shipping_over",
+        "pricing.currencies",
+        "pricing.shipping_rates",
+        "pricing.allow_backorders",
+    ]
+    assert [r["key"] for r in admin_client.get(DEFINITIONS + "?tag=money").context["rows"]] == [
+        "pricing.vat_rate",
+        "pricing.shipping_rates",
+        "limits.max_currencies",
+    ]
+    assert [r["key"] for r in admin_client.get(DEFINITIONS + "?q=vat").context["rows"]] == ["pricing.vat_rate"]
+    assert admin_client.get(DEFINITIONS + "?category=nope").status_code == 404
+    assert admin_client.get(DEFINITIONS + "?group=nope").status_code == 404
+    assert tags_url("pricing.vat_rate") in response.content.decode()
+    viewer = staff("tunables.view_tunabledefinition")
+    page = viewer.get(DEFINITIONS)
+    assert page.status_code == 200
+    assert tags_url("pricing.vat_rate") not in page.content.decode()
+    assert staff().get(DEFINITIONS).status_code == 403
+
+
+def test_definition_tags_page(admin_client: Client, synced: SyncResult) -> None:
+    from tunables.models import Tag, TunableDefinitionTag
+
+    response = admin_client.get(tags_url("pricing.vat_rate"))
+    assert response.status_code == 200
+    assert response.context["seeded"] == ["money"]
+    assert response.context["form"].initial["tags"] == ""
+    response = admin_client.post(tags_url("pricing.vat_rate"), {"tags": "review, q3"})
+    assert response.status_code == 302
+    assert sorted(Tag.objects.filter(from_catalogue=False).values_list("name", flat=True)) == ["q3", "review"]
+    assigned = TunableDefinitionTag.objects.filter(definition__key="pricing.vat_rate").select_related("tag")
+    assert {r.tag.name: r.seeded for r in assigned} == {"money": True, "q3": False, "review": False}
+    response = admin_client.get(tags_url("pricing.vat_rate"))
+    assert response.context["form"].initial["tags"] == "q3, review"
+    response = admin_client.post(tags_url("pricing.vat_rate"), {"tags": "Bad Name"})
+    assert response.status_code == 200
+    assert "tags" in response.context["form"].errors
+    assert admin_client.get(tags_url("weights.nope")).status_code == 404
+    assert ChangeSet.objects.count() == 0
+    viewer = staff("tunables.view_tunabledefinition")
+    assert viewer.get(tags_url("pricing.vat_rate")).status_code == 403
+    with restricted():
+        assert admin_client.get(tags_url("weights.beta")).status_code == 403
+        assert admin_client.post(tags_url("weights.beta"), {"tags": "x"}).status_code == 403
+
+
+def test_tag_admin(admin_client: Client, synced: SyncResult) -> None:
+    from tunables.models import Tag
+
+    tags_admin = "/admin/tunables/tag/"
+    response = admin_client.get(tags_admin)
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "money" in content and "comfort" in content
+    response = admin_client.post(
+        f"{tags_admin}add/",
+        {"name": "review", "description": "Second look", "created_at_0": "2026-09-01", "created_at_1": "00:00:00"},
+    )
+    assert response.status_code == 302, response.content.decode()[:500]
+    review = Tag.objects.get(name="review")
+    assert (review.description, review.from_catalogue) == ("Second look", False)
+    change = admin_client.get(f"{tags_admin}{review.pk}/change/")
+    assert 'name="from_catalogue"' not in change.content.decode()
+    assert admin_client.post(f"{tags_admin}{review.pk}/delete/", {"post": "yes"}).status_code == 302
+    assert not Tag.objects.filter(name="review").exists()
+    money = Tag.objects.get(name="money")
+    response = admin_client.get(f"{tags_admin}{money.pk}/delete/")
+    assert response.status_code == 403
+    admin_client.post(f"{tags_admin}{money.pk}/delete/", {"post": "yes"})
+    assert Tag.objects.filter(name="money").exists()
+    assert "action-select" not in admin_client.get(tags_admin).content.decode()

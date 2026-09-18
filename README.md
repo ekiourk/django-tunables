@@ -216,9 +216,10 @@ including the problem types and error codes, is in [docs/api.md](docs/api.md).
 
 ## Admin
 
-The Tunables page in the admin lists the groups and edits one group per form with a
-reason field and a reset box per override. The change set history is read only and has
-a rollback action. See [docs/admin.md](docs/admin.md).
+The Tunables page in the admin lists the groups by category and edits one group per
+form with a reason field and a reset box per override. A definitions page browses every
+tunable by category, group, tag and text, and tags can be edited per definition. The
+change set history is read only and has a rollback action. See [docs/admin.md](docs/admin.md).
 
 A screenshot of the group edit form will be added here.
 

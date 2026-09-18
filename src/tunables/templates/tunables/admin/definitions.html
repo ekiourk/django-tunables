@@ -1,0 +1,56 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate "Home" %}</a> &rsaquo;
+  <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a> &rsaquo;
+  <a href="{{ index_url }}">{% translate "Tunables" %}</a> &rsaquo;
+  {% translate "Definitions" %}
+</div>
+{% endblock %}
+{% block content %}
+<div id="content-main">
+  <form method="get" class="aligned">
+    <label>{% translate "Category" %}
+      <select name="category">
+        <option value="">{% translate "any" %}</option>
+        {% for category in categories %}<option value="{{ category.name }}" {% if filters.category == category.name %}selected{% endif %}>{{ category.title|default:category.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>{% translate "Group" %}
+      <select name="group">
+        <option value="">{% translate "any" %}</option>
+        {% for group in groups %}<option value="{{ group.name }}" {% if filters.group == group.name %}selected{% endif %}>{{ group.title|default:group.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>{% translate "Tag" %}
+      <select name="tag">
+        <option value="">{% translate "any" %}</option>
+        {% for name in tag_names %}<option value="{{ name }}" {% if filters.tag == name %}selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>{% translate "Search" %} <input type="search" name="q" value="{{ filters.q }}"></label>
+    <input type="submit" value="{% translate 'Filter' %}">
+  </form>
+  <table>
+    <thead>
+      <tr><th>{% translate "Key" %}</th><th>{% translate "Title" %}</th><th>{% translate "Category" %}</th><th>{% translate "Group" %}</th><th>{% translate "Type" %}</th><th>{% translate "Tags" %}</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        <td><code>{{ row.key }}</code></td>
+        <td>{{ row.title }}</td>
+        <td>{{ row.category }}</td>
+        <td>{{ row.group }}</td>
+        <td>{{ row.type }}</td>
+        <td>{{ row.tags|join:", " }}</td>
+        <td>{% if row.tags_url %}<a href="{{ row.tags_url }}">{% translate "Edit tags" %}</a>{% endif %}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7">{% translate "No definitions match." %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
