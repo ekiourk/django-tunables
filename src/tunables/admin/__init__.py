@@ -11,9 +11,9 @@ from django.utils.html import format_html
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
-from tunables.access import check_editable, editable_groups
+from tunables.access import check_editable, check_group_editable, editable_groups
 from tunables.admin.forms import DefinitionTagsForm, GroupForm, build_group_form
-from tunables.changes import Actor, Change
+from tunables.changes import Actor
 from tunables.errors import (
     CatalogueOutOfSync,
     FieldError,
@@ -119,7 +119,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
         if key not in set(catalogue.keys()):
             raise Http404(f"unknown tunable {key!r}")
         try:
-            check_editable(request, [Change(key, reset=True)])
+            check_group_editable(request, key.partition(".")[0])
         except GroupNotEditable as refused:
             raise PermissionDenied(str(refused)) from refused
         rows = TunableDefinitionTag.objects.filter(definition__key=key).select_related("tag")
