@@ -100,7 +100,7 @@ Shapes:
 group summary = {name, title, description, order, tunable_count, validators: [text]}
 definition    = {key, group, name, type: {name, params}, default, title, description, unit, ui, metadata, deprecated}
 change set    = {version, created_at, actor, actor_source, client, reason, source, restores_version,
-                 request_id, catalogue_version, metadata, item_count}
+                 request_id, catalogue_version, metadata, item_count}   # metadata comes from the POST body, {} otherwise
 item          = {key, old_value, new_value, reset}
 ```
 
@@ -133,7 +133,7 @@ tunable's default removes the override if there is one, the same as `reset`, so
 
 | Method and path | Body | Effect |
 |---|---|---|
-| `POST changesets/` | `{"changes": [...], "reason": "", "dry_run": false}` | applies the changes as one change set |
+| `POST changesets/` | `{"changes": [...], "reason": "", "dry_run": false, "metadata": {}}` | applies the changes as one change set |
 | `POST validate/` | same as above | always a dry run |
 | `PATCH groups/{group}/values/` | `{"<name>": value, "<name>": null}` | form-shaped write of one group; `null` resets |
 | `POST rollback/` | `{"to_version": 40, "reason": ""}` | restores the overrides of that snapshot |
@@ -142,6 +142,10 @@ tunable's default removes the override if there is one, the same as `reset`, so
 Each element of `changes` is either `{"key": "pricing.vat_rate", "value": 0.2}` or
 `{"key": "pricing.vat_rate", "reset": true}`. A `value` of `null` is a `type` validation
 error. To return a key to its default, send `reset`.
+
+`metadata` is an optional JSON object that the change set stores unchanged, for example
+a ticket number the caller wants to find again. The package does not read it, and only
+`POST changesets/` accepts it.
 
 A successful write answers `201`:
 

@@ -51,6 +51,7 @@ class ChangesRequestSerializer(serializers.Serializer[dict[str, Any]]):
     changes = serializers.ListField(child=ChangeSerializer())
     reason = serializers.CharField(required=False, allow_blank=True, default="")
     dry_run = serializers.BooleanField(default=False)
+    metadata = serializers.DictField(required=False, default=dict)
 
 
 class RollbackRequestSerializer(serializers.Serializer[dict[str, Any]]):

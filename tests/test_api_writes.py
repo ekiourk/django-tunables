@@ -415,3 +415,32 @@ def test_import_replace_mode(api: APIClient) -> None:
         response = post(api, "import/?mode=replace", {"format_version": 1, "groups": {"pricing": {"vat_rate": 0.3}}})
     assert response.status_code == 403
     assert response.json()["group"] == "thermostat"
+
+
+def test_changeset_metadata_round_trips(api: APIClient) -> None:
+    body = changes({"key": "pricing.vat_rate", "value": 0.2}, metadata={"ticket": "OPS-12", "batch": 3})
+    response = post(api, "changesets/", body)
+    assert response.status_code == 201
+    assert response.json()["changeset"]["metadata"] == {"ticket": "OPS-12", "batch": 3}
+    assert api.get(BASE + "changesets/1/").json()["metadata"] == {"ticket": "OPS-12", "batch": 3}
+    assert api.get(BASE + "changesets/").json()["results"][0]["metadata"] == {"ticket": "OPS-12", "batch": 3}
+    assert ChangeSet.objects.get(version=1).metadata == {"ticket": "OPS-12", "batch": 3}
+    response = post(api, "changesets/", changes({"key": "pricing.vat_rate", "value": 0.3}))
+    assert response.json()["changeset"]["metadata"] == {}
+
+
+@pytest.mark.parametrize("bad", [["a"], "note", 7], ids=["list", "string", "number"])
+def test_changeset_metadata_must_be_an_object(api: APIClient, bad: Any) -> None:
+    response = post(api, "changesets/", changes({"key": "pricing.vat_rate", "value": 0.2}, metadata=bad))
+    assert response.status_code == 400
+    assert response.json()["type"] == "urn:tunables:problem:invalid"
+    assert "metadata" in response.json()["errors"]
+    assert counts() == (0, 0)
+
+
+def test_dry_run_ignores_metadata(api: APIClient) -> None:
+    body = changes({"key": "pricing.vat_rate", "value": 0.2}, dry_run=True, metadata={"ticket": "OPS-12"})
+    response = post(api, "changesets/", body)
+    assert response.status_code == 200
+    assert response.json()["valid"] is True
+    assert counts() == (0, 0)

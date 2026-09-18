@@ -146,8 +146,8 @@ class ChangeSetList(TunablesAPIView):
     reads_need_sync = False
 
     def post(self, request: Request) -> Response:
-        changes, reason, dry_run = parsed_changes(request)
-        return write(request, changes, source="api", reason=reason, dry_run=dry_run)
+        changes, reason, dry_run, metadata = parsed_changes(request)
+        return write(request, changes, source="api", reason=reason, dry_run=dry_run, metadata=metadata)
 
     def get(self, request: Request) -> Response:
         matching = ChangeSet.objects.all()
