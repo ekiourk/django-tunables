@@ -400,3 +400,20 @@ def test_group_and_catalogue_errors_report_together(synced: SyncResult) -> None:
     with pytest.raises(ValidationFailed) as info:
         apply(Change("weights.alpha", 0.9), Change("limits.max_currencies", 1))
     assert [type(e) for e in info.value.errors] == [GroupError, CatalogueValidationError]
+
+
+def test_document_changes_replace_resets_omitted_overrides(synced: SyncResult) -> None:
+    apply(Change("pricing.vat_rate", 0.2), Change("thermostat.mode", "heat"))
+    document = {"format_version": 1, "groups": {"pricing": {"vat_rate": 0.1}}}
+    changes, warnings = services.document_changes(document, replace=True)
+    assert sorted(changes, key=lambda c: c.key) == [
+        Change("pricing.vat_rate", 0.1),
+        Change("thermostat.mode", reset=True),
+    ]
+    assert warnings == []
+    partial, _ = services.document_changes(document)
+    assert partial == [Change("pricing.vat_rate", 0.1)]
+    complete = {"format_version": 1, "groups": {"pricing": {"vat_rate": 0.2}, "thermostat": {"mode": "heat"}}}
+    changes, _ = services.document_changes(complete, replace=True)
+    with pytest.raises(NothingToChange):
+        apply(*changes)

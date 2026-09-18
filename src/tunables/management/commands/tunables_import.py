@@ -18,13 +18,18 @@ class Command(TunablesCommand):
         parser.add_argument("--actor", required=True, help="Recorded as the actor of the change set.")
         parser.add_argument("--reason", default="", help="Recorded as the reason of the change set.")
         parser.add_argument("--strict", action="store_true", help="Fail on keys not in the catalogue.")
+        parser.add_argument(
+            "--replace",
+            action="store_true",
+            help="Treat the document as the complete state: reset every override it does not name.",
+        )
 
     def handle(self, *_: Any, **options: Any) -> None:
         try:
             document = json.loads(Path(options["file"]).read_text())
         except json.JSONDecodeError as error:
             raise CommandError(f"{options['file']} is not valid JSON: {error}") from error
-        changes, warnings = document_changes(document, strict=options["strict"])
+        changes, warnings = document_changes(document, strict=options["strict"], replace=options["replace"])
         for warning in warnings:
             self.stderr.write(f"skipped {warning.key}: {warning.message}")
         try:

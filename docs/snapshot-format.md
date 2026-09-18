@@ -109,6 +109,11 @@ Readers that share the database poll one table and fetch from another.
 | `document` | JSON | The document above. |
 | `created_at` | timestamp with time zone | Same instant as `created_at` inside the document. |
 
+An exported document can also be imported into another deployment with the same
+catalogue, through `tunables_import` or `POST import/`. In replace mode the target ends
+up with exactly the overrides of the document, which is how a tuned state is promoted
+from one environment to another.
+
 The intended loop is: read `current_version` cheaply on an interval, and when it
 differs from the last version seen, fetch the row of `tunables_snapshot` with that
 `version` and replace the in-memory configuration atomically.

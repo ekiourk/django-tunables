@@ -111,5 +111,8 @@ class Import(TunablesAPIView):
         if not isinstance(request.data, Mapping):
             raise ValidationError("expected a snapshot document")
         strict = request.query_params.get("strict", "").lower() in ("1", "true", "yes")
-        changes, warnings = document_changes(request.data, strict=strict)
+        mode = request.query_params.get("mode", "")
+        if mode not in ("", "replace"):
+            raise ValidationError({"mode": "expected 'replace' or no mode"})
+        changes, warnings = document_changes(request.data, strict=strict, replace=mode == "replace")
         return write(request, changes, source="import", reason="", extra_warnings=warnings)
