@@ -71,6 +71,7 @@ def test_pricing_json_schema() -> None:
         },
         "x-validators": [],
         "x-catalogue-version": catalogue.version,
+        "x-category": "shop",
     }
 
 
@@ -300,3 +301,11 @@ def replace_in(document: dict[str, Any], path: list[str], value: Any) -> dict[st
 def test_document_schema_rejects(path: list[str], value: Any) -> None:
     with pytest.raises(ValidationError):
         snapshot_validator().validate(replace_in(defaults(), path, value))
+
+
+def test_group_schema_carries_the_category() -> None:
+    from tunables.schema import document_schema
+
+    assert json_schema(catalogue, pricing)["x-category"] == "shop"
+    assert json_schema(catalogue, weights)["x-category"] == "general"
+    assert document_schema(catalogue)["properties"]["groups"]["properties"]["thermostat"]["x-category"] == "building"

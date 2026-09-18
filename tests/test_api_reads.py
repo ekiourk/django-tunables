@@ -30,6 +30,8 @@ VAT_RATE = {
     "ui": {},
     "metadata": {},
     "deprecated": "",
+    "category": "shop",
+    "tags": ["money"],
 }
 
 
@@ -48,6 +50,7 @@ def test_groups_list(api: APIClient) -> None:
             "title": "Pricing",
             "description": "Prices and shipping rules for the web shop.",
             "order": 1,
+            "category": "shop",
             "tunable_count": 5,
             "validators": [],
         },
@@ -56,6 +59,7 @@ def test_groups_list(api: APIClient) -> None:
             "title": "Thermostat",
             "description": "",
             "order": 2,
+            "category": "building",
             "tunable_count": 5,
             "validators": [],
         },
@@ -64,10 +68,19 @@ def test_groups_list(api: APIClient) -> None:
             "title": "Weights",
             "description": "",
             "order": 3,
+            "category": "general",
             "tunable_count": 3,
             "validators": ["The three weights must sum to 1."],
         },
-        {"name": "limits", "title": "Limits", "description": "", "order": 4, "tunable_count": 1, "validators": []},
+        {
+            "name": "limits",
+            "title": "Limits",
+            "description": "",
+            "order": 4,
+            "category": "general",
+            "tunable_count": 1,
+            "validators": [],
+        },
     ]
 
 
@@ -80,6 +93,7 @@ def test_group_detail(api: APIClient) -> None:
         "title": "Pricing",
         "description": "Prices and shipping rules for the web shop.",
         "order": 1,
+        "category": "shop",
         "ui": {},
         "metadata": {},
         "validators": [],
@@ -127,7 +141,15 @@ STORED_DATA_READS = [
     "snapshots/1/",
     "export/",
 ]
-CATALOGUE_READS = ["groups/", "groups/pricing/", "groups/pricing/schema/", "schema/", "definitions/"]
+CATALOGUE_READS = [
+    "groups/",
+    "groups/pricing/",
+    "groups/pricing/schema/",
+    "schema/",
+    "definitions/",
+    "categories/",
+    "tags/",
+]
 WRITES = [
     ("post", "changesets/", {"changes": [{"key": "pricing.vat_rate", "value": 0.3}]}),
     ("post", "validate/", {"changes": [{"key": "pricing.vat_rate", "value": 0.3}]}),
@@ -481,3 +503,84 @@ def test_status_reports_rule_violations(api: APIClient) -> None:
     with use("strict_weights"):
         body = api.get(BASE + "status/").json()
     assert body["rule_violations"] == [{"group": "weights", "code": "group", "detail": "alpha must be below 0.4"}]
+
+
+def test_categories_list(api: APIClient) -> None:
+    assert get(api, "categories/").json() == [
+        {"name": "shop", "title": "Shop", "description": "", "order": 1, "groups": ["pricing"]},
+        {"name": "building", "title": "Building", "description": "", "order": 2, "groups": ["thermostat"]},
+        {
+            "name": "general",
+            "title": "General",
+            "description": "Everything else.",
+            "order": 3,
+            "groups": ["weights", "limits"],
+        },
+    ]
+
+
+def test_groups_filtered_by_category(api: APIClient) -> None:
+    assert [g["name"] for g in get(api, "groups/?category=general").json()] == ["weights", "limits"]
+    assert [g["name"] for g in get(api, "groups/?category=shop").json()] == ["pricing"]
+    response = get(api, "groups/?category=nope")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "unknown category 'nope'"
+
+
+def keys_of(api: APIClient, query: str) -> list[str]:
+    response = get(api, "definitions/?" + query)
+    assert response.status_code == 200, response.content
+    return [d["key"] for d in response.json()]
+
+
+def test_definitions_filters(api: APIClient) -> None:
+    from tunables.models import Tag, TunableDefinition, TunableDefinitionTag
+
+    body = get(api, "definitions/").json()
+    assert {d["key"]: d["category"] for d in body}["weights.alpha"] == "general"
+    assert {d["key"]: d["tags"] for d in body}["thermostat.mode"] == ["comfort"]
+    assert keys_of(api, "category=shop") == [
+        "pricing.vat_rate",
+        "pricing.free_shipping_over",
+        "pricing.currencies",
+        "pricing.shipping_rates",
+        "pricing.allow_backorders",
+    ]
+    assert keys_of(api, "group=thermostat")[:2] == ["thermostat.target_c", "thermostat.mode"]
+    assert keys_of(api, "tag=money") == ["pricing.vat_rate", "pricing.shipping_rates", "limits.max_currencies"]
+    assert keys_of(api, "tag=money&tag=comfort") == []
+    assert keys_of(api, "tag=comfort&category=building") == ["thermostat.target_c", "thermostat.mode"]
+    assert keys_of(api, "q=vat") == ["pricing.vat_rate"]
+    assert keys_of(api, "q=CURRENC") == ["pricing.currencies", "limits.max_currencies"]
+    assert keys_of(api, "q=web shop") == []
+    assert keys_of(api, "tag=nope") == []
+    review = Tag.objects.create(name="review")
+    TunableDefinitionTag.objects.create(definition=TunableDefinition.objects.get(key="weights.beta"), tag=review)
+    assert keys_of(api, "tag=review") == ["weights.beta"]
+    assert {d["key"]: d["tags"] for d in get(api, "definitions/").json()}["weights.beta"] == ["review"]
+    for query in ("category=nope", "group=nope"):
+        assert get(api, "definitions/?" + query).status_code == 404
+
+
+def test_tags_list_and_detail(api: APIClient) -> None:
+    from tunables.models import Tag
+
+    assert get(api, "tags/").json() == [
+        {"name": "comfort", "description": "", "from_catalogue": True, "definition_count": 2},
+        {"name": "money", "description": "", "from_catalogue": True, "definition_count": 3},
+    ]
+    Tag.objects.create(name="review", description="Needs a second look.")
+    body = get(api, "tags/").json()
+    assert [t["name"] for t in body] == ["comfort", "money", "review"]
+    assert body[2] == {
+        "name": "review",
+        "description": "Needs a second look.",
+        "from_catalogue": False,
+        "definition_count": 0,
+    }
+    detail = get(api, "tags/money/").json()
+    assert detail["definitions"] == ["pricing.vat_rate", "pricing.shipping_rates", "limits.max_currencies"]
+    assert detail["definition_count"] == 3
+    response = get(api, "tags/nope/")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "unknown tag 'nope'"
