@@ -396,3 +396,22 @@ def test_catalogue_validation_error_in_the_problem_body(api: APIClient) -> None:
     assert response.json()["errors"] == [
         {"scope": "catalogue", "code": "catalogue", "detail": "accepted currencies exceed limits.max_currencies"}
     ]
+
+
+def test_import_replace_mode(api: APIClient) -> None:
+    apply(Change("pricing.vat_rate", 0.2), Change("thermostat.mode", "heat"))
+    body = {"format_version": 1, "groups": {"pricing": {"vat_rate": 0.1}}}
+    response = post(api, "import/?mode=replace", body)
+    assert response.status_code == 201
+    assert {i["key"]: i["reset"] for i in response.json()["changeset"]["items"]} == {
+        "pricing.vat_rate": False,
+        "thermostat.mode": True,
+    }
+    response = post(api, "import/?mode=merge", body)
+    assert response.status_code == 400
+    assert response.json()["type"] == "urn:tunables:problem:invalid"
+    apply(Change("thermostat.mode", "cool"))
+    with settings_with(EDITABLE_GROUPS=f"{__name__}.only_pricing"):
+        response = post(api, "import/?mode=replace", {"format_version": 1, "groups": {"pricing": {"vat_rate": 0.3}}})
+    assert response.status_code == 403
+    assert response.json()["group"] == "thermostat"

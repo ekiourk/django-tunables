@@ -230,3 +230,14 @@ def test_publish_command(synced: SyncResult) -> None:
         with pytest.raises(CommandError, match="not configured"):
             run("tunables_publish", "--publisher", "x.Nope")
     assert Failing.raise_error is True
+
+
+def test_import_replace(synced: SyncResult, tmp_path: Path) -> None:
+    apply(Change("pricing.vat_rate", 0.2), Change("thermostat.mode", "heat"))
+    path = tmp_path / "state.json"
+    path.write_text(json.dumps({"format_version": 1, "groups": {"pricing": {"vat_rate": 0.1}}}))
+    assert run("tunables_import", str(path), "--actor", "deploy", "--replace") == "wrote version 2\n"
+    items = {item.key: item.reset for item in ChangeSet.objects.get(version=2).items.all()}
+    assert items == {"pricing.vat_rate": False, "thermostat.mode": True}
+    assert latest_document()["overridden"] == ["pricing.vat_rate"]
+    assert run("tunables_import", str(path), "--actor", "deploy", "--replace") == "nothing to change\n"

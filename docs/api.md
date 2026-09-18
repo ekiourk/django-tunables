@@ -133,7 +133,7 @@ tunable's default removes the override if there is one, the same as `reset`, so
 | `POST validate/` | same as above | always a dry run |
 | `PATCH groups/{group}/values/` | `{"<name>": value, "<name>": null}` | form-shaped write of one group; `null` resets |
 | `POST rollback/` | `{"to_version": 40, "reason": ""}` | restores the overrides of that snapshot |
-| `POST import/` | a snapshot document | applies its `groups` as changes; `?strict=1` rejects unknown keys |
+| `POST import/` | a snapshot document | applies its `groups` as changes; `?strict=1` rejects unknown keys; `?mode=replace` also resets every override the document does not name |
 
 Each element of `changes` is either `{"key": "pricing.vat_rate", "value": 0.2}` or
 `{"key": "pricing.vat_rate", "reset": true}`. A `value` of `null` is a `type` validation
@@ -154,9 +154,12 @@ including `If-Match`, the group restriction and `nothing-to-change`, so a client
 show exactly what the real request would do.
 
 Import skips keys that are not in the catalogue and reports each as a warning with code
-`unknown_key`, unless `?strict=1` turns them into errors. Only keys present in the
-document are touched; a document is not a full desired state. Importing a document
-that matches the current values is `400 nothing-to-change`.
+`unknown_key`, unless `?strict=1` turns them into errors. By default only keys present in
+the document are touched. With `?mode=replace` the document is the complete desired
+state: keys it omits return to their defaults, so after the import the stored overrides
+are exactly those in the document. The resets this produces are subject to
+`EDITABLE_GROUPS` like any other change. Importing a document that matches the current
+values is `400 nothing-to-change` in either mode.
 
 ## Errors
 

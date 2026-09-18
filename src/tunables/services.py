@@ -140,8 +140,13 @@ def rollback(to_version: int, *, actor: Actor, reason: str = "", expected_versio
     )
 
 
-def document_changes(document: Mapping[str, Any], *, strict: bool = False) -> tuple[list[Change], list[FieldWarning]]:
-    """Changes that set every value in a snapshot document's groups. Unknown keys are skipped, or errors when strict."""
+def document_changes(
+    document: Mapping[str, Any], *, strict: bool = False, replace: bool = False
+) -> tuple[list[Change], list[FieldWarning]]:
+    """Changes that set every value in a document's groups. Unknown keys are skipped, or errors when strict.
+
+    With replace, every stored override absent from the document is reset, so the document is the complete state.
+    """
     if document.get("format_version") != FORMAT_VERSION:
         raise ValidationFailed(
             [FieldError("format_version", "unsupported", f"expected format_version {FORMAT_VERSION}")]
@@ -149,7 +154,8 @@ def document_changes(document: Mapping[str, Any], *, strict: bool = False) -> tu
     groups = document.get("groups", {})
     if not isinstance(groups, Mapping):
         raise ValidationFailed([FieldError("groups", "type", "expected an object")])
-    known = set(get_catalogue().keys())
+    catalogue = get_catalogue()
+    known = set(catalogue.keys())
     changes: list[Change] = []
     warnings: list[FieldWarning] = []
     errors: list[FieldError | GroupError] = []
@@ -167,6 +173,9 @@ def document_changes(document: Mapping[str, Any], *, strict: bool = False) -> tu
                 warnings.append(FieldWarning(key, "unknown_key", f"unknown tunable {key!r}"))
     if errors:
         raise ValidationFailed(errors)
+    if replace:
+        named = {change.key for change in changes}
+        changes.extend(Change(key, reset=True) for key in stored_overrides(catalogue) if key not in named)
     return changes, warnings
 
 
