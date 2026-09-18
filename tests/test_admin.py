@@ -356,3 +356,17 @@ def test_admin_form_labels_are_translated(admin_client: Client, synced: SyncResu
         assert str(response.context["form"].fields["reset_vat_rate"].label) == "Auf Standard zurücksetzen"
     assert "Auf Standard zurücksetzen" in response.content.decode()
     assert str(response.context["form"].fields["reset_vat_rate"].label) == "Reset to default"
+
+
+def test_group_index_shows_rule_violations(admin_client: Client, synced: SyncResult) -> None:
+    from tests.test_sync import use
+
+    response = admin_client.get(INDEX)
+    assert response.context["violations"] == []
+    assert "alpha must be below 0.4" not in response.content.decode()
+    with use("strict_weights"):
+        response = admin_client.get(INDEX)
+    assert response.context["violations"] == ["group weights: group: alpha must be below 0.4"]
+    content = response.content.decode()
+    assert "alpha must be below 0.4" in content
+    assert 'class="errornote"' in content

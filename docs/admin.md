@@ -17,6 +17,11 @@ When the catalogue in code differs from the database, the index shows a warning 
 for `tunables_sync`, the Edit links disappear, and the edit page redirects back here
 with the same message.
 
+When the stored values break a group or catalogue rule, which happens when a rule is
+added or tightened in code after the values were set, the index shows the broken rules
+in a red note above the table. Nothing is changed automatically; someone has to set
+values that satisfy the rule.
+
 ## Editing a group
 
 `admin/tunables/tunabledefinition/edit/<group>/` shows one form for the whole group:
@@ -40,6 +45,12 @@ set records `source: admin` and the logged-in user's username as a verified acto
 Errors appear where you would expect: a bad value on its field, a group or catalogue
 validator's message at the top of the form, and "Enter a value or tick reset to default." on a
 field that was emptied without its reset box.
+
+Cross-group rules, the catalogue validators, are enforced on every save, the same as in
+the API. Because the admin saves one group per change set, a rule that can only be
+satisfied by changing two groups at once cannot be met from the admin: the first save
+fails the rule. Such a change goes through `POST changesets/`, which accepts keys from
+any number of groups in one change set.
 
 If someone else saved the group while the form was open, the save is refused. The page
 reloads with the new values and a message naming the version you started from and the

@@ -87,9 +87,11 @@ Python as `tunables.document.defaults_document(catalogue)`.
 
 The output equals the snapshot 0 that `tunables_sync` writes on a fresh database with
 the same catalogue and environment, except for `created_at`, which is the time of the
-run. A build step that commits the file and checks it for drift should compare every
-field but `created_at`, or call `defaults_document(catalogue, created_at=...)` with a
-fixed instant.
+run. A committed defaults file should use a fixed timestamp, so that a drift test can
+compare the file byte for byte: `tunables_export --defaults --created-at
+2026-09-01T00:00:00+00:00` stamps that instant instead of now, and
+`defaults_document(catalogue, created_at=...)` does the same in Python. The value must
+carry a UTC offset.
 
 ## Reader contract: database tables
 

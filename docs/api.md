@@ -92,7 +92,7 @@ keeps serving the previous state. Every write requires sync.
 | `GET snapshots/schema/` | JSON Schema of snapshot documents for this catalogue, see `snapshot-format.md`; requires sync |
 | `GET export/` | the latest document as a download, `Content-Disposition: attachment; filename="tunables-v42.json"` |
 | `GET diff/?from=40&to=47` | `{"from", "to", "changes": [{key, old, new}]}` over the two stored documents, keys sorted, equal values omitted; a key present in only one document has `null` on the other side; both parameters required, unknown version is `404` |
-| `GET status/` | `{"synced", "version", "catalogue_version", "code_catalogue_version", "validators"}`, always `200`; `version` and `catalogue_version` are `null` before the first sync; `validators` lists the catalogue-level rules; `publishers` lists each configured publisher with `last_version`, `last_published_at` and `last_error` |
+| `GET status/` | `{"synced", "version", "catalogue_version", "code_catalogue_version", "validators"}`, always `200`; `version` and `catalogue_version` are `null` before the first sync; `validators` lists the catalogue-level rules; `publishers` lists each configured publisher with `last_version`, `last_published_at` and `last_error`; `rule_violations` lists the group and catalogue rules the stored values break, in the same shape as the `errors` of a validation problem |
 
 Shapes:
 
@@ -100,7 +100,7 @@ Shapes:
 group summary = {name, title, description, order, tunable_count, validators: [text]}
 definition    = {key, group, name, type: {name, params}, default, title, description, unit, ui, metadata, deprecated}
 change set    = {version, created_at, actor, actor_source, client, reason, source, restores_version,
-                 request_id, catalogue_version, metadata, item_count}
+                 request_id, catalogue_version, metadata, item_count}   # metadata comes from the POST body, {} otherwise
 item          = {key, old_value, new_value, reset}
 ```
 
@@ -133,7 +133,7 @@ tunable's default removes the override if there is one, the same as `reset`, so
 
 | Method and path | Body | Effect |
 |---|---|---|
-| `POST changesets/` | `{"changes": [...], "reason": "", "dry_run": false}` | applies the changes as one change set |
+| `POST changesets/` | `{"changes": [...], "reason": "", "dry_run": false, "metadata": {}}` | applies the changes as one change set |
 | `POST validate/` | same as above | always a dry run |
 | `PATCH groups/{group}/values/` | `{"<name>": value, "<name>": null}` | form-shaped write of one group; `null` resets |
 | `POST rollback/` | `{"to_version": 40, "reason": ""}` | restores the overrides of that snapshot |
@@ -142,6 +142,10 @@ tunable's default removes the override if there is one, the same as `reset`, so
 Each element of `changes` is either `{"key": "pricing.vat_rate", "value": 0.2}` or
 `{"key": "pricing.vat_rate", "reset": true}`. A `value` of `null` is a `type` validation
 error. To return a key to its default, send `reset`.
+
+`metadata` is an optional JSON object that the change set stores unchanged, for example
+a ticket number the caller wants to find again. The package does not read it, and only
+`POST changesets/` accepts it.
 
 A successful write answers `201`:
 

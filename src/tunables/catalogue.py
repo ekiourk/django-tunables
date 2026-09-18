@@ -22,6 +22,13 @@ def _check_identifier(kind: str, name: str) -> None:
         raise CatalogueError(f"{kind} name {name!r} must match {IDENTIFIER.pattern}")
 
 
+def _check_json(kind: str, name: str, field_name: str, value: Mapping[str, Any]) -> None:
+    try:
+        json.dumps(dict(value), allow_nan=False)
+    except (TypeError, ValueError) as error:
+        raise CatalogueError(f"{field_name} of {kind} {name!r} is not JSON serialisable: {error}") from error
+
+
 @dataclass(frozen=True)
 class Tunable:
     name: str
@@ -36,6 +43,8 @@ class Tunable:
 
     def __post_init__(self) -> None:
         _check_identifier("tunable", self.name)
+        _check_json("tunable", self.name, "metadata", self.metadata)
+        _check_json("tunable", self.name, "ui", self.ui)
         try:
             default = self.type.coerce(self.default)
             self.type.validate(default)
@@ -57,6 +66,8 @@ class Group:
 
     def __post_init__(self) -> None:
         _check_identifier("group", self.name)
+        _check_json("group", self.name, "metadata", self.metadata)
+        _check_json("group", self.name, "ui", self.ui)
         object.__setattr__(self, "tunables", tuple(self.tunables))
         seen: set[str] = set()
         for tunable in self.tunables:

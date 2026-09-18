@@ -1,4 +1,5 @@
 from collections.abc import Mapping, Sequence
+from typing import Any
 
 from django.db.models import Count
 from rest_framework.exceptions import ValidationError
@@ -28,12 +29,12 @@ def _expected_version(request: Request) -> int | None:
     return int(tag)
 
 
-def parsed_changes(request: Request) -> tuple[list[Change], str, bool]:
+def parsed_changes(request: Request) -> tuple[list[Change], str, bool, dict[str, Any]]:
     serializer = ChangesRequestSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     data = serializer.validated_data
     changes = [Change(item["key"], item.get("value"), item["reset"]) for item in data["changes"]]
-    return changes, data["reason"], data["dry_run"]
+    return changes, data["reason"], data["dry_run"], dict(data["metadata"])
 
 
 def write(
@@ -45,6 +46,7 @@ def write(
     dry_run: bool = False,
     restores_version: int | None = None,
     extra_warnings: Sequence[FieldWarning] = (),
+    metadata: Mapping[str, Any] | None = None,
 ) -> Response:
     expected_version = _expected_version(request)
     check_editable(request, changes)
@@ -62,6 +64,7 @@ def write(
         expected_version=expected_version,
         request_id=request_id(request),
         restores_version=restores_version,
+        metadata=metadata,
     )
     changeset = ChangeSet.objects.annotate(item_count=Count("items")).get(pk=result.changeset.pk)
     warnings = [*extra_warnings, *result.warnings]
@@ -75,7 +78,7 @@ def write(
 
 class Validate(TunablesAPIView):
     def post(self, request: Request) -> Response:
-        changes, reason, _ = parsed_changes(request)
+        changes, reason, _, _ = parsed_changes(request)
         return write(request, changes, source="api", reason=reason, dry_run=True)
 
 

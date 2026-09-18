@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -6,7 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from tunables.catalogue import Catalogue, Group, Tunable
-from tunables.errors import ConstraintError
+from tunables.errors import CatalogueValidationError, ConstraintError, GroupError
 from tunables.models import (
     ActorSource,
     ChangeItem,
@@ -17,7 +18,7 @@ from tunables.models import (
     TunableValue,
 )
 from tunables.registry import get_catalogue
-from tunables.services import write_snapshot
+from tunables.services import rule_violations, write_snapshot
 
 
 @dataclass(frozen=True)
@@ -25,6 +26,7 @@ class SyncResult:
     created: bool
     rebuilt: bool
     version: int
+    violations: Sequence[GroupError | CatalogueValidationError] = ()
 
 
 def is_synced() -> bool:
@@ -44,9 +46,11 @@ def sync() -> SyncResult:
     _mirror(catalogue, now)
     if created:
         write_snapshot(catalogue, version=0, changeset=None, created_at=now)
-        return SyncResult(created=True, rebuilt=False, version=0)
+        return SyncResult(created=True, rebuilt=False, version=0, violations=tuple(rule_violations()))
     if state.catalogue_version == catalogue.version:
-        return SyncResult(created=False, rebuilt=False, version=state.current_version)
+        return SyncResult(
+            created=False, rebuilt=False, version=state.current_version, violations=tuple(rule_violations())
+        )
     version = state.current_version + 1
     changeset = ChangeSet.objects.create(
         version=version,
@@ -63,7 +67,7 @@ def sync() -> SyncResult:
     state.current_version = version
     state.catalogue_version = catalogue.version
     state.save()
-    return SyncResult(created=False, rebuilt=True, version=version)
+    return SyncResult(created=False, rebuilt=True, version=version, violations=tuple(rule_violations()))
 
 
 def _mirror(catalogue: Catalogue, now: datetime) -> None:

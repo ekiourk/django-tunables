@@ -1,9 +1,11 @@
+from collections.abc import Sequence
 from typing import Any
 
 from django.core.management.base import CommandError, CommandParser
 
-from tunables.management.base import TunablesCommand
-from tunables.services import current_version
+from tunables.errors import CatalogueValidationError, GroupError
+from tunables.management.base import TunablesCommand, describe
+from tunables.services import current_version, rule_violations
 from tunables.sync import is_synced, sync
 
 
@@ -22,6 +24,7 @@ class Command(TunablesCommand):
             if not is_synced():
                 raise CommandError("out of sync; run tunables_sync", returncode=1)
             self.stdout.write(f"in sync at version {current_version()}")
+            self._warn(rule_violations())
             return
         result = sync()
         if result.created:
@@ -30,3 +33,8 @@ class Command(TunablesCommand):
             self.stdout.write(f"catalogue changed, wrote version {result.version}")
         else:
             self.stdout.write(f"in sync at version {result.version}")
+        self._warn(result.violations)
+
+    def _warn(self, violations: Sequence[GroupError | CatalogueValidationError]) -> None:
+        for violation in violations:
+            self.stderr.write(f"warning: {describe(violation)}")

@@ -241,3 +241,45 @@ def test_import_replace(synced: SyncResult, tmp_path: Path) -> None:
     assert items == {"pricing.vat_rate": False, "thermostat.mode": True}
     assert latest_document()["overridden"] == ["pricing.vat_rate"]
     assert run("tunables_import", str(path), "--actor", "deploy", "--replace") == "nothing to change\n"
+
+
+def test_export_defaults_with_a_fixed_timestamp_is_reproducible(db: None) -> None:
+    stamp = "2026-09-01T00:00:00+00:00"
+    first = run("tunables_export", "--defaults", "--created-at", stamp)
+    second = run("tunables_export", "--defaults", "--created-at", stamp)
+    assert first == second
+    assert json.loads(first)["created_at"] == stamp
+    assert json.loads(run("tunables_export", "--defaults", "--created-at", "2026-09-01T02:00:00+02:00"))[
+        "created_at"
+    ] == ("2026-09-01T02:00:00+02:00")
+
+
+@pytest.mark.parametrize(
+    ("args", "match"),
+    [
+        (["--defaults", "--created-at", "2026-09-01T00:00:00"], "offset"),
+        (["--defaults", "--created-at", "yesterday"], "ISO 8601"),
+        (["--schema", "--created-at", "2026-09-01T00:00:00+00:00"], "--defaults"),
+        (["--created-at", "2026-09-01T00:00:00+00:00"], "--defaults"),
+    ],
+    ids=["naive", "malformed", "with-schema", "without-defaults"],
+)
+def test_export_created_at_is_validated(db: None, args: list[str], match: str) -> None:
+    with pytest.raises(CommandError, match=match):
+        run("tunables_export", *args)
+
+
+def test_sync_command_warns_about_rule_violations(synced: SyncResult) -> None:
+    from tests.test_sync import use
+
+    apply(Change("pricing.currencies", ["EUR", "USD"]))
+    with use("strict_limits"):
+        err = StringIO()
+        assert run("tunables_sync", stderr=err) == "in sync at version 1\n"
+        assert err.getvalue().splitlines() == ["warning: catalogue: catalogue: only one currency may be accepted"]
+        err = StringIO()
+        assert run("tunables_sync", "--check", stderr=err) == "in sync at version 1\n"
+        assert err.getvalue().splitlines() == ["warning: catalogue: catalogue: only one currency may be accepted"]
+    err = StringIO()
+    run("tunables_sync", stderr=err)
+    assert err.getvalue() == ""

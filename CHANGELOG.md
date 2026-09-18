@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- `tunables_export --defaults` accepts `--created-at` with an ISO 8601 datetime and
+  offset, so a committed defaults file can use a fixed timestamp and a drift test can
+  compare it byte for byte. A naive value, or the flag without `--defaults`, is an error.
+- `metadata` and `ui` on a `Tunable` or `Group` must be JSON serialisable. A value that
+  is not, such as a set or NaN, is a `CatalogueError` at construction instead of a
+  failure at `tunables_sync`.
+- `POST changesets/` accepts an optional `metadata` object, stored on the change set as
+  given and returned in the change set list and detail. A non-object is a `400`.
+- Rules the stored values break after a catalogue change are reported instead of
+  discovered on the next write. `services.rule_violations()` returns them, `sync()`
+  returns them on `SyncResult.violations`, `tunables_sync` prints them as warnings on
+  standard error without changing its exit code, `GET status/` lists them as
+  `rule_violations`, and the admin group index shows them above the table.
+
 ## 0.1.1, 2026-09-18
 
 - `tunables_sync` now resets overrides that no longer coerce or validate after a

@@ -10,6 +10,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from tunables.api import problems
 from tunables.api.base import TunablesAPIView
 from tunables.api.serializers import ChangeSetDetailSerializer, ChangeSetSerializer
 from tunables.api.writes import parsed_changes, write
@@ -20,7 +21,7 @@ from tunables.errors import UnknownVersion
 from tunables.models import ChangeSet, PublisherState, Snapshot, State
 from tunables.registry import get_catalogue
 from tunables.schema import describe_group, document_schema, validator_description
-from tunables.services import diff_versions, latest_snapshot
+from tunables.services import diff_versions, latest_snapshot, rule_violations
 
 
 def _group(catalogue: Catalogue, name: str) -> Group:
@@ -146,8 +147,8 @@ class ChangeSetList(TunablesAPIView):
     reads_need_sync = False
 
     def post(self, request: Request) -> Response:
-        changes, reason, dry_run = parsed_changes(request)
-        return write(request, changes, source="api", reason=reason, dry_run=dry_run)
+        changes, reason, dry_run, metadata = parsed_changes(request)
+        return write(request, changes, source="api", reason=reason, dry_run=dry_run, metadata=metadata)
 
     def get(self, request: Request) -> Response:
         matching = ChangeSet.objects.all()
@@ -246,6 +247,7 @@ class Status(TunablesAPIView):
                     }
                     for row in PublisherState.objects.order_by("publisher")
                 ],
+                "rule_violations": [problems.describe(v) for v in rule_violations()] if state is not None else [],
             }
         )
 
