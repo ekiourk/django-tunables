@@ -117,7 +117,44 @@ def test_unknown_group_is_a_problem(api: APIClient, path: str) -> None:
     }
 
 
-@pytest.mark.parametrize("path", ["groups/", "groups/pricing/", "schema/", "definitions/"])
+STORED_DATA_READS = [
+    "values/",
+    "groups/pricing/values/",
+    "changesets/",
+    "changesets/1/",
+    "snapshots/latest/",
+    "snapshots/1/",
+    "export/",
+]
+CATALOGUE_READS = ["groups/", "groups/pricing/", "groups/pricing/schema/", "schema/", "definitions/"]
+WRITES = [
+    ("post", "changesets/", {"changes": [{"key": "pricing.vat_rate", "value": 0.3}]}),
+    ("post", "validate/", {"changes": [{"key": "pricing.vat_rate", "value": 0.3}]}),
+    ("patch", "groups/pricing/values/", {"vat_rate": 0.3}),
+    ("post", "rollback/", {"to_version": 0}),
+    ("post", "import/", {"format_version": 1, "groups": {"pricing": {"vat_rate": 0.3}}}),
+]
+
+
+@pytest.mark.parametrize("path", STORED_DATA_READS)
+def test_stored_data_reads_work_while_out_of_sync(api: APIClient, path: str) -> None:
+    apply(Change("pricing.vat_rate", 0.2))
+    State.objects.update(catalogue_version="sha256:stale")
+    response = api.get(BASE + path)
+    assert response.status_code == 200
+    assert response["X-Tunables-Version"] == "1"
+
+
+@pytest.mark.parametrize(("method", "path", "body"), WRITES, ids=[w[1] for w in WRITES])
+def test_writes_are_503_while_out_of_sync(api: APIClient, method: str, path: str, body: Any) -> None:
+    State.objects.update(catalogue_version="sha256:stale")
+    response = getattr(api, method)(BASE + path, body, format="json")
+    assert response.status_code == 503
+    assert response.json()["type"] == "urn:tunables:problem:catalogue-out-of-sync"
+    assert ChangeSet.objects.count() == 0
+
+
+@pytest.mark.parametrize("path", CATALOGUE_READS)
 def test_out_of_sync_is_503(api: APIClient, path: str) -> None:
     State.objects.update(catalogue_version="sha256:stale")
     response = get(api, path)
@@ -330,3 +367,42 @@ def test_every_read_endpoint_carries_the_version_header(api: APIClient, path: st
     response = api.get(BASE + path)
     assert response.status_code == 200
     assert response["X-Tunables-Version"] == "2"
+
+
+def test_group_values_come_from_the_stored_document(api: APIClient) -> None:
+    assert api.get(BASE + "groups/shop/values/").status_code == 404
+    with override_settings(TUNABLES={"CATALOGUE": "tests.test_sync.reduced"}):
+        response = api.get(BASE + "groups/pricing/values/")
+    assert response.status_code == 200
+    assert "allow_backorders" in response.json()["values"]
+
+
+def test_status(api: APIClient) -> None:
+    response = api.get(BASE + "status/")
+    assert response.status_code == 200
+    assert response["X-Tunables-Version"] == "0"
+    assert response.json() == {
+        "synced": True,
+        "version": 0,
+        "catalogue_version": catalogue.version,
+        "code_catalogue_version": catalogue.version,
+    }
+    State.objects.update(catalogue_version="sha256:stale")
+    body = api.get(BASE + "status/").json()
+    assert (body["synced"], body["catalogue_version"], body["code_catalogue_version"]) == (
+        False,
+        "sha256:stale",
+        catalogue.version,
+    )
+
+
+def test_status_before_the_first_sync(db: None) -> None:
+    response = APIClient().get(BASE + "status/")
+    assert response.status_code == 200
+    assert "X-Tunables-Version" not in response
+    assert response.json() == {
+        "synced": False,
+        "version": None,
+        "catalogue_version": None,
+        "code_catalogue_version": catalogue.version,
+    }

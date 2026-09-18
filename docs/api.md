@@ -66,8 +66,12 @@ may edit `pricing`. The first group outside the collection is reported as a
 
 ## Read endpoints
 
-Every endpoint first checks that the catalogue in code matches the database. If not,
-the answer is `503 catalogue-out-of-sync` until `tunables_sync` has run.
+Endpoints that describe the catalogue in code, `groups/`, `groups/{group}/`, the two
+schema endpoints and `definitions/`, first check that the code matches the database.
+If not, the answer is `503 catalogue-out-of-sync` until `tunables_sync` has run.
+Endpoints that serve stored data, the values, change sets, snapshots and the export,
+answer from the latest snapshot regardless, so a deployment whose sync has not run yet
+keeps serving the previous state. Every write requires sync.
 
 | Method and path | Response |
 |---|---|
@@ -83,6 +87,7 @@ the answer is `503 catalogue-out-of-sync` until `tunables_sync` has run.
 | `GET snapshots/latest/` | the snapshot document, see `snapshot-format.md`, with `ETag` |
 | `GET snapshots/{version}/` | the same for one version |
 | `GET export/` | the latest document as a download, `Content-Disposition: attachment; filename="tunables-v42.json"` |
+| `GET status/` | `{"synced", "version", "catalogue_version", "code_catalogue_version"}`, always `200`; `version` and `catalogue_version` are `null` before the first sync |
 
 Shapes:
 
