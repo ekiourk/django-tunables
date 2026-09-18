@@ -3,7 +3,7 @@ from typing import Any
 
 from django import forms
 
-from tunables import Boolean, Catalogue, Enum, Float, Group, Integer, List, Mapping, Tunable, TunableType
+from tunables import Boolean, Catalogue, Category, Enum, Float, Group, Integer, List, Mapping, Tunable, TunableType
 from tunables.errors import ConstraintError, TypeCoercionError
 
 
@@ -38,13 +38,19 @@ def weights_sum_to_one(values: ValueMapping[str, Any]) -> None:
         raise ConstraintError("group", "weights must sum to 1")
 
 
+shop = Category("shop", title="Shop", order=1)
+building = Category("building", title="Building", order=2)
+general = Category("general", title="General", description="Everything else.", order=3)
+CATEGORIES = [shop, building, general]
+
 pricing = Group(
     "pricing",
     title="Pricing",
     description="Prices and shipping rules for the web shop.",
     order=1,
+    category="shop",
     tunables=[
-        Tunable("vat_rate", Float(min=0.0, max=1.0), 0.24, title="VAT rate"),
+        Tunable("vat_rate", Float(min=0.0, max=1.0), 0.24, title="VAT rate", tags=["money"]),
         Tunable("free_shipping_over", Float(min=0.0), 50.0, title="Free shipping over", unit="EUR"),
         Tunable(
             "currencies",
@@ -58,6 +64,7 @@ pricing = Group(
             {"EUR": 4.9},
             title="Shipping rates",
             unit="per currency",
+            tags=["money"],
         ),
         Tunable("allow_backorders", Boolean(), False, title="Allow backorders"),
     ],
@@ -67,6 +74,7 @@ thermostat = Group(
     "thermostat",
     title="Thermostat",
     order=2,
+    category="building",
     ui={
         "sections": [
             {"title": "Control", "tunables": ["target_c", "mode"]},
@@ -74,8 +82,8 @@ thermostat = Group(
         ]
     },
     tunables=[
-        Tunable("target_c", Float(min=5.0, max=30.0), 21.0, title="Target temperature", unit="°C"),
-        Tunable("mode", Enum(["auto", "heat", "cool", "off"]), "auto", title="Mode"),
+        Tunable("target_c", Float(min=5.0, max=30.0), 21.0, title="Target temperature", unit="°C", tags=["comfort"]),
+        Tunable("mode", Enum(["auto", "heat", "cool", "off"]), "auto", title="Mode", tags=["comfort"]),
         Tunable("sample_interval", Float(min=1.0), 60.0, title="Sample interval", unit="s"),
         Tunable("display_colour", HexColour(), "#ffffff", title="Display colour"),
         Tunable("legacy_offset", Float(), 0.0, title="Legacy offset", deprecated="Use target_c instead."),
@@ -98,7 +106,7 @@ limits = Group(
     "limits",
     title="Limits",
     order=4,
-    tunables=[Tunable("max_currencies", Integer(min=1), 3, title="Maximum accepted currencies")],
+    tunables=[Tunable("max_currencies", Integer(min=1), 3, title="Maximum accepted currencies", tags=["money"])],
 )
 
 
@@ -108,4 +116,8 @@ def currencies_within_limit(values: ValueMapping[str, ValueMapping[str, Any]]) -
         raise ConstraintError("catalogue", "accepted currencies exceed limits.max_currencies")
 
 
-catalogue = Catalogue([pricing, thermostat, weights, limits], validators=[currencies_within_limit])
+catalogue = Catalogue(
+    [pricing, thermostat, weights, limits],
+    categories=CATEGORIES,
+    validators=[currencies_within_limit],
+)

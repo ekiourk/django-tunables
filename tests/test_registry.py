@@ -4,10 +4,10 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.test import override_settings
 
-from tests.catalogue import catalogue, pricing
+from tests.catalogue import CATEGORIES, catalogue, pricing
 from tunables import Catalogue, registry
 
-other = Catalogue([pricing], label="other")
+other = Catalogue([pricing], categories=CATEGORIES, label="other")
 calls = 0
 
 

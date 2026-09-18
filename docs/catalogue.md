@@ -36,7 +36,7 @@ code that builds catalogues at runtime can call `tunables.registry.reset()`.
 ## Tunable
 
 ```python
-Tunable(name, type, default, title="", description="", unit="", ui={}, metadata={}, deprecated="")
+Tunable(name, type, default, title="", description="", unit="", ui={}, metadata={}, deprecated="", tags=())
 ```
 
 | Argument | Meaning |
@@ -49,6 +49,7 @@ Tunable(name, type, default, title="", description="", unit="", ui={}, metadata=
 | `ui` | Hints copied into the UI schema's `options` for this control, see [Sections and UI hints](#sections-and-ui-hints). Must be JSON serialisable; checked at construction. |
 | `metadata` | Opaque to the package. Exposed read-only through the API. Must be JSON serialisable; checked at construction. |
 | `deprecated` | A non-empty string marks the tunable deprecated with that reason. |
+| `tags` | Seed tags, names matching `^[a-z0-9][a-z0-9_-]*$`, each once. See [Categories and tags](#categories-and-tags). |
 
 A deprecated tunable still exists and can still be changed. Writes that touch it return
 a warning, the JSON Schema marks it `deprecated`, the UI schema makes its control
@@ -58,11 +59,13 @@ tunable from the catalogue once nothing reads it.
 ## Group
 
 ```python
-Group(name, tunables, title="", description="", order=0, validators=(), ui={}, metadata={})
+Group(name, tunables, title="", description="", order=0, validators=(), ui={}, metadata={}, category="general")
 ```
 
 `name` follows the identifier rule and is unique in the catalogue. Tunable names are
-unique within the group. Groups are ordered by `(order, name)` everywhere they are listed.
+unique within the group. `category` names a declared `Category`, or the implicit
+`general`. Groups are ordered by their category's order, then `(order, name)`,
+everywhere they are listed.
 
 `validators` is a sequence of callables that receive the effective values of the whole
 group as a mapping from tunable name to Python value, including values that are not
@@ -88,12 +91,14 @@ the API has dry-run endpoints.
 ## Catalogue
 
 ```python
-Catalogue(groups, label="", validators=())
+Catalogue(groups, *, categories=(), label="", validators=())
 ```
 
 | Member | Meaning |
 |---|---|
-| `groups` | Mapping of name to `Group`, in `(order, name)` order. |
+| `categories` | Mapping of name to `Category`, in `(order, name)` order; `general` is always present. |
+| `groups` | Mapping of name to `Group`, ordered by category, then `(order, name)`. |
+| `groups_in(category)` | The groups of one category in that order, or `CatalogueError`. |
 | `get(key)` | The `Tunable` for `"group.name"`, or `UnknownKey`. |
 | `group_of(key)` | The `Group` a key belongs to, or `UnknownKey`. |
 | `keys()` | Every full key in group order, then tunable order. |
@@ -101,6 +106,32 @@ Catalogue(groups, label="", validators=())
 | `version` | `"sha256:<hex>"`, see [Catalogue version](#catalogue-version). |
 
 Duplicate group names raise `CatalogueError`.
+
+### Categories and tags
+
+Categories are a navigation level above groups, for the admin index and the API's
+category listing. They carry no values and no validators.
+
+```python
+from tunables import Category
+
+shop = Category("shop", title="Shop", order=1)
+catalogue = Catalogue([pricing, thermostat], categories=[shop])
+```
+
+A group names its category with `category="shop"`. Groups that name none belong to
+`general`, which exists even when undeclared, with title "General" and order 0.
+Declaring `Category("general", ...)` replaces that default, for example to give it a
+different title or to order it last. A group naming an undeclared category, or two
+categories with one name, is a `CatalogueError`.
+
+Tags are free-form labels on tunables for search across groups. `Tunable(tags=[...])`
+declares seed tags, which `tunables_sync` creates and re-applies on every run; operators
+can attach further tags by hand. Tag names match `^[a-z0-9][a-z0-9_-]*$`.
+
+Categories and tags change how definitions are listed and found. They do not change
+values, snapshots, or the catalogue version, so adding them to an existing deployment
+writes no new version.
 
 ### Catalogue validators
 
@@ -244,8 +275,8 @@ meaning of stored data: for each group in order, for each tunable in order, its 
 `type.describe()`, the JSON form of its default, and whether it is deprecated. The
 label is included when set.
 
-Titles, descriptions, units, `ui` and `metadata` are not hashed, so rewording a label
-does not create a new version. Adding, removing, renaming or retyping a tunable,
+Titles, descriptions, units, `ui`, `metadata`, categories and tags are not hashed, so
+rewording a label or reorganising groups does not create a new version. Adding, removing, renaming or retyping a tunable,
 changing a default, deprecating a tunable, or changing a group's `order` does.
 
 The version is stored with every change set and snapshot and compared on every request.

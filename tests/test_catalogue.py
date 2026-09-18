@@ -3,8 +3,8 @@ from typing import Any
 
 import pytest
 
-from tests.catalogue import catalogue, currencies_within_limit, limits, pricing, thermostat, weights
-from tunables import Catalogue, Float, Group, Integer, Tunable
+from tests.catalogue import CATEGORIES, catalogue, currencies_within_limit, limits, pricing, thermostat, weights
+from tunables import Catalogue, Category, Float, Group, Integer, Tunable
 from tunables.errors import CatalogueError, UnknownKey
 
 
@@ -134,7 +134,7 @@ def test_defaults_returns_a_fresh_dict() -> None:
 
 def test_version_format_and_stability() -> None:
     assert re.fullmatch(r"sha256:[0-9a-f]{64}", catalogue.version)
-    assert Catalogue([pricing, thermostat, weights, limits]).version == catalogue.version
+    assert Catalogue([pricing, thermostat, weights, limits], categories=CATEGORIES).version == catalogue.version
 
 
 def make(**changes: Any) -> Catalogue:
@@ -175,8 +175,14 @@ def test_version_ignores_wording_and_hints(changes: dict[str, Any]) -> None:
 
 
 def test_version_includes_label() -> None:
-    assert Catalogue([pricing], label="a").version != Catalogue([pricing]).version
-    assert Catalogue([pricing], label="a").version != Catalogue([pricing], label="b").version
+    assert (
+        Catalogue([pricing], categories=CATEGORIES, label="a").version
+        != Catalogue([pricing], categories=CATEGORIES).version
+    )
+    assert (
+        Catalogue([pricing], categories=CATEGORIES, label="a").version
+        != Catalogue([pricing], categories=CATEGORIES, label="b").version
+    )
 
 
 def test_version_depends_on_group_order() -> None:
@@ -186,13 +192,16 @@ def test_version_depends_on_group_order() -> None:
 
 
 def test_version_ignores_declaration_order() -> None:
-    assert Catalogue([pricing, thermostat]).version == Catalogue([thermostat, pricing]).version
+    assert (
+        Catalogue([pricing, thermostat], categories=CATEGORIES).version
+        == Catalogue([thermostat, pricing], categories=CATEGORIES).version
+    )
 
 
 def test_catalogue_validators_are_stored_and_do_not_affect_the_version() -> None:
-    assert Catalogue([pricing]).validators == ()
+    assert Catalogue([pricing], categories=CATEGORIES).validators == ()
     assert catalogue.validators == (currencies_within_limit,)
-    assert Catalogue([pricing, thermostat, weights, limits]).version == catalogue.version
+    assert Catalogue([pricing, thermostat, weights, limits], categories=CATEGORIES).version == catalogue.version
 
 
 @pytest.mark.parametrize("field_name", ["metadata", "ui"])
@@ -219,3 +228,79 @@ def test_nested_json_values_are_accepted() -> None:
     value = {"owners": ["ops", "dev"], "limits": {"soft": 1, "hard": 2.5}, "enabled": True, "note": None}
     assert Tunable("x", Integer(), 1, metadata=value, ui=value).metadata == value
     assert Group("g", [tunable()], metadata=value, ui={**value, "sections": []}).ui["limits"] == value["limits"]
+
+
+@pytest.mark.parametrize("name", ["Shop", "1x", "a-b", ""])
+def test_category_rejects_bad_identifier(name: str) -> None:
+    with pytest.raises(CatalogueError):
+        Category(name)
+
+
+def test_duplicate_category_and_undeclared_category_are_rejected() -> None:
+    with pytest.raises(CatalogueError, match="duplicate category 'shop'"):
+        Catalogue([Group("g", [tunable()])], categories=[Category("shop"), Category("shop")])
+    with pytest.raises(CatalogueError, match="group 'g' names undeclared category 'shop'"):
+        Catalogue([Group("g", [tunable()], category="shop")])
+
+
+def test_general_category_is_implicit_and_can_be_declared() -> None:
+    plain = Catalogue([Group("g", [tunable()])])
+    assert list(plain.categories) == ["general"]
+    assert (plain.categories["general"].title, plain.categories["general"].order) == ("General", 0)
+    assert plain.groups["g"].category == "general"
+    declared = Catalogue(
+        [Group("g", [tunable()])], categories=[Category("general", title="Misc", order=9), Category("a")]
+    )
+    assert list(declared.categories) == ["a", "general"]
+    assert declared.categories["general"].title == "Misc"
+
+
+def test_groups_are_ordered_by_category_then_group() -> None:
+    c = Catalogue(
+        [
+            Group("z", [tunable()], order=1, category="late"),
+            Group("b", [tunable()], order=2, category="early"),
+            Group("a", [tunable()], order=1, category="early"),
+            Group("m", [tunable()], order=0),
+            Group("n", [tunable()], order=0, category="tie"),
+        ],
+        categories=[Category("late", order=5), Category("early", order=1), Category("tie", order=1)],
+    )
+    assert list(c.categories) == ["general", "early", "tie", "late"]
+    assert list(c.groups) == ["m", "a", "b", "n", "z"]
+    assert [g.name for g in c.groups_in("early")] == ["a", "b"]
+    assert c.groups_in("general") == (c.groups["m"],)
+    with pytest.raises(CatalogueError, match="unknown category 'nope'"):
+        c.groups_in("nope")
+
+
+@pytest.mark.parametrize("tags", [["Money"], ["-x"], ["a b"], ["a", "a"], [""]])
+def test_bad_tags_are_rejected(tags: list[str]) -> None:
+    with pytest.raises(CatalogueError):
+        Tunable("x", Integer(), 1, tags=tags)
+
+
+def test_tags_are_stored_as_a_tuple() -> None:
+    t = Tunable("x", Integer(), 1, tags=["money", "q3-2026", "a_b"])
+    assert t.tags == ("money", "q3-2026", "a_b")
+    assert Tunable("x", Integer(), 1).tags == ()
+
+
+def test_version_ignores_categories_and_tags() -> None:
+    base = Catalogue([Group("g", [Tunable("x", Integer(), 1)])])
+    with_category = Catalogue([Group("g", [Tunable("x", Integer(), 1)], category="c")], categories=[Category("c")])
+    with_tag = Catalogue([Group("g", [Tunable("x", Integer(), 1, tags=["t"])])])
+    assert base.version == with_category.version == with_tag.version
+    two = [Group("a", [tunable()], order=1), Group("b", [tunable()], order=2)]
+    moved = [Group("a", [tunable()], order=1, category="late"), Group("b", [tunable()], order=2)]
+    assert Catalogue(two).version == Catalogue(moved, categories=[Category("late", order=9)]).version
+    assert list(Catalogue(moved, categories=[Category("late", order=9)]).groups) == ["b", "a"]
+
+
+def test_shared_catalogue_categories_and_tags() -> None:
+    assert list(catalogue.categories) == ["shop", "building", "general"]
+    assert [g.name for g in catalogue.groups_in("general")] == ["weights", "limits"]
+    assert catalogue.get("pricing.vat_rate").tags == ("money",)
+    assert catalogue.get("limits.max_currencies").tags == ("money",)
+    assert catalogue.get("thermostat.mode").tags == ("comfort",)
+    assert catalogue.get("weights.alpha").tags == ()

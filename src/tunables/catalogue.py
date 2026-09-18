@@ -12,6 +12,7 @@ from tunables.errors import CatalogueError, ConstraintError, UnknownKey
 from tunables.types import TunableType
 
 IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
+TAG = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 
 GroupValidator = Callable[[Mapping[str, Any]], None]
 CatalogueValidator = Callable[[Mapping[str, Mapping[str, Any]]], None]
@@ -30,6 +31,19 @@ def _check_json(kind: str, name: str, field_name: str, value: Mapping[str, Any])
 
 
 @dataclass(frozen=True)
+class Category:
+    """A navigation level above groups. Carries no values and no validators."""
+
+    name: str
+    title: str | Promise = ""
+    description: str | Promise = ""
+    order: int = 0
+
+    def __post_init__(self) -> None:
+        _check_identifier("category", self.name)
+
+
+@dataclass(frozen=True)
 class Tunable:
     name: str
     type: TunableType
@@ -40,11 +54,18 @@ class Tunable:
     ui: Mapping[str, Any] = field(default_factory=dict)
     metadata: Mapping[str, Any] = field(default_factory=dict)
     deprecated: str = ""
+    tags: Sequence[str] = ()
 
     def __post_init__(self) -> None:
         _check_identifier("tunable", self.name)
         _check_json("tunable", self.name, "metadata", self.metadata)
         _check_json("tunable", self.name, "ui", self.ui)
+        object.__setattr__(self, "tags", tuple(self.tags))
+        for tag in self.tags:
+            if not TAG.match(tag):
+                raise CatalogueError(f"tag {tag!r} on tunable {self.name!r} must match {TAG.pattern}")
+        if len(set(self.tags)) != len(self.tags):
+            raise CatalogueError(f"tunable {self.name!r} lists a tag more than once")
         try:
             default = self.type.coerce(self.default)
             self.type.validate(default)
@@ -63,9 +84,11 @@ class Group:
     validators: Sequence[GroupValidator] = ()
     ui: Mapping[str, Any] = field(default_factory=dict)
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    category: str = "general"
 
     def __post_init__(self) -> None:
         _check_identifier("group", self.name)
+        _check_identifier("category", self.category)
         _check_json("group", self.name, "metadata", self.metadata)
         _check_json("group", self.name, "ui", self.ui)
         object.__setattr__(self, "tunables", tuple(self.tunables))
@@ -91,10 +114,30 @@ class Group:
 
 
 class Catalogue:
-    def __init__(self, groups: Sequence[Group], label: str = "", validators: Sequence[CatalogueValidator] = ()) -> None:
+    def __init__(
+        self,
+        groups: Sequence[Group],
+        *,
+        categories: Sequence[Category] = (),
+        label: str = "",
+        validators: Sequence[CatalogueValidator] = (),
+    ) -> None:
         self.label = label
         self.validators: Sequence[CatalogueValidator] = tuple(validators)
-        ordered = sorted(groups, key=lambda group: (group.order, group.name))
+        declared: dict[str, Category] = {}
+        for category in categories:
+            if category.name in declared:
+                raise CatalogueError(f"duplicate category {category.name!r}")
+            declared[category.name] = category
+        declared.setdefault("general", Category("general", title="General"))
+        self.categories: Mapping[str, Category] = {
+            c.name: c for c in sorted(declared.values(), key=lambda c: (c.order, c.name))
+        }
+        for group in groups:
+            if group.category not in self.categories:
+                raise CatalogueError(f"group {group.name!r} names undeclared category {group.category!r}")
+        rank = {name: index for index, name in enumerate(self.categories)}
+        ordered = sorted(groups, key=lambda g: (rank[g.category], g.order, g.name))
         by_name: dict[str, Group] = {}
         for group in ordered:
             if group.name in by_name:
@@ -102,6 +145,12 @@ class Catalogue:
             by_name[group.name] = group
         self.groups: Mapping[str, Group] = by_name
         self._tunables = {f"{group.name}.{tunable.name}": tunable for group in ordered for tunable in group.tunables}
+
+    def groups_in(self, category: str) -> Sequence[Group]:
+        """The groups of one category, in catalogue order."""
+        if category not in self.categories:
+            raise CatalogueError(f"unknown category {category!r}")
+        return tuple(group for group in self.groups.values() if group.category == category)
 
     def get(self, key: str) -> Tunable:
         try:
@@ -123,6 +172,9 @@ class Catalogue:
 
     @cached_property
     def version(self) -> str:
+        # Groups are hashed in (order, name) order, not category order, so moving a group between
+        # categories does not change the version.
+        hashed = sorted(self.groups.values(), key=lambda group: (group.order, group.name))
         description: dict[str, Any] = {
             "groups": [
                 {
@@ -137,7 +189,7 @@ class Catalogue:
                         for tunable in group.tunables
                     ],
                 }
-                for group in self.groups.values()
+                for group in hashed
             ]
         }
         if self.label:
