@@ -1,8 +1,9 @@
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, ClassVar
 
 from django.utils.module_loading import import_string
 from rest_framework.authentication import BaseAuthentication
+from rest_framework.permissions import SAFE_METHODS
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -21,6 +22,8 @@ def _instantiate(entries: Sequence[Any]) -> list[Any]:
 class TunablesAPIView(APIView):
     """Shared behaviour: settings-driven auth, sync check, X-Tunables-Version header, problem responses."""
 
+    reads_need_sync: ClassVar[bool] = True
+
     def get_authenticators(self) -> list[BaseAuthentication]:
         configured = settings.API_AUTHENTICATION_CLASSES
         return super().get_authenticators() if configured is None else _instantiate(configured)
@@ -34,6 +37,8 @@ class TunablesAPIView(APIView):
 
     def initial(self, request: Request, *args: Any, **kwargs: Any) -> None:
         super().initial(request, *args, **kwargs)
+        if request.method in SAFE_METHODS and not self.reads_need_sync:
+            return
         if not is_synced():
             raise CatalogueOutOfSync("catalogue changed since the last sync; run tunables_sync")
 

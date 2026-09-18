@@ -192,6 +192,7 @@ shipped with the package, and the table contract are in
 | `GET values/`, `GET groups/{group}/values/` | effective values, with `ETag` |
 | `GET changesets/`, `GET changesets/{version}/` | history, paginated and filterable |
 | `GET snapshots/latest/`, `GET snapshots/{version}/`, `GET export/` | snapshot documents |
+| `GET status/` | sync state, current version and catalogue hashes, for probes |
 | `POST changesets/`, `POST validate/` | apply or dry-run a list of changes |
 | `PATCH groups/{group}/values/` | form-shaped write of one group |
 | `POST rollback/`, `POST import/` | restore a version, import a document |

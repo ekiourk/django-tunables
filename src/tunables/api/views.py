@@ -16,7 +16,7 @@ from tunables.api.writes import parsed_changes, write
 from tunables.catalogue import Catalogue, Group, Tunable
 from tunables.changes import Change
 from tunables.conf import settings
-from tunables.models import ChangeSet, Snapshot
+from tunables.models import ChangeSet, Snapshot, State
 from tunables.registry import get_catalogue
 from tunables.schema import describe_group, validator_description
 from tunables.services import latest_snapshot
@@ -102,6 +102,8 @@ def _with_etag(request: Request, version: int, body: Any) -> Response:
 
 
 class Values(TunablesAPIView):
+    reads_need_sync = False
+
     def get(self, request: Request) -> Response:
         document = latest_snapshot().document
         body = {key: document[key] for key in ("version", "groups", "overridden")}
@@ -109,6 +111,8 @@ class Values(TunablesAPIView):
 
 
 class GroupValues(TunablesAPIView):
+    reads_need_sync = False
+
     def patch(self, request: Request, group: str) -> Response:
         _group(get_catalogue(), group)
         if not isinstance(request.data, Mapping):
@@ -120,8 +124,9 @@ class GroupValues(TunablesAPIView):
         return write(request, changes, source="api", reason=request.headers.get(settings.REASON_HEADER, ""))
 
     def get(self, request: Request, group: str) -> Response:
-        _group(get_catalogue(), group)
         document = latest_snapshot().document
+        if group not in document["groups"]:
+            raise NotFound(f"unknown group {group!r}")
         prefix = f"{group}."
         body = {
             "version": document["version"],
@@ -137,6 +142,8 @@ class ChangeSetPagination(PageNumberPagination):
 
 
 class ChangeSetList(TunablesAPIView):
+    reads_need_sync = False
+
     def post(self, request: Request) -> Response:
         changes, reason, dry_run = parsed_changes(request)
         return write(request, changes, source="api", reason=reason, dry_run=dry_run)
@@ -161,6 +168,8 @@ class ChangeSetList(TunablesAPIView):
 
 
 class ChangeSetDetail(TunablesAPIView):
+    reads_need_sync = False
+
     def get(self, request: Request, version: int) -> Response:
         changeset = ChangeSet.objects.annotate(item_count=Count("items")).filter(version=version).first()
         if changeset is None:
@@ -169,12 +178,16 @@ class ChangeSetDetail(TunablesAPIView):
 
 
 class LatestSnapshot(TunablesAPIView):
+    reads_need_sync = False
+
     def get(self, request: Request) -> Response:
         snapshot = latest_snapshot()
         return _with_etag(request, snapshot.version, snapshot.document)
 
 
 class SnapshotDetail(TunablesAPIView):
+    reads_need_sync = False
+
     def get(self, request: Request, version: int) -> Response:
         snapshot = Snapshot.objects.filter(version=version).first()
         if snapshot is None:
@@ -183,8 +196,26 @@ class SnapshotDetail(TunablesAPIView):
 
 
 class Export(TunablesAPIView):
+    reads_need_sync = False
+
     def get(self, request: Request) -> HttpResponse:
         snapshot = latest_snapshot()
         response = HttpResponse(json.dumps(snapshot.document, indent=2), content_type="application/json")
         response["Content-Disposition"] = f'attachment; filename="tunables-v{snapshot.version}.json"'
         return response
+
+
+class Status(TunablesAPIView):
+    reads_need_sync = False
+
+    def get(self, request: Request) -> Response:
+        code_version = get_catalogue().version
+        state = State.objects.filter(pk=1).first()
+        return Response(
+            {
+                "synced": state is not None and state.catalogue_version == code_version,
+                "version": None if state is None else state.current_version,
+                "catalogue_version": None if state is None else state.catalogue_version,
+                "code_catalogue_version": code_version,
+            }
+        )
