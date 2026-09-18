@@ -2,6 +2,7 @@ from collections.abc import Collection, Mapping
 from typing import Any
 
 from django import forms
+from django.utils.translation import gettext_lazy as _
 
 from tunables.catalogue import Group
 from tunables.changes import Change
@@ -10,7 +11,7 @@ from tunables.changes import Change
 class GroupForm(forms.Form):
     """Base for the per-group form built by build_group_form. Tunable fields are added dynamically."""
 
-    reason = forms.CharField(label="Reason", max_length=1000, widget=forms.Textarea(attrs={"rows": 2}))
+    reason = forms.CharField(label=_("Reason"), max_length=1000, widget=forms.Textarea(attrs={"rows": 2}))
     expected_version = forms.IntegerField(widget=forms.HiddenInput)
 
     group: Group
@@ -22,7 +23,7 @@ class GroupForm(forms.Form):
             if tunable.name in self.errors or cleaned.get(f"reset_{tunable.name}"):
                 continue
             if cleaned.get(tunable.name) is None:
-                self.add_error(tunable.name, "Enter a value or tick reset to default.")
+                self.add_error(tunable.name, _("Enter a value or tick reset to default."))
         return cleaned
 
     def changes(self) -> list[Change]:
@@ -51,6 +52,6 @@ def build_group_form(
             required=False,
         )
         if tunable.name in overridden:
-            attrs[f"reset_{tunable.name}"] = forms.BooleanField(label="Reset to default", required=False)
+            attrs[f"reset_{tunable.name}"] = forms.BooleanField(label=_("Reset to default"), required=False)
     attrs["expected_version"] = forms.IntegerField(widget=forms.HiddenInput, initial=version)
     return type(f"{group.name.title()}GroupForm", (GroupForm,), attrs)

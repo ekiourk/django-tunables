@@ -7,6 +7,7 @@ from typing import Any, ClassVar
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
 
 from tunables.errors import ConstraintError, TypeCoercionError
 
@@ -51,9 +52,9 @@ class TunableType(ABC):
 
 def _check_bounds(value: Any, minimum: Any, maximum: Any) -> None:
     if minimum is not None and value < minimum:
-        raise ConstraintError("min", f"must be >= {minimum}")
+        raise ConstraintError("min", _("must be >= %(minimum)s") % {"minimum": minimum})
     if maximum is not None and value > maximum:
-        raise ConstraintError("max", f"must be <= {maximum}")
+        raise ConstraintError("max", _("must be <= %(maximum)s") % {"maximum": maximum})
 
 
 def _bounds_schema(minimum: Any, maximum: Any) -> dict[str, Any]:
@@ -73,7 +74,7 @@ class Integer(TunableType):
 
     def coerce(self, raw: Any) -> int:
         if isinstance(raw, bool) or not isinstance(raw, int):
-            raise TypeCoercionError("expected an integer")
+            raise TypeCoercionError(str(_("expected an integer")))
         return raw
 
     def validate(self, value: Any) -> None:
@@ -100,9 +101,9 @@ class Float(TunableType):
 
     def coerce(self, raw: Any) -> float:
         if isinstance(raw, bool) or not isinstance(raw, int | float):
-            raise TypeCoercionError("expected a number")
+            raise TypeCoercionError(str(_("expected a number")))
         if not math.isfinite(raw):
-            raise TypeCoercionError("expected a finite number")
+            raise TypeCoercionError(str(_("expected a finite number")))
         return float(raw)
 
     def validate(self, value: Any) -> None:
@@ -127,7 +128,7 @@ class Boolean(TunableType):
 
     def coerce(self, raw: Any) -> bool:
         if not isinstance(raw, bool):
-            raise TypeCoercionError("expected a boolean")
+            raise TypeCoercionError(str(_("expected a boolean")))
         return raw
 
     def validate(self, value: Any) -> None:
@@ -156,16 +157,20 @@ class String(TunableType):
 
     def coerce(self, raw: Any) -> str:
         if not isinstance(raw, str):
-            raise TypeCoercionError("expected a string")
+            raise TypeCoercionError(str(_("expected a string")))
         return raw
 
     def validate(self, value: Any) -> None:
         if self.min_length is not None and len(value) < self.min_length:
-            raise ConstraintError("min_length", f"must have at least {self.min_length} characters")
+            raise ConstraintError(
+                "min_length", _("must have at least %(count)s characters") % {"count": self.min_length}
+            )
         if self.max_length is not None and len(value) > self.max_length:
-            raise ConstraintError("max_length", f"must have at most {self.max_length} characters")
+            raise ConstraintError(
+                "max_length", _("must have at most %(count)s characters") % {"count": self.max_length}
+            )
         if self.pattern is not None and re.search(self.pattern, value) is None:
-            raise ConstraintError("pattern", f"must match {self.pattern}")
+            raise ConstraintError("pattern", _("must match %(pattern)s") % {"pattern": self.pattern})
 
     def to_json(self, value: Any) -> str:
         return str(value)
@@ -198,12 +203,12 @@ class Enum(TunableType):
 
     def coerce(self, raw: Any) -> str:
         if not isinstance(raw, str):
-            raise TypeCoercionError("expected a string")
+            raise TypeCoercionError(str(_("expected a string")))
         return raw
 
     def validate(self, value: Any) -> None:
         if value not in self.choices:
-            raise ConstraintError("enum", "must be one of: " + ", ".join(self.choices))
+            raise ConstraintError("enum", _("must be one of: %(choices)s") % {"choices": ", ".join(self.choices)})
 
     def to_json(self, value: Any) -> str:
         return str(value)
@@ -228,7 +233,7 @@ class List(TunableType):
 
     def coerce(self, raw: Any) -> list[Any]:
         if not isinstance(raw, list):
-            raise TypeCoercionError("expected a list")
+            raise TypeCoercionError(str(_("expected a list")))
         return [self._coerce_item(index, item) for index, item in enumerate(raw)]
 
     def _coerce_item(self, index: int, item: Any) -> Any:
@@ -239,11 +244,11 @@ class List(TunableType):
 
     def validate(self, value: Any) -> None:
         if self.min_items is not None and len(value) < self.min_items:
-            raise ConstraintError("min_items", f"must have at least {self.min_items} items")
+            raise ConstraintError("min_items", _("must have at least %(count)s items") % {"count": self.min_items})
         if self.max_items is not None and len(value) > self.max_items:
-            raise ConstraintError("max_items", f"must have at most {self.max_items} items")
+            raise ConstraintError("max_items", _("must have at most %(count)s items") % {"count": self.max_items})
         if self.unique and len({self.item.to_json(item) for item in value}) != len(value):
-            raise ConstraintError("unique", "items must be unique")
+            raise ConstraintError("unique", str(_("items must be unique")))
         for index, item in enumerate(value):
             try:
                 self.item.validate(item)
@@ -288,18 +293,18 @@ class Mapping(TunableType):
 
     def coerce(self, raw: Any) -> dict[str, Any]:
         if not isinstance(raw, dict):
-            raise TypeCoercionError("expected an object")
+            raise TypeCoercionError(str(_("expected an object")))
         return {self._coerce_key(k): self._coerce_value(k, v) for k, v in raw.items()}
 
     def _coerce_key(self, key: Any) -> str:
         if not isinstance(key, str):
-            raise TypeCoercionError(f"[{key!r}]: keys must be strings")
+            raise TypeCoercionError(f"[{key!r}]: " + str(_("keys must be strings")))
         try:
             coerced = self.key.coerce(key)
         except TypeCoercionError as error:
             raise TypeCoercionError(f'["{key}"]: {error.message}') from error
         if not isinstance(coerced, str):
-            raise TypeCoercionError(f'["{key}"]: key type must produce strings')
+            raise TypeCoercionError(f'["{key}"]: ' + str(_("key type must produce strings")))
         return coerced
 
     def _coerce_value(self, key: str, value: Any) -> Any:
@@ -310,9 +315,11 @@ class Mapping(TunableType):
 
     def validate(self, value: Any) -> None:
         if self.min_entries is not None and len(value) < self.min_entries:
-            raise ConstraintError("min_entries", f"must have at least {self.min_entries} entries")
+            raise ConstraintError(
+                "min_entries", _("must have at least %(count)s entries") % {"count": self.min_entries}
+            )
         if self.max_entries is not None and len(value) > self.max_entries:
-            raise ConstraintError("max_entries", f"must have at most {self.max_entries} entries")
+            raise ConstraintError("max_entries", _("must have at most %(count)s entries") % {"count": self.max_entries})
         for key, item in value.items():
             try:
                 self.key.validate(key)

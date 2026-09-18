@@ -8,6 +8,8 @@ from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path, reverse
 from django.utils.html import format_html
+from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy
 
 from tunables.access import check_editable, editable_groups
 from tunables.admin.forms import GroupForm, build_group_form
@@ -75,7 +77,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
         context = {
             **self.admin_site.each_context(request),
             **(extra_context or {}),
-            "title": "Tunables",
+            "title": _("Tunables"),
             "opts": self.model._meta,
             "groups": groups,
             "validators": [validator_description(v) for v in get_catalogue().validators],
@@ -94,7 +96,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             raise PermissionDenied
         index = reverse("admin:tunables_tunabledefinition_changelist")
         if not is_synced():
-            messages.error(request, "The catalogue in code differs from the database. Run tunables_sync first.")
+            messages.error(request, _("The catalogue in code differs from the database. Run tunables_sync first."))
             return HttpResponseRedirect(index)
         found = catalogue.groups[group]
         form_class = self._form_class(found)
@@ -113,16 +115,23 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
                     field = item.key.partition(".")[2] if isinstance(item, FieldError) else None
                     form.add_error(field if field in form.fields else None, item.message)
             except NothingToChange:
-                form.add_error(None, "Nothing changed.")
+                form.add_error(None, _("Nothing changed."))
             except VersionConflict as conflict:
                 messages.warning(
                     request,
-                    f"The values changed while you were editing: version {conflict.expected} is now "
-                    f"version {conflict.actual}. The form shows the current values; review and submit again.",
+                    _(
+                        "The values changed while you were editing: version %(expected)s is now version %(actual)s. "
+                        "The form shows the current values; review and submit again."
+                    )
+                    % {"expected": conflict.expected, "actual": conflict.actual},
                 )
                 form = self._form_class(found)()
             else:
-                messages.success(request, f"Saved version {result.version} of {str(found.title) or found.name}.")
+                messages.success(
+                    request,
+                    _("Saved version %(version)s of %(group)s.")
+                    % {"version": result.version, "group": str(found.title) or found.name},
+                )
                 return HttpResponseRedirect(index)
         rows = [
             (
@@ -134,7 +143,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
         ]
         context = {
             **self.admin_site.each_context(request),
-            "title": f"Edit {str(found.title) or found.name}",
+            "title": _("Edit %(group)s") % {"group": str(found.title) or found.name},
             "opts": self.model._meta,
             "group": found,
             "form": form,
@@ -174,23 +183,23 @@ class ChangeSetAdmin(ReadOnlyAdmin):
         queryset: QuerySet[ChangeSet] = super().get_queryset(request)
         return queryset.annotate(item_count=Count("items"))
 
-    @admin.display(description="Items", ordering="item_count")
+    @admin.display(description=gettext_lazy("Items"), ordering="item_count")
     def item_count(self, changeset: ChangeSet) -> int:
         return int(getattr(changeset, "item_count", 0))
 
     def has_rollback_permission(self, request: HttpRequest) -> bool:
         return bool(request.user.has_perm("tunables.add_changeset"))
 
-    @admin.action(description="Roll back to this version", permissions=["rollback"])
+    @admin.action(description=gettext_lazy("Roll back to this version"), permissions=["rollback"])
     def rollback(self, request: HttpRequest, queryset: QuerySet[ChangeSet]) -> HttpResponse | None:
         if queryset.count() != 1:
-            self.message_user(request, "Select exactly one change set to roll back to.", messages.ERROR)
+            self.message_user(request, _("Select exactly one change set to roll back to."), messages.ERROR)
             return None
         changeset = queryset.get()
         try:
             check_editable(request, rollback_changes(changeset.version))
         except GroupNotEditable as refused:
-            self.message_user(request, f"Cannot roll back: {refused}", messages.ERROR)
+            self.message_user(request, _("Cannot roll back: %(reason)s") % {"reason": refused}, messages.ERROR)
             return None
         error = ""
         if request.POST.get("confirm"):
@@ -198,10 +207,10 @@ class ChangeSetAdmin(ReadOnlyAdmin):
             if reason:
                 self._roll_back(request, changeset.version, reason)
                 return None
-            error = "A reason is required."
+            error = _("A reason is required.")
         context = {
             **self.admin_site.each_context(request),
-            "title": f"Roll back to version {changeset.version}",
+            "title": _("Roll back to version %(version)s") % {"version": changeset.version},
             "opts": self.model._meta,
             "changeset": changeset,
             "error": error,
@@ -214,12 +223,18 @@ class ChangeSetAdmin(ReadOnlyAdmin):
             result = rollback(version, actor=actor, reason=reason)
         except NothingToChange:
             self.message_user(
-                request, f"Nothing to change: the values already match version {version}.", messages.WARNING
+                request,
+                _("Nothing to change: the values already match version %(version)s.") % {"version": version},
+                messages.WARNING,
             )
         except (ValidationFailed, CatalogueOutOfSync) as failure:
-            self.message_user(request, f"Rollback failed: {failure}", messages.ERROR)
+            self.message_user(request, _("Rollback failed: %(reason)s") % {"reason": failure}, messages.ERROR)
         else:
-            self.message_user(request, f"Rolled back to version {version} as version {result.version}.")
+            self.message_user(
+                request,
+                _("Rolled back to version %(version)s as version %(new)s.")
+                % {"version": version, "new": result.version},
+            )
 
 
 @admin.register(Snapshot)
@@ -228,6 +243,6 @@ class SnapshotAdmin(ReadOnlyAdmin):
     fields = ["version", "changeset", "created_at", "format_version", "catalogue_version", "pretty_document"]
     readonly_fields = ["pretty_document"]
 
-    @admin.display(description="Document")
+    @admin.display(description=gettext_lazy("Document"))
     def pretty_document(self, snapshot: Snapshot) -> str:
         return format_html("<pre>{}</pre>", json.dumps(snapshot.document, indent=2))

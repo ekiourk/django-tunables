@@ -343,3 +343,16 @@ def test_admin_passes_a_django_request_to_the_hook(admin_client: Client, synced:
         admin_client.get(edit_url("pricing"))
     assert SEEN_REQUESTS and all(isinstance(r, HttpRequest) for r in SEEN_REQUESTS)
     assert SEEN_REQUESTS[0].user.get_username() == "admin"
+
+
+def test_admin_form_labels_are_translated(admin_client: Client, synced: SyncResult, german: None) -> None:
+    from django.utils import translation
+
+    apply(Change("pricing.vat_rate", 0.2))
+    with translation.override("de"):
+        response = admin_client.get(edit_url("pricing"))
+        assert response.status_code == 200
+        # The label is a lazy string; it resolves in the language active when it is read.
+        assert str(response.context["form"].fields["reset_vat_rate"].label) == "Auf Standard zurücksetzen"
+    assert "Auf Standard zurücksetzen" in response.content.decode()
+    assert str(response.context["form"].fields["reset_vat_rate"].label) == "Reset to default"

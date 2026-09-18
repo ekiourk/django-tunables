@@ -6,6 +6,7 @@ from typing import Any
 
 from django.db import transaction
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from tunables.catalogue import Catalogue, Group
 from tunables.changes import Actor, Change
@@ -146,11 +147,17 @@ def document_changes(
     """
     if document.get("format_version") != FORMAT_VERSION:
         raise ValidationFailed(
-            [FieldError("format_version", "unsupported", f"expected format_version {FORMAT_VERSION}")]
+            [
+                FieldError(
+                    "format_version",
+                    "unsupported",
+                    _("expected format_version %(version)s") % {"version": FORMAT_VERSION},
+                )
+            ]
         )
     groups = document.get("groups", {})
     if not isinstance(groups, Mapping):
-        raise ValidationFailed([FieldError("groups", "type", "expected an object")])
+        raise ValidationFailed([FieldError("groups", "type", str(_("expected an object")))])
     catalogue = get_catalogue()
     known = set(catalogue.keys())
     changes: list[Change] = []
@@ -158,16 +165,16 @@ def document_changes(
     errors: list[FieldError | GroupError] = []
     for group, values in groups.items():
         if not isinstance(values, Mapping):
-            errors.append(FieldError(f"groups.{group}", "type", "expected an object"))
+            errors.append(FieldError(f"groups.{group}", "type", str(_("expected an object"))))
             continue
         for name, value in values.items():
             key = f"{group}.{name}"
             if key in known:
                 changes.append(Change(key, value))
             elif strict:
-                errors.append(FieldError(key, "unknown_key", f"unknown tunable {key!r}"))
+                errors.append(FieldError(key, "unknown_key", _("unknown tunable %(key)r") % {"key": key}))
             else:
-                warnings.append(FieldWarning(key, "unknown_key", f"unknown tunable {key!r}"))
+                warnings.append(FieldWarning(key, "unknown_key", _("unknown tunable %(key)r") % {"key": key}))
     if errors:
         raise ValidationFailed(errors)
     if replace:
@@ -232,7 +239,7 @@ def _prepare(catalogue: Catalogue, changes: Sequence[Change]) -> tuple[list[_Pre
     seen: set[str] = set()
     for change in changes:
         if change.key in seen:
-            report.errors.append(FieldError(change.key, "duplicate", "key appears more than once"))
+            report.errors.append(FieldError(change.key, "duplicate", str(_("key appears more than once"))))
             continue
         seen.add(change.key)
         item = _prepare_one(catalogue, overrides, change, report)
@@ -246,7 +253,7 @@ def _prepare(catalogue: Catalogue, changes: Sequence[Change]) -> tuple[list[_Pre
     if report.errors:
         raise ValidationFailed(report.errors)
     if not prepared:
-        raise NothingToChange("no effective change")
+        raise NothingToChange(str(_("no effective change")))
     return prepared, report.warnings
 
 
@@ -277,7 +284,9 @@ def _prepare_one(
         else:
             prepared = _Prepared(change.key, False, new_value, old_value) if new_value != current else None
     if prepared is not None and tunable.deprecated:
-        report.warnings.append(FieldWarning(change.key, "deprecated", f"deprecated: {tunable.deprecated}"))
+        report.warnings.append(
+            FieldWarning(change.key, "deprecated", _("deprecated: %(reason)s") % {"reason": tunable.deprecated})
+        )
     return prepared
 
 
