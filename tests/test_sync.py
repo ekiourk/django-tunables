@@ -4,7 +4,7 @@ from typing import Any
 import pytest
 from django.test import override_settings
 
-from tests.catalogue import catalogue, currencies_within_limit, limits, pricing, thermostat, weights
+from tests.catalogue import CATEGORIES, catalogue, currencies_within_limit, limits, pricing, thermostat, weights
 from tunables import Actor, Catalogue, Change, Float, Group, Integer, Tunable, services
 from tunables.document import FORMAT_VERSION, build_document
 from tunables.errors import CatalogueValidationError, ConstraintError, GroupError
@@ -20,8 +20,14 @@ from tunables.sync import SyncResult, is_synced, sync
 
 pytestmark = pytest.mark.django_db
 
-reworded = Catalogue([replace(pricing, title="Prices"), thermostat, weights, limits])
-extended = Catalogue(
+
+def alt(groups: Any, **kwargs: Any) -> Catalogue:
+    """An alternative catalogue built from the shared groups, with the shared categories."""
+    return Catalogue(groups, categories=CATEGORIES, **kwargs)
+
+
+reworded = alt([replace(pricing, title="Prices"), thermostat, weights, limits])
+extended = alt(
     [
         replace(pricing, tunables=[*pricing.tunables, Tunable("discount", Float(min=0.0, max=1.0), 0.0)]),
         thermostat,
@@ -29,17 +35,15 @@ extended = Catalogue(
         limits,
     ]
 )
-reduced = Catalogue([replace(pricing, tunables=pricing.tunables[:-1]), thermostat, weights, limits])
+reduced = alt([replace(pricing, tunables=pricing.tunables[:-1]), thermostat, weights, limits])
 
 
 def retype(group: Group, tunable: Tunable) -> Group:
     return replace(group, tunables=[tunable if t.name == tunable.name else t for t in group.tunables])
 
 
-retyped = Catalogue([retype(pricing, Tunable("vat_rate", Integer(min=0, max=10), 0)), thermostat, weights, limits])
-narrowed = Catalogue(
-    [pricing, retype(thermostat, Tunable("target_c", Float(min=5.0, max=25.0), 21.0)), weights, limits]
-)
+retyped = alt([retype(pricing, Tunable("vat_rate", Integer(min=0, max=10), 0)), thermostat, weights, limits])
+narrowed = alt([pricing, retype(thermostat, Tunable("target_c", Float(min=5.0, max=25.0), 21.0)), weights, limits])
 
 
 def alpha_below_point_four(values: Any) -> None:
@@ -54,14 +58,12 @@ def at_most_one_currency(values: Any) -> None:
         raise ConstraintError("catalogue", "only one currency may be accepted")
 
 
-strict_weights = Catalogue(
+strict_weights = alt(
     [pricing, thermostat, replace(weights, validators=[*weights.validators, alpha_below_point_four]), limits],
     validators=[currencies_within_limit],
 )
-strict_limits = Catalogue(
-    [pricing, thermostat, weights, limits], validators=[currencies_within_limit, at_most_one_currency]
-)
-strict_limits_extended = Catalogue(
+strict_limits = alt([pricing, thermostat, weights, limits], validators=[currencies_within_limit, at_most_one_currency])
+strict_limits_extended = alt(
     [
         replace(pricing, tunables=[*pricing.tunables, Tunable("discount", Float(min=0.0, max=1.0), 0.0)]),
         thermostat,
