@@ -40,8 +40,10 @@ no value and create no change set.
 
 `Tags` in the admin menu lists every tag with the number of definitions carrying it.
 Tags can be created and their descriptions edited by hand; the flag that marks a tag as
-coming from the catalogue is read only. A tag the catalogue seeds cannot be deleted, and
-there is no bulk delete action. Deleting a manual tag removes its assignments.
+coming from the catalogue is read only, and so is the name of a tag the catalogue seeds,
+since the code owns that name. A seeded tag cannot be deleted, and there is no bulk
+delete action. Deleting a manual tag removes its assignments. Tag edits made through the
+API leave no record; edits made in the admin appear in Django's admin log.
 
 ## Editing a group
 

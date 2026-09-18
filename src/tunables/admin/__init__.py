@@ -359,6 +359,12 @@ class TagAdmin(ModelAdmin):
     def definition_count(self, tag: Tag) -> int:
         return int(getattr(tag, "definition_count", 0))
 
+    def get_readonly_fields(self, request: HttpRequest, obj: Any = None) -> list[str]:
+        # A seeded tag's name belongs to the code; renaming it would only make sync recreate the original.
+        if obj is not None and obj.from_catalogue:
+            return [*self.readonly_fields, "name"]
+        return list(self.readonly_fields)
+
     def has_delete_permission(self, request: HttpRequest, obj: Any = None) -> bool:
         if obj is not None and obj.from_catalogue:
             return False

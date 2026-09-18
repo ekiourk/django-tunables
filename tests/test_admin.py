@@ -473,3 +473,22 @@ def test_tag_admin(admin_client: Client, synced: SyncResult) -> None:
     admin_client.post(f"{tags_admin}{money.pk}/delete/", {"post": "yes"})
     assert Tag.objects.filter(name="money").exists()
     assert "action-select" not in admin_client.get(tags_admin).content.decode()
+
+
+def test_seeded_tag_name_is_read_only_in_the_tag_admin(admin_client: Client, synced: SyncResult) -> None:
+    from tunables.models import Tag
+
+    money = Tag.objects.get(name="money")
+    change = f"/admin/tunables/tag/{money.pk}/change/"
+    content = admin_client.get(change).content.decode()
+    assert 'name="name"' not in content
+    response = admin_client.post(change, {"name": "cash", "description": "Renamed?"})
+    assert response.status_code == 302
+    money.refresh_from_db()
+    assert (money.name, money.description) == ("money", "Renamed?")
+    manual = Tag.objects.create(name="review")
+    change = f"/admin/tunables/tag/{manual.pk}/change/"
+    assert 'name="name"' in admin_client.get(change).content.decode()
+    assert admin_client.post(change, {"name": "reviewed", "description": ""}).status_code == 302
+    manual.refresh_from_db()
+    assert manual.name == "reviewed"
