@@ -374,3 +374,16 @@ def test_dry_run_honours_if_match(api: APIClient, path: str) -> None:
     invalid = changes({"key": "pricing.vat_rate", "value": 5.0}, **extra)
     assert post(api, path, invalid, HTTP_IF_MATCH='"0"').status_code == 412
     assert counts() == (1, 1)
+
+
+def test_patch_reason_header_name_is_a_setting(api: APIClient) -> None:
+    with settings_with(REASON_HEADER="X-Why"):
+        response = api.patch(
+            BASE + "groups/pricing/values/",
+            {"vat_rate": 0.2},
+            format="json",
+            HTTP_X_WHY="renamed header",
+            HTTP_X_TUNABLES_REASON="ignored",
+        )
+    assert response.status_code == 201
+    assert response.json()["changeset"]["reason"] == "renamed header"

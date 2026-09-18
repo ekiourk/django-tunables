@@ -40,7 +40,7 @@ per group with `EDITABLE_GROUPS` below.
 | `X-Tunables-Actor` | request | Who is acting, when the request is not authenticated. Recorded with `actor_source: asserted`. Name configurable with `ACTOR_HEADER`. |
 | `X-Tunables-Client` | request | Which program is acting. Recorded as `client`. Name configurable with `CLIENT_HEADER`. |
 | `X-Request-ID` | request | Recorded as `request_id` on the change set. Name configurable with `REQUEST_ID_HEADER`. |
-| `X-Tunables-Reason` | request | Reason for a `PATCH` of group values, whose body has no room for one. |
+| `X-Tunables-Reason` | request | Reason for a `PATCH` of group values, whose body has no room for one. Name configurable with `REASON_HEADER`. |
 
 ## Actors
 
