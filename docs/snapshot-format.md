@@ -65,6 +65,20 @@ in tests. The schema constrains the top-level fields, the `catalogue_version` pa
 and the uniqueness of `overridden`. It does not know the catalogue, so it does not
 constrain which groups and tunables exist or what their value types are.
 
+## The version-zero document without a database
+
+A reader that starts before any snapshot is reachable needs the all-defaults document.
+`manage.py tunables_export --defaults` writes it from the catalogue in code, with
+`version` 0, an empty `overridden`, the catalogue hash and the host's `environment`,
+and needs neither a database nor `tunables_sync`. The same document is available in
+Python as `tunables.document.defaults_document(catalogue)`.
+
+The output equals the snapshot 0 that `tunables_sync` writes on a fresh database with
+the same catalogue and environment, except for `created_at`, which is the time of the
+run. A build step that commits the file and checks it for drift should compare every
+field but `created_at`, or call `defaults_document(catalogue, created_at=...)` with a
+fixed instant.
+
 ## Reader contract: database tables
 
 Readers that share the database poll one table and fetch from another.

@@ -147,7 +147,7 @@ All settings live in one dictionary, `TUNABLES`. Only `CATALOGUE` is required.
 |---|---|
 | `tunables_sync [--check]` | Mirrors the catalogue into the database, creates the state row and snapshot 0 on a fresh database, and writes a system version when the catalogue structure changed. `--check` exits 1 when the stored catalogue version differs from the code, without writing. Idempotent. |
 | `tunables_show [--group NAME] [--json]` | Prints the effective values of the latest snapshot, one key per line, marking overrides. `--json` prints the snapshot document. |
-| `tunables_export [--output FILE]` | Writes the latest snapshot document as JSON to a file or to standard output. |
+| `tunables_export [--output FILE] [--defaults]` | Writes the latest snapshot document as JSON to a file or to standard output. `--defaults` writes the version-zero document from the catalogue in code and needs no database. |
 | `tunables_import FILE --actor NAME [--reason TEXT] [--strict]` | Applies the values of a snapshot document as one change set with `source: import`. Unknown keys are skipped with a warning, or rejected with `--strict`. |
 | `tunables_protect_history [--remove] [--database ALIAS]` | Installs PostgreSQL triggers that reject `UPDATE`, `DELETE` and `TRUNCATE` on the history tables. |
 

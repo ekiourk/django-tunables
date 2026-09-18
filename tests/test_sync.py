@@ -202,3 +202,11 @@ def test_state_is_locked_before_the_mirror_runs() -> None:
     with mock.patch.object(sync_module, "_mirror", observing_mirror):
         sync()
     assert seen == [True], "the State row must exist and be locked before the catalogue is mirrored"
+
+
+def test_snapshot_zero_equals_the_defaults_document() -> None:
+    from tunables.document import defaults_document
+
+    sync()
+    snapshot = Snapshot.objects.get(version=0)
+    assert snapshot.document == defaults_document(catalogue, created_at=snapshot.created_at)
