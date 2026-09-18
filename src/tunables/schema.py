@@ -24,6 +24,7 @@ def json_schema(catalogue: Catalogue, group: Group) -> dict[str, Any]:
             "properties": {tunable.name: _property(group, tunable) for tunable in group.tunables},
             "x-validators": [validator_description(validator) for validator in group.validators],
             "x-catalogue-version": catalogue.version,
+            "x-category": group.category,
         }
     )
     return schema

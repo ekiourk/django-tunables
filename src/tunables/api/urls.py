@@ -5,12 +5,15 @@ from tunables.api import views, writes
 app_name = "tunables"
 
 urlpatterns = [
+    path("categories/", views.CategoryList.as_view(), name="categories"),
     path("groups/", views.GroupList.as_view(), name="groups"),
     path("groups/<str:group>/", views.GroupDetail.as_view(), name="group"),
     path("groups/<str:group>/schema/", views.GroupSchema.as_view(), name="group-schema"),
     path("groups/<str:group>/values/", views.GroupValues.as_view(), name="group-values"),
     path("schema/", views.SchemaList.as_view(), name="schema"),
     path("definitions/", views.DefinitionList.as_view(), name="definitions"),
+    path("tags/", views.TagList.as_view(), name="tags"),
+    path("tags/<str:name>/", views.TagDetail.as_view(), name="tag"),
     path("values/", views.Values.as_view(), name="values"),
     path("changesets/", views.ChangeSetList.as_view(), name="changesets"),
     path("changesets/<int:version>/", views.ChangeSetDetail.as_view(), name="changeset"),

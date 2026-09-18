@@ -1,5 +1,5 @@
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from django.db.models import Count
@@ -14,11 +14,11 @@ from tunables.api import problems
 from tunables.api.base import TunablesAPIView
 from tunables.api.serializers import ChangeSetDetailSerializer, ChangeSetSerializer
 from tunables.api.writes import parsed_changes, write
-from tunables.catalogue import Catalogue, Group, Tunable
+from tunables.catalogue import Catalogue, Category, Group, Tunable
 from tunables.changes import Change
 from tunables.conf import settings
 from tunables.errors import UnknownVersion
-from tunables.models import ChangeSet, PublisherState, Snapshot, State
+from tunables.models import ChangeSet, PublisherState, Snapshot, State, Tag, TunableDefinitionTag
 from tunables.registry import get_catalogue
 from tunables.schema import describe_group, document_schema, validator_description
 from tunables.services import diff_versions, latest_snapshot, rule_violations
@@ -37,11 +37,12 @@ def _summary(group: Group) -> dict[str, Any]:
         "title": str(group.title),
         "description": str(group.description),
         "order": group.order,
+        "category": group.category,
         "validators": [validator_description(validator) for validator in group.validators],
     }
 
 
-def _definition(group: Group, tunable: Tunable) -> dict[str, Any]:
+def _definition(group: Group, tunable: Tunable, tags: Sequence[str] = ()) -> dict[str, Any]:
     return {
         "key": f"{group.name}.{tunable.name}",
         "group": group.name,
@@ -54,25 +55,91 @@ def _definition(group: Group, tunable: Tunable) -> dict[str, Any]:
         "ui": dict(tunable.ui),
         "metadata": dict(tunable.metadata),
         "deprecated": tunable.deprecated,
+        "category": group.category,
+        "tags": sorted(tags),
     }
+
+
+def _tags_by_key() -> dict[str, list[str]]:
+    """Every tag name per definition key, seeded and manual, from the mirror."""
+    by_key: dict[str, list[str]] = {}
+    for key, name in TunableDefinitionTag.objects.values_list("definition__key", "tag__name"):
+        by_key.setdefault(key, []).append(name)
+    return by_key
+
+
+def _category(catalogue: Catalogue, name: str) -> Category:
+    try:
+        return catalogue.categories[name]
+    except KeyError:
+        raise NotFound(f"unknown category {name!r}") from None
+
+
+class CategoryList(TunablesAPIView):
+    def get(self, request: Request) -> Response:
+        catalogue = get_catalogue()
+        return Response(
+            [
+                {
+                    "name": category.name,
+                    "title": str(category.title),
+                    "description": str(category.description),
+                    "order": category.order,
+                    "groups": [group.name for group in catalogue.groups_in(category.name)],
+                }
+                for category in catalogue.categories.values()
+            ]
+        )
+
+
+def _tag_summary(tag: Tag) -> dict[str, Any]:
+    return {
+        "name": tag.name,
+        "description": tag.description,
+        "from_catalogue": tag.from_catalogue,
+        "definition_count": int(getattr(tag, "definition_count", 0)),
+    }
+
+
+class TagList(TunablesAPIView):
+    def get(self, request: Request) -> Response:
+        tags = Tag.objects.annotate(definition_count=Count("definitions")).order_by("name")
+        return Response([_tag_summary(tag) for tag in tags])
+
+
+class TagDetail(TunablesAPIView):
+    def get(self, request: Request, name: str) -> Response:
+        tag = Tag.objects.annotate(definition_count=Count("definitions")).filter(name=name).first()
+        if tag is None:
+            raise NotFound(f"unknown tag {name!r}")
+        tagged = set(tag.definitions.values_list("key", flat=True))
+        ordered_keys = get_catalogue().keys()
+        keys = [key for key in ordered_keys if key in tagged]
+        return Response({**_tag_summary(tag), "definitions": keys})
 
 
 class GroupList(TunablesAPIView):
     def get(self, request: Request) -> Response:
-        return Response(
-            [{**_summary(group), "tunable_count": len(group.tunables)} for group in get_catalogue().groups.values()]
-        )
+        catalogue = get_catalogue()
+        groups: Sequence[Group] = list(catalogue.groups.values())
+        if category := request.query_params.get("category"):
+            groups = catalogue.groups_in(_category(catalogue, category).name)
+        return Response([{**_summary(group), "tunable_count": len(group.tunables)} for group in groups])
 
 
 class GroupDetail(TunablesAPIView):
     def get(self, request: Request, group: str) -> Response:
         found = _group(get_catalogue(), group)
+        tags = _tags_by_key()
         return Response(
             {
                 **_summary(found),
                 "ui": dict(found.ui),
                 "metadata": dict(found.metadata),
-                "definitions": [_definition(found, tunable) for tunable in found.tunables],
+                "definitions": [
+                    _definition(found, tunable, tags.get(f"{found.name}.{tunable.name}", []))
+                    for tunable in found.tunables
+                ],
             }
         )
 
@@ -92,7 +159,27 @@ class SchemaList(TunablesAPIView):
 class DefinitionList(TunablesAPIView):
     def get(self, request: Request) -> Response:
         catalogue = get_catalogue()
-        return Response([_definition(group, t) for group in catalogue.groups.values() for t in group.tunables])
+        params = request.query_params
+        groups: Sequence[Group] = list(catalogue.groups.values())
+        if category := params.get("category"):
+            groups = catalogue.groups_in(_category(catalogue, category).name)
+        if group_name := params.get("group"):
+            groups = [group for group in groups if group.name == _group(catalogue, group_name).name]
+        wanted_tags = set(params.getlist("tag"))
+        query = params.get("q", "").casefold()
+        tags = _tags_by_key()
+        definitions = []
+        for group in groups:
+            for tunable in group.tunables:
+                key = f"{group.name}.{tunable.name}"
+                own_tags = tags.get(key, [])
+                if wanted_tags and not wanted_tags <= set(own_tags):
+                    continue
+                haystack = " ".join((key, str(tunable.title), str(tunable.description))).casefold()
+                if query and query not in haystack:
+                    continue
+                definitions.append(_definition(group, tunable, own_tags))
+        return Response(definitions)
 
 
 def _with_etag(request: Request, version: int, body: Any) -> Response:

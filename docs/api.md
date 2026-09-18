@@ -78,11 +78,14 @@ keeps serving the previous state. Every write requires sync.
 
 | Method and path | Response |
 |---|---|
-| `GET groups/` | `[group summary]` in catalogue order |
+| `GET categories/` | `[{name, title, description, order, groups: [names]}]` in catalogue order; `general` is always present |
+| `GET groups/[?category=]` | `[group summary]` in catalogue order, optionally one category's groups; unknown category is `404` |
 | `GET groups/{group}/` | group summary without `tunable_count`, plus `ui`, `metadata` and `definitions: [definition]` |
 | `GET groups/{group}/schema/` | `{"json_schema": ..., "ui_schema": ...}` |
 | `GET schema/` | `{"<group>": {"json_schema": ..., "ui_schema": ...}}` for every group |
-| `GET definitions/` | `[definition]` for every tunable in catalogue order |
+| `GET definitions/[?category=&group=&tag=&tag=&q=]` | `[definition]` in catalogue order; filters combine; `tag` repeats and every named tag must be present; `q` is a case-insensitive substring of the key, title or description; unknown category or group is `404`, an unknown tag matches nothing |
+| `GET tags/` | `[{name, description, from_catalogue, definition_count}]` by name |
+| `GET tags/{name}/` | the same plus `definitions: [keys]` in catalogue order; unknown is `404` |
 | `GET values/` | `{"version", "groups": {group: {name: value}}, "overridden": [key]}` with `ETag` |
 | `GET groups/{group}/values/` | `{"version", "values": {name: value}, "overridden": [name]}` with `ETag` |
 | `GET changesets/` | paginated `[change set]`, newest first |
@@ -97,8 +100,9 @@ keeps serving the previous state. Every write requires sync.
 Shapes:
 
 ```
-group summary = {name, title, description, order, tunable_count, validators: [text]}
-definition    = {key, group, name, type: {name, params}, default, title, description, unit, ui, metadata, deprecated}
+group summary = {name, title, description, order, category, tunable_count, validators: [text]}
+definition    = {key, group, name, type: {name, params}, default, title, description, unit, ui, metadata, deprecated,
+                 category, tags: [names]}
 change set    = {version, created_at, actor, actor_source, client, reason, source, restores_version,
                  request_id, catalogue_version, metadata, item_count}   # metadata comes from the POST body, {} otherwise
 item          = {key, old_value, new_value, reset}
