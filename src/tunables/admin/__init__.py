@@ -9,11 +9,13 @@ from django.template.response import TemplateResponse
 from django.urls import URLPattern, path, reverse
 from django.utils.html import format_html
 
+from tunables.access import check_editable, editable_groups
 from tunables.admin.forms import GroupForm, build_group_form
 from tunables.changes import Actor
 from tunables.errors import (
     CatalogueOutOfSync,
     FieldError,
+    GroupNotEditable,
     NothingToChange,
     ValidationFailed,
     VersionConflict,
@@ -21,7 +23,7 @@ from tunables.errors import (
 from tunables.models import ChangeItem, ChangeSet, Snapshot, TunableDefinition
 from tunables.registry import get_catalogue
 from tunables.schema import validator_description
-from tunables.services import apply_changeset, latest_snapshot, rollback
+from tunables.services import apply_changeset, latest_snapshot, rollback, rollback_changes
 from tunables.sync import is_synced
 
 if TYPE_CHECKING:
@@ -57,6 +59,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
     def changelist_view(self, request: HttpRequest, extra_context: dict[str, Any] | None = None) -> HttpResponse:
         if not self.has_view_or_change_permission(request):
             raise PermissionDenied
+        editable = editable_groups(request)
         groups = [
             {
                 "name": group.name,
@@ -65,6 +68,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
                 "count": len(group.tunables),
                 "validators": [validator_description(v) for v in group.validators],
                 "edit_url": reverse("admin:tunables_group_edit", args=[group.name]),
+                "can_edit": self.has_write_permission(request) and (editable is None or group.name in editable),
             }
             for group in get_catalogue().groups.values()
         ]
@@ -76,7 +80,6 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             "groups": groups,
             "validators": [validator_description(v) for v in get_catalogue().validators],
             "synced": is_synced(),
-            "can_edit": self.has_write_permission(request),
         }
         return TemplateResponse(request, "tunables/admin/group_index.html", context)
 
@@ -86,6 +89,9 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
         catalogue = get_catalogue()
         if group not in catalogue.groups:
             raise Http404(f"unknown group {group!r}")
+        editable = editable_groups(request)
+        if editable is not None and group not in editable:
+            raise PermissionDenied
         index = reverse("admin:tunables_tunabledefinition_changelist")
         if not is_synced():
             messages.error(request, "The catalogue in code differs from the database. Run tunables_sync first.")
@@ -181,6 +187,11 @@ class ChangeSetAdmin(ReadOnlyAdmin):
             self.message_user(request, "Select exactly one change set to roll back to.", messages.ERROR)
             return None
         changeset = queryset.get()
+        try:
+            check_editable(request, rollback_changes(changeset.version))
+        except GroupNotEditable as refused:
+            self.message_user(request, f"Cannot roll back: {refused}", messages.ERROR)
+            return None
         error = ""
         if request.POST.get("confirm"):
             reason = request.POST.get("reason", "").strip()

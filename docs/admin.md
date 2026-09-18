@@ -85,7 +85,11 @@ The admin uses Django's standard permissions with one addition:
 | see snapshots | `tunables.view_snapshot` |
 
 Every write in the admin creates a change set, which is why `add_changeset` is the one
-write permission. The admin grants no add, change or delete permission on the three
+write permission. `TUNABLES["EDITABLE_GROUPS"]` narrows it further, with the same
+callable the API uses: the index shows an Edit link only for groups the callable
+returns, the edit view refuses the others, and the rollback action refuses a rollback
+that would change a group outside the set, naming the group. The callable receives the
+admin's `HttpRequest`, whose `user` is the logged-in user. The admin grants no add, change or delete permission on the three
 models themselves, so their detail pages are read only for everyone, superusers
 included. Users without `add_changeset` see the index without Edit links and the
 history without the rollback action.
