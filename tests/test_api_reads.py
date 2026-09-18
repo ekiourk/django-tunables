@@ -394,6 +394,7 @@ def test_status(api: APIClient) -> None:
         "catalogue_version": catalogue.version,
         "code_catalogue_version": catalogue.version,
         "validators": ["The number of accepted currencies must not exceed limits.max_currencies."],
+        "publishers": [],
     }
     State.objects.update(catalogue_version="sha256:stale")
     body = api.get(BASE + "status/").json()
@@ -414,6 +415,7 @@ def test_status_before_the_first_sync(db: None) -> None:
         "catalogue_version": None,
         "code_catalogue_version": catalogue.version,
         "validators": ["The number of accepted currencies must not exceed limits.max_currencies."],
+        "publishers": [],
     }
 
 
@@ -425,3 +427,20 @@ def test_snapshot_schema_endpoint(api: APIClient) -> None:
     assert response.json() == document_schema(catalogue)
     State.objects.update(catalogue_version="sha256:stale")
     assert api.get(BASE + "snapshots/schema/").status_code == 503
+
+
+def test_status_lists_publisher_states(api: APIClient) -> None:
+    from tunables.models import PublisherState
+
+    PublisherState.objects.create(publisher="tunables.publishers.FilePublisher", last_version=3, last_error="")
+    PublisherState.objects.create(publisher="x.Broken", last_version=None, last_error="disk full")
+    body = api.get(BASE + "status/").json()
+    assert body["publishers"] == [
+        {
+            "publisher": "tunables.publishers.FilePublisher",
+            "last_version": 3,
+            "last_published_at": None,
+            "last_error": "",
+        },
+        {"publisher": "x.Broken", "last_version": None, "last_published_at": None, "last_error": "disk full"},
+    ]

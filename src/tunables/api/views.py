@@ -16,7 +16,7 @@ from tunables.api.writes import parsed_changes, write
 from tunables.catalogue import Catalogue, Group, Tunable
 from tunables.changes import Change
 from tunables.conf import settings
-from tunables.models import ChangeSet, Snapshot, State
+from tunables.models import ChangeSet, PublisherState, Snapshot, State
 from tunables.registry import get_catalogue
 from tunables.schema import describe_group, document_schema, validator_description
 from tunables.services import latest_snapshot
@@ -218,6 +218,15 @@ class Status(TunablesAPIView):
                 "catalogue_version": None if state is None else state.catalogue_version,
                 "code_catalogue_version": code_version,
                 "validators": [validator_description(v) for v in get_catalogue().validators],
+                "publishers": [
+                    {
+                        "publisher": row.publisher,
+                        "last_version": row.last_version,
+                        "last_published_at": row.last_published_at,
+                        "last_error": row.last_error,
+                    }
+                    for row in PublisherState.objects.order_by("publisher")
+                ],
             }
         )
 

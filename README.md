@@ -150,6 +150,7 @@ All settings live in one dictionary, `TUNABLES`. Only `CATALOGUE` is required.
 | `tunables_export [--output FILE] [--defaults] [--schema]` | Writes the latest snapshot document as JSON to a file or to standard output. `--defaults` writes the version-zero document from the catalogue in code, `--schema` writes the JSON Schema of documents for that catalogue; both need no database. |
 | `tunables_import FILE --actor NAME [--reason TEXT] [--strict]` | Applies the values of a snapshot document as one change set with `source: import`. Unknown keys are skipped with a warning, or rejected with `--strict`. |
 | `tunables_protect_history [--remove] [--database ALIAS]` | Installs PostgreSQL triggers that reject `UPDATE`, `DELETE` and `TRUNCATE` on the history tables. |
+| `tunables_publish [VERSION] [--publisher PATH]` | Sends a stored snapshot, the latest by default, to the configured publishers again and records the outcome. Fails when a publisher fails. |
 
 `tunables_sync --check` compares the catalogue hash only. A change to a title or
 description makes the mirror stale without changing the hash; the next `tunables_sync`
@@ -163,6 +164,12 @@ snapshot is sent to the `tunables.signals.snapshot_published` signal, with the
 A publisher is any object with a `publish(snapshot)` method. An exception inside
 `publish` is logged under the `tunables.publishers` logger and does not affect the
 write. Both the signal and the publishers run after the transaction commits.
+
+Each publisher's outcome is recorded: the version it last received, when, and the last
+error if any. `GET status/` shows this per publisher, so a gap between the current version
+and a publisher's last version is visible. `manage.py tunables_publish [VERSION]
+[--publisher PATH]` sends a stored snapshot, the latest by default, to all or one
+publisher again, and fails with the publisher's error when it does not succeed.
 
 `tunables.publishers.FilePublisher` writes the document to `FILE_PUBLISHER_PATH`, using
 a temporary file in the same directory and a rename, so readers never see a partial

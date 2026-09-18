@@ -208,3 +208,25 @@ def test_import_reports_catalogue_errors(synced: SyncResult, tmp_path: Path) -> 
     with pytest.raises(CommandError) as info:
         run("tunables_import", str(path), "--actor", "deploy")
     assert str(info.value).splitlines() == ["catalogue: catalogue: accepted currencies exceed limits.max_currencies"]
+
+
+def test_publish_command(synced: SyncResult) -> None:
+    from tests.test_publishers import Failing, Recorder
+
+    apply(Change("pricing.vat_rate", 0.2))
+    Recorder.published = []
+    with override_settings(
+        TUNABLES={"CATALOGUE": "tests.catalogue.catalogue", "PUBLISHERS": ["tests.test_publishers.Recorder"]}
+    ):
+        assert run("tunables_publish") == "tests.test_publishers.Recorder: published version 1\n"
+        assert run("tunables_publish", "0") == "tests.test_publishers.Recorder: published version 0\n"
+    assert [s.version for s in Recorder.published] == [1, 0]
+    both = ["tests.test_publishers.Recorder", "tests.test_publishers.Failing"]
+    with override_settings(TUNABLES={"CATALOGUE": "tests.catalogue.catalogue", "PUBLISHERS": both}):
+        with pytest.raises(CommandError, match="tests.test_publishers.Failing: boom"):
+            run("tunables_publish")
+        with pytest.raises(CommandError, match="no snapshot for version 9"):
+            run("tunables_publish", "9")
+        with pytest.raises(CommandError, match="not configured"):
+            run("tunables_publish", "--publisher", "x.Nope")
+    assert Failing.raise_error is True

@@ -130,3 +130,13 @@ class Snapshot(AppendOnlyModel):
 
     class Meta:
         ordering = ["-version"]
+
+
+class PublisherState(models.Model):
+    """Bookkeeping per configured publisher: the version it last received and the last failure."""
+
+    publisher = models.CharField(max_length=255, unique=True)
+    last_version = models.PositiveIntegerField(null=True, blank=True)
+    last_published_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
