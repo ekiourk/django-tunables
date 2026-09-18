@@ -193,3 +193,29 @@ def test_catalogue_validators_are_stored_and_do_not_affect_the_version() -> None
     assert Catalogue([pricing]).validators == ()
     assert catalogue.validators == (currencies_within_limit,)
     assert Catalogue([pricing, thermostat, weights, limits]).version == catalogue.version
+
+
+@pytest.mark.parametrize("field_name", ["metadata", "ui"])
+@pytest.mark.parametrize("kind", ["tunable", "group"])
+def test_metadata_and_ui_must_be_json_serialisable(kind: str, field_name: str) -> None:
+    bad = {"owners": {"ops", "dev"}}
+    with pytest.raises(CatalogueError) as info:
+        if kind == "tunable":
+            Tunable("x", Integer(), 1, **{field_name: bad})
+        else:
+            Group("g", [tunable()], **{field_name: bad})
+    message = str(info.value)
+    assert field_name in message
+    assert ("tunable 'x'" if kind == "tunable" else "group 'g'") in message
+    assert "not JSON serialisable" in message
+
+
+def test_nan_in_metadata_is_refused() -> None:
+    with pytest.raises(CatalogueError, match="metadata of tunable 'x'"):
+        Tunable("x", Integer(), 1, metadata={"ratio": float("nan")})
+
+
+def test_nested_json_values_are_accepted() -> None:
+    value = {"owners": ["ops", "dev"], "limits": {"soft": 1, "hard": 2.5}, "enabled": True, "note": None}
+    assert Tunable("x", Integer(), 1, metadata=value, ui=value).metadata == value
+    assert Group("g", [tunable()], metadata=value, ui={**value, "sections": []}).ui["limits"] == value["limits"]

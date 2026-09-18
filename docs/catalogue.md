@@ -46,8 +46,8 @@ Tunable(name, type, default, title="", description="", unit="", ui={}, metadata=
 | `default` | Must satisfy the type. It is coerced and validated when the `Tunable` is constructed, so a default of `50` for a `Float` is stored as `50.0`, and an invalid default raises `CatalogueError` at import time. |
 | `title`, `description` | Shown in the admin, the API and the JSON Schema. Lazy translation strings are accepted. |
 | `unit` | Free text such as `"EUR"` or `"s"`. Shown next to the field and exposed as `x-unit`. |
-| `ui` | Hints copied into the UI schema's `options` for this control, see [Sections and UI hints](#sections-and-ui-hints). |
-| `metadata` | Opaque to the package. Exposed read-only through the API. |
+| `ui` | Hints copied into the UI schema's `options` for this control, see [Sections and UI hints](#sections-and-ui-hints). Must be JSON serialisable; checked at construction. |
+| `metadata` | Opaque to the package. Exposed read-only through the API. Must be JSON serialisable; checked at construction. |
 | `deprecated` | A non-empty string marks the tunable deprecated with that reason. |
 
 A deprecated tunable still exists and can still be changed. Writes that touch it return
