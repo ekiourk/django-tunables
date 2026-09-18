@@ -36,6 +36,7 @@ pip install django-tunables
 
 Add the apps and point the setting at your catalogue. In `settings.py`:
 
+<!-- quickstart: settings -->
 ```python
 INSTALLED_APPS = [
     # ...
@@ -48,6 +49,7 @@ TUNABLES = {"CATALOGUE": "myproject.tunables_catalogue.catalogue"}
 
 Declare the catalogue. In `myproject/tunables_catalogue.py`:
 
+<!-- quickstart: catalogue -->
 ```python
 from tunables import Boolean, Catalogue, Enum, Float, Group, List, Tunable
 
@@ -78,6 +80,7 @@ catalogue = Catalogue([pricing, thermostat])
 
 Mount the API next to the admin. In `myproject/urls.py`:
 
+<!-- quickstart: urls -->
 ```python
 from django.contrib import admin
 from django.urls import include, path
@@ -90,6 +93,7 @@ urlpatterns = [
 
 Create the tables and the first snapshot:
 
+<!-- quickstart: setup -->
 ```
 python manage.py migrate
 python manage.py tunables_sync
@@ -97,12 +101,14 @@ python manage.py tunables_sync
 
 Read the effective values:
 
+<!-- quickstart: read -->
 ```
 curl -s http://localhost:8000/api/tunables/values/
 ```
 
 Change one:
 
+<!-- quickstart: change -->
 ```
 curl -s -X POST http://localhost:8000/api/tunables/changesets/ \
   -H "Content-Type: application/json" \
@@ -215,6 +221,7 @@ uv sync --all-extras
 uv run pytest
 uv run pytest --postgres    # the whole suite on a PostgreSQL testcontainer, needs Docker
 uv run ruff check . && uv run mypy src
+scripts/quickstart_check.sh    # installs the built wheel into a fresh project and runs the quickstart
 ```
 
 ## License
