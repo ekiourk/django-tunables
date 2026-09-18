@@ -60,6 +60,7 @@ def test_show_text(synced: SyncResult) -> None:
         "pricing.vat_rate = 0.2  (override)",
         "pricing.free_shipping_over = 50.0",
         'pricing.currencies = ["EUR"]',
+        'pricing.shipping_rates = {"EUR": 4.9}',
         "pricing.allow_backorders = false",
         "thermostat.target_c = 21.0",
         'thermostat.mode = "heat"  (override)',

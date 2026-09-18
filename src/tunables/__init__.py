@@ -1,6 +1,6 @@
 from tunables.catalogue import Catalogue, Group, Tunable
 from tunables.changes import Actor, Change
-from tunables.types import Boolean, Enum, Float, Integer, List, String, TunableType
+from tunables.types import Boolean, Enum, Float, Integer, List, Mapping, String, TunableType
 
 __all__ = [
     "Actor",
@@ -12,6 +12,7 @@ __all__ = [
     "Group",
     "Integer",
     "List",
+    "Mapping",
     "String",
     "Tunable",
     "TunableType",

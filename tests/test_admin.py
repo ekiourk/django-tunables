@@ -31,7 +31,7 @@ def form_data(group: str, **overrides: Any) -> dict[str, Any]:
         if isinstance(value, bool):
             if value:
                 data[tunable.name] = "on"
-        elif isinstance(value, list):
+        elif isinstance(value, list | dict):
             data[tunable.name] = json.dumps(value)
         else:
             data[tunable.name] = str(value)
@@ -63,7 +63,7 @@ def test_group_index(admin_client: Client, synced: SyncResult) -> None:
     assert edit_url("pricing") in content
     assert "Prices and shipping rules for the web shop." in content
     assert [row["name"] for row in response.context["groups"]] == ["pricing", "thermostat", "weights"]
-    assert response.context["groups"][0]["count"] == 4
+    assert response.context["groups"][0]["count"] == 5
     assert INDEX in admin_client.get("/admin/").content.decode()
 
 

@@ -7,7 +7,7 @@ from django.core.exceptions import ValidationError
 
 from tests.catalogue import HexColour
 from tunables.errors import ConstraintError, TypeCoercionError
-from tunables.types import Boolean, Enum, Float, Integer, List, String, TunableType
+from tunables.types import Boolean, Enum, Float, Integer, List, Mapping, String, TunableType
 
 COLOURS = Enum(["red", "green", "blue"])
 
@@ -265,3 +265,135 @@ def test_custom_type_works_through_the_base_interface() -> None:
 def test_base_type_cannot_be_instantiated() -> None:
     with pytest.raises(TypeError):
         TunableType()  # type: ignore[abstract]
+
+
+RATES = Mapping(Enum(["EUR", "USD", "GBP"]), Float(min=0.0))
+
+
+@pytest.mark.parametrize(
+    ("tunable_type", "raw", "expected"),
+    [
+        (RATES, {"EUR": 4.9, "USD": 6}, {"EUR": 4.9, "USD": 6.0}),
+        (RATES, {}, {}),
+        (Mapping(String(), List(Integer())), {"a": [1, 2]}, {"a": [1, 2]}),
+        (Mapping(String(pattern=r"^\d+,\d+$"), Float()), {"3,5": 1.5}, {"3,5": 1.5}),
+    ],
+)
+def test_mapping_coerce_accepts(tunable_type: TunableType, raw: Any, expected: Any) -> None:
+    assert tunable_type.coerce(raw) == expected
+
+
+@pytest.mark.parametrize("raw", [[("EUR", 4.9)], "EUR=4.9", {"EUR": "4.9"}, {1: 4.9}, None])
+def test_mapping_coerce_rejects(raw: Any) -> None:
+    with pytest.raises(TypeCoercionError) as info:
+        RATES.coerce(raw)
+    assert info.value.code == "type"
+
+
+def test_mapping_coercion_error_names_the_key() -> None:
+    with pytest.raises(TypeCoercionError, match=r'\["USD"\]'):
+        RATES.coerce({"EUR": 4.9, "USD": "six"})
+
+
+@pytest.mark.parametrize(
+    ("tunable_type", "value", "code"),
+    [
+        (Mapping(String(), Float(), min_entries=1), {}, "min_entries"),
+        (Mapping(String(), Float(), max_entries=1), {"a": 1.0, "b": 2.0}, "max_entries"),
+        (RATES, {"CHF": 1.0}, "enum"),
+        (RATES, {"EUR": -1.0}, "min"),
+        (Mapping(String(min_length=2), Float()), {"a": 1.0}, "min_length"),
+    ],
+)
+def test_mapping_validate_rejects_with_code(tunable_type: TunableType, value: Any, code: str) -> None:
+    with pytest.raises(ConstraintError) as info:
+        tunable_type.validate(value)
+    assert info.value.code == code
+
+
+def test_mapping_validation_error_names_the_key() -> None:
+    with pytest.raises(ConstraintError, match=r'\["EUR"\]: must be >= 0.0'):
+        RATES.validate({"EUR": -1.0})
+
+
+def test_mapping_validate_accepts_boundaries() -> None:
+    Mapping(String(), Float(), min_entries=1, max_entries=1).validate({"a": 1.0})
+    RATES.validate({})
+
+
+def test_mapping_round_trip() -> None:
+    value = {"EUR": 4.9, "GBP": 3.0}
+    assert RATES.coerce(RATES.to_json(value)) == value
+    nested = Mapping(String(), List(Integer()))
+    assert nested.coerce(nested.to_json({"a": [1], "b": [2, 3]})) == {"a": [1], "b": [2, 3]}
+
+
+def test_mapping_json_schema() -> None:
+    assert RATES.json_schema() == {
+        "type": "object",
+        "propertyNames": {"type": "string", "enum": ["EUR", "USD", "GBP"]},
+        "additionalProperties": {"type": "number", "minimum": 0.0},
+    }
+    assert Mapping(String(), Integer(), min_entries=1, max_entries=3).json_schema() == {
+        "type": "object",
+        "propertyNames": {"type": "string"},
+        "additionalProperties": {"type": "integer"},
+        "minProperties": 1,
+        "maxProperties": 3,
+    }
+
+
+def test_mapping_form_field() -> None:
+    assert type(RATES.form_field()) is forms.JSONField
+    with pytest.raises(ValidationError):
+        RATES.form_field().clean('{"EUR": -1}')
+    assert RATES.form_field().clean('{"EUR": 4.9}') == {"EUR": 4.9}
+
+
+def test_mapping_describe() -> None:
+    assert Mapping(String(), Integer(min=0), max_entries=5).describe() == {
+        "name": "mapping",
+        "params": {
+            "key": {"name": "string", "params": {"min_length": None, "max_length": None, "pattern": None}},
+            "value": {"name": "integer", "params": {"min": 0, "max": None}},
+            "min_entries": None,
+            "max_entries": 5,
+        },
+    }
+
+
+def test_mapping_with_a_non_string_key_type_is_rejected_at_declaration() -> None:
+    from tunables import Tunable
+    from tunables.errors import CatalogueError
+
+    with pytest.raises(CatalogueError):
+        Tunable("table", Mapping(Integer(), Integer()), {"1": 2})
+
+
+class Numeric(TunableType):
+    """A key type that turns digit strings into integers, which a Mapping must refuse."""
+
+    name = "numeric"
+
+    def coerce(self, raw: Any) -> int:
+        return int(raw)
+
+    def validate(self, value: Any) -> None:
+        pass
+
+    def to_json(self, value: Any) -> int:
+        return int(value)
+
+    def json_schema(self) -> dict[str, Any]:
+        return {"type": "integer"}
+
+    def form_field(self, **kwargs: Any) -> forms.Field:
+        return forms.IntegerField(**kwargs)
+
+    def describe(self) -> dict[str, Any]:
+        return {"name": self.name, "params": {}}
+
+
+def test_mapping_refuses_a_key_type_that_does_not_produce_strings() -> None:
+    with pytest.raises(TypeCoercionError, match="key type must produce strings"):
+        Mapping(Numeric(), Integer()).coerce({"1": 2})

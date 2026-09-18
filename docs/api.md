@@ -201,12 +201,14 @@ code with underscores replaced by hyphens, for example `method-not-allowed` or
 | `min_length`, `max_length`, `pattern` | `String` |
 | `enum` | `Enum` membership |
 | `min_items`, `max_items`, `unique` | `List` |
+| `min_entries`, `max_entries` | `Mapping` |
 | `unknown_key` | the key is not in the catalogue |
 | `duplicate` | the key appears twice in one request |
 | `group` | a group validator, reported with `group` instead of `key` |
 
 Custom types define their own codes. Inside a `List`, an item error keeps the item's
-code and its `detail` starts with the index, such as `[1]: must be >= 0`.
+code and its `detail` starts with the index, such as `[1]: must be >= 0`. Inside a
+`Mapping`, it starts with the key, such as `["EUR"]: must be >= 0`.
 
 ### Warning codes
 
