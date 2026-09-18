@@ -88,7 +88,7 @@ keeps serving the previous state. Every write requires sync.
 | `GET snapshots/{version}/` | the same for one version |
 | `GET snapshots/schema/` | JSON Schema of snapshot documents for this catalogue, see `snapshot-format.md`; requires sync |
 | `GET export/` | the latest document as a download, `Content-Disposition: attachment; filename="tunables-v42.json"` |
-| `GET status/` | `{"synced", "version", "catalogue_version", "code_catalogue_version"}`, always `200`; `version` and `catalogue_version` are `null` before the first sync |
+| `GET status/` | `{"synced", "version", "catalogue_version", "code_catalogue_version", "validators"}`, always `200`; `version` and `catalogue_version` are `null` before the first sync; `validators` lists the catalogue-level rules |
 
 Shapes:
 
@@ -170,10 +170,14 @@ Errors are RFC 9457 problem documents with content type `application/problem+jso
   "detail": "2 errors",
   "errors": [
     {"key": "pricing.vat_rate", "code": "max", "detail": "must be <= 1.0"},
-    {"group": "weights", "code": "group", "detail": "weights must sum to 1"}
+    {"group": "weights", "code": "group", "detail": "weights must sum to 1"},
+    {"scope": "catalogue", "code": "catalogue", "detail": "accepted currencies exceed limits.max_currencies"}
   ]
 }
 ```
+
+An `errors` entry names a `key` for a single tunable, a `group` for a group validator,
+or `scope: "catalogue"` for a catalogue validator.
 
 | `type` | Status | Extra members | When |
 |---|---|---|---|
@@ -205,6 +209,7 @@ code with underscores replaced by hyphens, for example `method-not-allowed` or
 | `unknown_key` | the key is not in the catalogue |
 | `duplicate` | the key appears twice in one request |
 | `group` | a group validator, reported with `group` instead of `key` |
+| any | a catalogue validator, reported with `scope: "catalogue"`; the code is whatever the validator raises |
 
 Custom types define their own codes. Inside a `List`, an item error keeps the item's
 code and its `detail` starts with the index, such as `[1]: must be >= 0`. Inside a

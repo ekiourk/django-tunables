@@ -27,5 +27,9 @@
       {% endfor %}
     </tbody>
   </table>
+  {% if validators %}
+  <h2>Rules across groups</h2>
+  <ul>{% for rule in validators %}<li>{{ rule }}</li>{% endfor %}</ul>
+  {% endif %}
 </div>
 {% endblock %}

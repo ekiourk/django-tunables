@@ -70,6 +70,7 @@ def test_show_text(synced: SyncResult) -> None:
         "weights.alpha = 0.5",
         "weights.beta = 0.3",
         "weights.gamma = 0.2",
+        "limits.max_currencies = 3",
     ]
 
 
@@ -199,3 +200,11 @@ def test_export_schema_needs_no_database(db: None, tmp_path: Path) -> None:
 def test_export_defaults_and_schema_are_exclusive(db: None) -> None:
     with pytest.raises(CommandError, match="cannot be combined"):
         run("tunables_export", "--defaults", "--schema")
+
+
+def test_import_reports_catalogue_errors(synced: SyncResult, tmp_path: Path) -> None:
+    apply(Change("pricing.currencies", ["EUR", "USD"]))
+    path = write_document(tmp_path, limits__max_currencies=1)
+    with pytest.raises(CommandError) as info:
+        run("tunables_import", str(path), "--actor", "deploy")
+    assert str(info.value).splitlines() == ["catalogue: catalogue: accepted currencies exceed limits.max_currencies"]

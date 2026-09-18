@@ -7,12 +7,13 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
-from tunables.catalogue import Catalogue
+from tunables.catalogue import Catalogue, Group
 from tunables.changes import Actor, Change
 from tunables.conf import settings
 from tunables.document import FORMAT_VERSION, build_document
 from tunables.errors import (
     CatalogueOutOfSync,
+    CatalogueValidationError,
     ConstraintError,
     FieldError,
     FieldWarning,
@@ -185,7 +186,7 @@ def _locked_state(catalogue: Catalogue) -> State:
 
 @dataclass
 class _Report:
-    errors: list[FieldError | GroupError] = field(default_factory=list)
+    errors: list[FieldError | GroupError | CatalogueValidationError] = field(default_factory=list)
     warnings: list[FieldWarning] = field(default_factory=list)
 
 
@@ -202,7 +203,11 @@ def _prepare(catalogue: Catalogue, changes: Sequence[Change]) -> tuple[list[_Pre
         item = _prepare_one(catalogue, overrides, change, report)
         if item is not None:
             prepared.append(item)
-    report.errors.extend(_group_errors(catalogue, overrides, prepared))
+    proposed = _proposed(overrides, prepared)
+    group_errors = _group_errors(catalogue, proposed, prepared)
+    report.errors.extend(group_errors)
+    touched = {item.key.partition(".")[0] for item in prepared}
+    report.errors.extend(_catalogue_errors(catalogue, proposed, touched))
     if report.errors:
         raise ValidationFailed(report.errors)
     if not prepared:
@@ -241,29 +246,58 @@ def _prepare_one(
     return prepared
 
 
-def _group_errors(
-    catalogue: Catalogue, overrides: Mapping[str, Any], prepared: Sequence[_Prepared]
-) -> list[GroupError]:
+def _proposed(overrides: Mapping[str, Any], prepared: Sequence[_Prepared]) -> dict[str, Any]:
     proposed = dict(overrides)
     for item in prepared:
         if item.reset:
             proposed.pop(item.key, None)
         else:
             proposed[item.key] = item.new_value
+    return proposed
+
+
+def _group_values(group: Group, proposed: Mapping[str, Any]) -> dict[str, Any]:
+    """Effective Python values of one group. Raises ConstraintError when a stored value cannot be coerced."""
+    return {
+        tunable.name: tunable.type.coerce(proposed[f"{group.name}.{tunable.name}"])
+        if f"{group.name}.{tunable.name}" in proposed
+        else tunable.default
+        for tunable in group.tunables
+    }
+
+
+def _group_errors(catalogue: Catalogue, proposed: Mapping[str, Any], prepared: Sequence[_Prepared]) -> list[GroupError]:
     touched = {item.key.partition(".")[0] for item in prepared}
     errors: list[GroupError] = []
     for group in (group for group in catalogue.groups.values() if group.name in touched):
         try:
-            values = {
-                tunable.name: tunable.type.coerce(proposed[f"{group.name}.{tunable.name}"])
-                if f"{group.name}.{tunable.name}" in proposed
-                else tunable.default
-                for tunable in group.tunables
-            }
+            values = _group_values(group, proposed)
             for validator in group.validators:
                 validator(values)
         except ConstraintError as error:
             errors.append(GroupError(group.name, error.code, error.message))
+    return errors
+
+
+def _catalogue_errors(
+    catalogue: Catalogue, proposed: Mapping[str, Any], touched: set[str]
+) -> list[GroupError | CatalogueValidationError]:
+    """Run the catalogue validators on every group's effective values. Skipped when a group cannot be built."""
+    if not catalogue.validators:
+        return []
+    values: dict[str, dict[str, Any]] = {}
+    for group in catalogue.groups.values():
+        try:
+            values[group.name] = _group_values(group, proposed)
+        except ConstraintError as error:
+            # A touched group's coercion failure is already reported by _group_errors.
+            return [] if group.name in touched else [GroupError(group.name, error.code, error.message)]
+    errors: list[GroupError | CatalogueValidationError] = []
+    for validator in catalogue.validators:
+        try:
+            validator(values)
+        except ConstraintError as error:
+            errors.append(CatalogueValidationError(error.code, error.message))
     return errors
 
 

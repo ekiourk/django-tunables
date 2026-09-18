@@ -14,6 +14,7 @@ from tunables.types import TunableType
 IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 
 GroupValidator = Callable[[Mapping[str, Any]], None]
+CatalogueValidator = Callable[[Mapping[str, Mapping[str, Any]]], None]
 
 
 def _check_identifier(kind: str, name: str) -> None:
@@ -79,8 +80,9 @@ class Group:
 
 
 class Catalogue:
-    def __init__(self, groups: Sequence[Group], label: str = "") -> None:
+    def __init__(self, groups: Sequence[Group], label: str = "", validators: Sequence[CatalogueValidator] = ()) -> None:
         self.label = label
+        self.validators: Sequence[CatalogueValidator] = tuple(validators)
         ordered = sorted(groups, key=lambda group: (group.order, group.name))
         by_name: dict[str, Group] = {}
         for group in ordered:

@@ -88,7 +88,7 @@ the API has dry-run endpoints.
 ## Catalogue
 
 ```python
-Catalogue(groups, label="")
+Catalogue(groups, label="", validators=())
 ```
 
 | Member | Meaning |
@@ -101,6 +101,31 @@ Catalogue(groups, label="")
 | `version` | `"sha256:<hex>"`, see [Catalogue version](#catalogue-version). |
 
 Duplicate group names raise `CatalogueError`.
+
+### Catalogue validators
+
+Group validators see one group. A rule that spans groups goes on the catalogue:
+
+```python
+def currencies_within_limit(values):
+    """The number of accepted currencies must not exceed limits.max_currencies."""
+    if len(values["pricing"]["currencies"]) > values["limits"]["max_currencies"]:
+        raise ConstraintError("catalogue", "accepted currencies exceed limits.max_currencies")
+
+
+catalogue = Catalogue([pricing, limits], validators=[currencies_within_limit])
+```
+
+A catalogue validator receives the effective values of every group, as a mapping of
+group name to a mapping of tunable name to Python value, and raises `ConstraintError`
+when the combination is invalid. It runs after the group validators on every write and
+dry run, whichever group the write touches, so a change in one group can be refused
+because of a value in another. The message should therefore name the values it compared.
+Errors are reported with scope `catalogue` in the API problem body, as non-field errors
+in the admin, and as `catalogue: <code>: <message>` lines by `tunables_import`. The
+description, found the same way as for group validators, appears in the document schema's
+top-level `x-validators`, in the `status/` endpoint and on the admin group index.
+Validators do not affect the catalogue version.
 
 ## Built-in types
 

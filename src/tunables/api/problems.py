@@ -6,6 +6,7 @@ from rest_framework.response import Response
 
 from tunables.errors import (
     CatalogueOutOfSync,
+    CatalogueValidationError,
     FieldError,
     FieldWarning,
     GroupError,
@@ -57,6 +58,8 @@ def exception_handler(exc: Exception, _context: dict[str, Any]) -> Response | No
     return None
 
 
-def describe(item: FieldError | GroupError | FieldWarning) -> dict[str, Any]:
+def describe(item: FieldError | GroupError | FieldWarning | CatalogueValidationError) -> dict[str, Any]:
+    if isinstance(item, CatalogueValidationError):
+        return {"scope": "catalogue", "code": item.code, "detail": item.message}
     subject = {"group": item.group} if isinstance(item, GroupError) else {"key": item.key}
     return {**subject, "code": item.code, "detail": item.message}

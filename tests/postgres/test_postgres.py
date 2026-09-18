@@ -161,4 +161,4 @@ def test_concurrent_syncs_on_a_fresh_database() -> None:
     assert State.objects.count() == 1
     assert Snapshot.objects.count() == 1
     assert ChangeSet.objects.count() == 0
-    assert TunableDefinition.objects.count() == 13
+    assert TunableDefinition.objects.count() == 14
