@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.3.0, 2026-09-19
+
+Categories group the groups, tags label tunables across groups, and the admin and API
+can browse by both.
+
+Changes to existing behaviour:
+
+- `Catalogue` takes `label` and `validators` as keyword-only arguments, alongside the
+  new `categories`. A caller that passed `label` positionally must name it.
+- Groups are ordered by their category first, then by `(order, name)`. A catalogue that
+  declares no categories keeps its order, since every group is in the implicit
+  `general`. The version hash still walks groups in `(order, name)` order, so moving a
+  group between categories writes no new version.
+- `tunables_sync --check` exits 1 when the mirrored categories or seeded tags differ
+  from the code. The API and the admin keep answering on the catalogue hash alone.
+
+Additions:
+
+- `Category(name, title, description, order)`; `Group(category=...)`; `Tunable(tags=...)`
+  with seed tags matching `^[a-z0-9][a-z0-9_-]*$`; `Catalogue.categories` and
+  `Catalogue.groups_in()`. Categories and tags are outside the version hash.
+- Models `Tag` and `TunableDefinitionTag`, `TunableDefinition.category_name`, migration
+  `0003`. `tunables_sync` mirrors categories and seeds tags, leaving manual tags and
+  assignments alone.
+- API reads: `GET categories/`; `category` on groups and definitions; `groups/?category=`;
+  `definitions/?category=&group=&tag=&q=`; `GET tags/` and `GET tags/{name}/`;
+  `x-category` on group schemas. Tag reads work while the catalogue is out of sync.
+- API writes: `POST tags/`, `PATCH` and `DELETE tags/{name}/`,
+  `PUT definitions/{key}/tags/`, with problem types `tag-exists` and `tag-seeded`. Tag
+  writes create no change set and record no actor.
+- Admin: the group index is organised by category, a definitions page browses and
+  filters every tunable, a per-definition page edits manual tags, and a tag admin
+  creates and edits tags by hand. Seeded tags cannot be deleted or renamed there.
+- `tunables.access.check_group_editable(request, group)` for callers that hold a group
+  name and no change list.
+
 ## 0.2.0, 2026-09-18
 
 Reads survive a catalogue rollout, snapshots can be republished and diffed, imports can
