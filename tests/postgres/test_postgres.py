@@ -11,7 +11,7 @@ from django.db import DatabaseError, connection, transaction
 from tests.test_services import apply
 from tunables import Change, services
 from tunables.errors import VersionConflict
-from tunables.models import ChangeItem, ChangeSet, Snapshot
+from tunables.models import ChangeItem, ChangeSet, Snapshot, State, TunableDefinition
 from tunables.sync import SyncResult
 
 pytestmark = [pytest.mark.postgres, pytest.mark.django_db]
@@ -120,3 +120,45 @@ def test_concurrent_writers_without_expected_version_both_win(synced: SyncResult
     assert sorted(results.values()) == [1, 2]
     assert ChangeSet.objects.count() == 2
     assert services.current_values()["pricing"]["vat_rate"] == 0.2
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_syncs_on_a_fresh_database() -> None:
+    from tunables import sync as sync_module
+
+    entered = threading.Event()
+    second_started = threading.Event()
+    results: dict[str, Any] = {}
+    original = sync_module._mirror
+
+    def slow_mirror(*args: Any) -> None:
+        if not entered.is_set():
+            entered.set()
+            second_started.wait(timeout=5)
+            time.sleep(0.3)
+        original(*args)
+
+    def worker(name: str) -> None:
+        try:
+            if name == "second":
+                second_started.set()
+            results[name] = sync_module.sync()
+        except Exception as error:  # noqa: BLE001
+            results[name] = error
+        finally:
+            connection.close()
+
+    with mock.patch.object(sync_module, "_mirror", slow_mirror):
+        first = threading.Thread(target=worker, args=("first",))
+        first.start()
+        assert entered.wait(timeout=5)
+        second = threading.Thread(target=worker, args=("second",))
+        second.start()
+        first.join(timeout=15)
+        second.join(timeout=15)
+    assert all(isinstance(r, SyncResult) for r in results.values()), results
+    assert sorted(r.created for r in results.values()) == [False, True]
+    assert State.objects.count() == 1
+    assert Snapshot.objects.count() == 1
+    assert ChangeSet.objects.count() == 0
+    assert TunableDefinition.objects.count() == 12

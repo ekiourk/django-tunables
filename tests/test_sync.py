@@ -185,3 +185,20 @@ def test_narrowed_bound_resets_out_of_range_override() -> None:
         assert document["groups"]["thermostat"]["target_c"] == 21.0
         assert document["overridden"] == []
         assert services.current_values()["thermostat"]["target_c"] == 21.0
+
+
+def test_state_is_locked_before_the_mirror_runs() -> None:
+    from unittest import mock
+
+    from tunables import sync as sync_module
+
+    seen: list[bool] = []
+    original = sync_module._mirror
+
+    def observing_mirror(*args: Any) -> None:
+        seen.append(State.objects.filter(pk=1).exists())
+        original(*args)
+
+    with mock.patch.object(sync_module, "_mirror", observing_mirror):
+        sync()
+    assert seen == [True], "the State row must exist and be locked before the catalogue is mirrored"

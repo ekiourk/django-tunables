@@ -38,10 +38,10 @@ def sync() -> SyncResult:
     """Mirror the catalogue, bootstrap State and snapshot 0, rebuild on catalogue change. Idempotent."""
     catalogue = get_catalogue()
     now = timezone.now()
-    _mirror(catalogue, now)
     state, created = State.objects.select_for_update().get_or_create(
         pk=1, defaults={"current_version": 0, "catalogue_version": catalogue.version}
     )
+    _mirror(catalogue, now)
     if created:
         write_snapshot(catalogue, version=0, changeset=None, created_at=now)
         return SyncResult(created=True, rebuilt=False, version=0)
