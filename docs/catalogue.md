@@ -131,7 +131,11 @@ can attach further tags by hand. Tag names match `^[a-z0-9][a-z0-9_-]*$`.
 
 Categories and tags change how definitions are listed and found. They do not change
 values, snapshots, or the catalogue version, so adding them to an existing deployment
-writes no new version.
+writes no new version. `tunables_sync` mirrors the category of every definition and
+seeds the tags: it creates missing tags, applies the seeded assignments, removes seeded
+assignments the code no longer declares, and leaves tags and assignments made by hand
+alone. A tag the code stops seeding stays, marked as no longer coming from the
+catalogue. `tunables_sync --check` reports these differences as drift and exits 1.
 
 ### Catalogue validators
 

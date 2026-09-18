@@ -14,7 +14,9 @@ from tunables.models import (
     ChangeSet,
     ChangeSource,
     State,
+    Tag,
     TunableDefinition,
+    TunableDefinitionTag,
     TunableValue,
 )
 from tunables.registry import get_catalogue
@@ -27,6 +29,29 @@ class SyncResult:
     rebuilt: bool
     version: int
     violations: Sequence[GroupError | CatalogueValidationError] = ()
+
+
+def mirror_drift() -> list[str]:
+    """Differences between the code and the mirrored categories and seeded tags, one line each."""
+    catalogue = get_catalogue()
+    drift: list[str] = []
+    mirrored = dict(TunableDefinition.objects.filter(is_active=True).values_list("key", "category_name"))
+    for group in catalogue.groups.values():
+        for tunable in group.tunables:
+            key = f"{group.name}.{tunable.name}"
+            if key in mirrored and mirrored[key] != group.category:
+                drift.append(f"{key}: category {mirrored[key]!r} in the mirror, {group.category!r} in code")
+    seeds = _seeds(catalogue)
+    seeded = {
+        (row.definition.key, row.tag.name)
+        for row in TunableDefinitionTag.objects.filter(seeded=True).select_related("definition", "tag")
+    }
+    drift.extend(f"{key}: seed tag {tag!r} is not assigned" for key, tag in sorted(seeds - seeded))
+    drift.extend(f"{key}: assignment of {tag!r} is seeded but not in code" for key, tag in sorted(seeded - seeds))
+    seed_names = {tag for _, tag in seeds}
+    for name in Tag.objects.filter(from_catalogue=True).exclude(name__in=seed_names).values_list("name", flat=True):
+        drift.append(f"{name}: tag is marked as coming from the catalogue but no tunable seeds it")
+    return drift
 
 
 def is_synced() -> bool:
@@ -44,6 +69,7 @@ def sync() -> SyncResult:
         pk=1, defaults={"current_version": 0, "catalogue_version": catalogue.version}
     )
     _mirror(catalogue, now)
+    _seed_tags(catalogue)
     if created:
         write_snapshot(catalogue, version=0, changeset=None, created_at=now)
         return SyncResult(created=True, rebuilt=False, version=0, violations=tuple(rule_violations()))
@@ -84,6 +110,7 @@ def _definition_fields(group: Group, order: int, tunable: Tunable, now: datetime
     described = tunable.type.describe()
     return {
         "group_name": group.name,
+        "category_name": group.category,
         "name": tunable.name,
         "order": order,
         "type_name": described["name"],
@@ -98,6 +125,34 @@ def _definition_fields(group: Group, order: int, tunable: Tunable, now: datetime
         "is_active": True,
         "synced_at": now,
     }
+
+
+def _seeds(catalogue: Catalogue) -> set[tuple[str, str]]:
+    """(key, tag) pairs declared in code."""
+    return {
+        (f"{group.name}.{tunable.name}", tag)
+        for group in catalogue.groups.values()
+        for tunable in group.tunables
+        for tag in tunable.tags
+    }
+
+
+def _seed_tags(catalogue: Catalogue) -> None:
+    """Create seed tags, apply seeded assignments, drop seeded assignments no longer in code. Manual rows untouched."""
+    seeds = _seeds(catalogue)
+    seed_names = {tag for _, tag in seeds}
+    for name in seed_names:
+        Tag.objects.update_or_create(name=name, defaults={"from_catalogue": True})
+    Tag.objects.filter(from_catalogue=True).exclude(name__in=seed_names).update(from_catalogue=False)
+    definitions = TunableDefinition.objects.in_bulk([key for key, _ in seeds], field_name="key")
+    tags = Tag.objects.in_bulk(seed_names, field_name="name")
+    for key, tag in seeds:
+        TunableDefinitionTag.objects.update_or_create(
+            definition=definitions[key], tag=tags[tag], defaults={"seeded": True}
+        )
+    for row in TunableDefinitionTag.objects.filter(seeded=True).select_related("definition", "tag"):
+        if (row.definition.key, row.tag.name) not in seeds:
+            row.delete()
 
 
 def _drop_stale_overrides(catalogue: Catalogue, changeset: ChangeSet) -> None:
