@@ -1,18 +1,17 @@
 from collections.abc import Mapping, Sequence
 
 from django.db.models import Count
-from django.utils.module_loading import import_string
 from rest_framework.exceptions import ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 
+from tunables.access import check_editable
 from tunables.api import problems
 from tunables.api.actors import request_id, resolve_actor
 from tunables.api.base import TunablesAPIView
 from tunables.api.serializers import ChangeSetDetailSerializer, ChangesRequestSerializer, RollbackRequestSerializer
 from tunables.changes import Change
-from tunables.conf import settings
-from tunables.errors import FieldWarning, GroupNotEditable, VersionConflict
+from tunables.errors import FieldWarning, VersionConflict
 from tunables.models import ChangeSet
 from tunables.services import apply_changeset, current_version, document_changes, rollback_changes, validate
 
@@ -37,21 +36,6 @@ def parsed_changes(request: Request) -> tuple[list[Change], str, bool]:
     return changes, data["reason"], data["dry_run"]
 
 
-def _check_editable(request: Request, changes: Sequence[Change]) -> None:
-    hook = settings.EDITABLE_GROUPS
-    if hook is None:
-        return
-    if isinstance(hook, str):
-        hook = import_string(hook)
-    editable = hook(request)
-    if editable is None:
-        return
-    for change in changes:
-        group = change.key.partition(".")[0]
-        if group not in editable:
-            raise GroupNotEditable(group)
-
-
 def write(
     request: Request,
     changes: Sequence[Change],
@@ -63,7 +47,7 @@ def write(
     extra_warnings: Sequence[FieldWarning] = (),
 ) -> Response:
     expected_version = _expected_version(request)
-    _check_editable(request, changes)
+    check_editable(request, changes)
     if dry_run:
         actual = current_version()
         if expected_version is not None and expected_version != actual:

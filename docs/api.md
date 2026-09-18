@@ -62,7 +62,10 @@ collection of group names the request may change, or `None` for all groups. It i
 consulted on every write, including dry runs, on the exact changes the write would
 make. A rollback that would only restore `pricing` values is allowed for a caller who
 may edit `pricing`. The first group outside the collection is reported as a
-`403 forbidden-group` problem.
+`403 forbidden-group` problem. The admin applies the same callable to its edit form and
+rollback action, passing its Django `HttpRequest`; the API passes DRF's `Request`, which
+proxies attribute access to the underlying `HttpRequest`, so a callable that reads
+`request.user` or `request.headers` works for both.
 
 ## Read endpoints
 

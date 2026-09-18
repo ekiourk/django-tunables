@@ -277,3 +277,69 @@ def test_catalogue_validator_error_is_a_non_field_error(admin_client: Client, sy
     assert response.status_code == 200
     assert response.context["form"].non_field_errors() == ["accepted currencies exceed limits.max_currencies"]
     assert ChangeSet.objects.count() == 1
+
+
+SEEN_REQUESTS: list[Any] = []
+
+
+def only_pricing(request: Any) -> set[str]:
+    SEEN_REQUESTS.append(request)
+    return {"pricing"}
+
+
+def restricted() -> Any:
+    from django.test import override_settings
+
+    return override_settings(
+        TUNABLES={"CATALOGUE": "tests.catalogue.catalogue", "EDITABLE_GROUPS": f"{__name__}.only_pricing"}
+    )
+
+
+def test_index_marks_editable_groups_per_request(admin_client: Client, synced: SyncResult) -> None:
+    with restricted():
+        response = admin_client.get(INDEX)
+    assert [(row["name"], row["can_edit"]) for row in response.context["groups"]] == [
+        ("pricing", True),
+        ("thermostat", False),
+        ("weights", False),
+        ("limits", False),
+    ]
+    assert response.content.decode().count(">Edit</a>") == 1
+
+
+def test_edit_view_refuses_groups_the_request_may_not_edit(admin_client: Client, synced: SyncResult) -> None:
+    with restricted():
+        assert admin_client.get(edit_url("thermostat")).status_code == 403
+        assert admin_client.post(edit_url("thermostat"), form_data("thermostat", mode="heat")).status_code == 403
+        assert ChangeSet.objects.count() == 0
+        assert admin_client.get(edit_url("pricing")).status_code == 200
+        assert admin_client.post(edit_url("pricing"), form_data("pricing", vat_rate="0.2")).status_code == 302
+    assert ChangeSet.objects.count() == 1
+
+
+def test_rollback_action_respects_editable_groups(admin_client: Client, synced: SyncResult) -> None:
+    first = apply(Change("pricing.vat_rate", 0.2))
+    apply(Change("thermostat.mode", "heat"))
+    third = apply(Change("pricing.vat_rate", 0.1))
+    confirm = {"action": "rollback", "_selected_action": [first.changeset.pk], "confirm": "1", "reason": "undo"}
+    with restricted():
+        response = admin_client.post(CHANGESETS, confirm)
+        assert response.status_code == 302
+        assert any("thermostat" in m and "not editable" in m for m in messages_of(response))
+        assert ChangeSet.objects.count() == 3
+        confirm["_selected_action"] = [third.changeset.pk]
+        apply(Change("pricing.vat_rate", 0.3))
+        response = admin_client.post(CHANGESETS, confirm)
+        assert response.status_code == 302
+        assert any("Rolled back" in m for m in messages_of(response))
+    assert ChangeSet.objects.get(version=5).restores_version == 3
+
+
+def test_admin_passes_a_django_request_to_the_hook(admin_client: Client, synced: SyncResult) -> None:
+    from django.http import HttpRequest
+
+    SEEN_REQUESTS.clear()
+    with restricted():
+        admin_client.get(edit_url("pricing"))
+    assert SEEN_REQUESTS and all(isinstance(r, HttpRequest) for r in SEEN_REQUESTS)
+    assert SEEN_REQUESTS[0].user.get_username() == "admin"

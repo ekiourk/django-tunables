@@ -135,7 +135,7 @@ All settings live in one dictionary, `TUNABLES`. Only `CATALOGUE` is required.
 | `API_AUTHENTICATION_CLASSES` | `None` | DRF authentication classes for the API. `None` uses the host's DRF defaults. |
 | `API_PERMISSION_CLASSES` | `None` | DRF permission classes for the API. `None` uses the host's DRF defaults. |
 | `ACTOR_RESOLVER` | `tunables.api.actors.default_actor_resolver` | Callable turning a request into an `Actor`. |
-| `EDITABLE_GROUPS` | `None` | Callable returning the group names a request may write, or `None` for all. |
+| `EDITABLE_GROUPS` | `None` | Callable returning the group names a request may write, or `None` for all. Applied by the API and the admin. |
 | `ACTOR_HEADER` | `X-Tunables-Actor` | Header naming the actor of an unauthenticated request. |
 | `CLIENT_HEADER` | `X-Tunables-Client` | Header naming the client program. |
 | `REQUEST_ID_HEADER` | `X-Request-ID` | Header whose value is recorded as the change set's request id. |
