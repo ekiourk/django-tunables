@@ -3,16 +3,19 @@ import logging
 import os
 import tempfile
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
 from django.core.exceptions import ImproperlyConfigured
 from django.core.signals import setting_changed
 from django.dispatch import receiver
+from django.utils import timezone
 from django.utils.module_loading import import_string
 
 from tunables.conf import settings
-from tunables.models import Snapshot
+from tunables.errors import UnknownVersion
+from tunables.models import PublisherState, Snapshot
 from tunables.signals import snapshot_published
 
 logger = logging.getLogger(__name__)
@@ -56,14 +59,55 @@ def reset() -> None:
     _publishers = None
 
 
+@dataclass(frozen=True)
+class PublishResult:
+    publisher: str
+    version: int
+    error: str = ""
+
+
+def republish(version: int | None = None, publisher: str | None = None) -> list[PublishResult]:
+    """Send a stored snapshot, the latest by default, to every configured publisher or to one of them."""
+    from tunables.services import latest_snapshot
+
+    if version is None:
+        snapshot = latest_snapshot()
+    else:
+        found = Snapshot.objects.filter(version=version).first()
+        if found is None:
+            raise UnknownVersion(version)
+        snapshot = found
+    configured = list(settings.PUBLISHERS)
+    if publisher is not None and publisher not in configured:
+        raise ValueError(f"publisher {publisher!r} is not configured in TUNABLES['PUBLISHERS']")
+    targets = [(path, instance) for path, instance in zip(configured, get_publishers(), strict=True)]
+    if publisher is not None:
+        targets = [target for target in targets if target[0] == publisher]
+    return [_send(path, instance, snapshot) for path, instance in targets]
+
+
 def publish(snapshot: Snapshot) -> None:
     """Send snapshot_published, then hand the snapshot to every publisher. Publisher errors are logged."""
     snapshot_published.send(sender=Snapshot, snapshot=snapshot)
-    for publisher in get_publishers():
-        try:
-            publisher.publish(snapshot)
-        except Exception:
-            logger.exception("publisher %s failed for snapshot %s", type(publisher).__name__, snapshot.version)
+    for path, instance in zip(settings.PUBLISHERS, get_publishers(), strict=True):
+        _send(path, instance, snapshot)
+
+
+def _send(path: str, publisher: Publisher, snapshot: Snapshot) -> PublishResult:
+    """Call one publisher and record the outcome in PublisherState."""
+    state, _ = PublisherState.objects.get_or_create(publisher=path)
+    try:
+        publisher.publish(snapshot)
+    except Exception as error:
+        logger.exception("publisher %s failed for snapshot %s", path, snapshot.version)
+        state.last_error = str(error) or type(error).__name__
+        state.save(update_fields=["last_error", "updated_at"])
+        return PublishResult(path, snapshot.version, state.last_error)
+    state.last_version = snapshot.version
+    state.last_published_at = timezone.now()
+    state.last_error = ""
+    state.save(update_fields=["last_version", "last_published_at", "last_error", "updated_at"])
+    return PublishResult(path, snapshot.version)
 
 
 @receiver(setting_changed)

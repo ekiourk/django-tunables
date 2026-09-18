@@ -35,8 +35,11 @@ class Recorder:
 
 
 class Failing:
+    raise_error = True
+
     def publish(self, snapshot: Snapshot) -> None:
-        raise RuntimeError("boom")
+        if Failing.raise_error:
+            raise RuntimeError("boom")
 
 
 @pytest.fixture(autouse=True)
@@ -145,3 +148,68 @@ def test_get_publishers_follows_settings() -> None:
         assert [type(p) for p in publishers.get_publishers()] == [Recorder]
         assert publishers.get_publishers() is publishers.get_publishers()
     assert publishers.get_publishers() == []
+
+
+RECORDER = f"{__name__}.Recorder"
+FAILING = f"{__name__}.Failing"
+
+
+def states() -> dict[str, tuple[int | None, str]]:
+    from tunables.models import PublisherState
+
+    return {row.publisher: (row.last_version, row.last_error) for row in PublisherState.objects.all()}
+
+
+def test_publish_records_the_version_per_publisher(
+    synced: SyncResult, django_capture_on_commit_callbacks: Callable[..., Any]
+) -> None:
+    from tunables.models import PublisherState
+
+    with with_publishers(RECORDER, FAILING), django_capture_on_commit_callbacks(execute=True):
+        apply(Change("pricing.vat_rate", 0.2))
+    assert states() == {RECORDER: (1, ""), FAILING: (None, "boom")}
+    assert PublisherState.objects.get(publisher=RECORDER).last_published_at is not None
+    assert PublisherState.objects.get(publisher=FAILING).last_published_at is None
+
+
+def test_a_later_success_clears_the_error(
+    synced: SyncResult, django_capture_on_commit_callbacks: Callable[..., Any]
+) -> None:
+    with with_publishers(FAILING), django_capture_on_commit_callbacks(execute=True):
+        apply(Change("pricing.vat_rate", 0.2))
+    assert states() == {FAILING: (None, "boom")}
+    Failing.raise_error = False
+    try:
+        with with_publishers(FAILING), django_capture_on_commit_callbacks(execute=True):
+            apply(Change("pricing.vat_rate", 0.1))
+    finally:
+        Failing.raise_error = True
+    assert states() == {FAILING: (2, "")}
+
+
+def test_republish_latest_and_given_version(synced: SyncResult) -> None:
+    first = apply(Change("pricing.vat_rate", 0.2))
+    second = apply(Change("pricing.vat_rate", 0.1))
+    with with_publishers(RECORDER, FAILING):
+        results = publishers.republish()
+    assert results == [
+        publishers.PublishResult(RECORDER, 2),
+        publishers.PublishResult(FAILING, 2, "boom"),
+    ]
+    assert Recorder.published == [second.snapshot]
+    assert states() == {RECORDER: (2, ""), FAILING: (None, "boom")}
+    with with_publishers(RECORDER, FAILING):
+        results = publishers.republish(version=1, publisher=RECORDER)
+    assert results == [publishers.PublishResult(RECORDER, 1)]
+    assert Recorder.published == [second.snapshot, first.snapshot]
+    assert states()[RECORDER] == (1, "")
+
+
+def test_republish_rejects_unknown_version_and_publisher(synced: SyncResult) -> None:
+    from tunables.errors import UnknownVersion
+
+    with with_publishers(RECORDER):
+        with pytest.raises(UnknownVersion):
+            publishers.republish(version=9)
+        with pytest.raises(ValueError, match="not configured"):
+            publishers.republish(publisher="tests.nowhere.Missing")
