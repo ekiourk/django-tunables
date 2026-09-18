@@ -101,6 +101,8 @@ def _tag_summary(tag: Tag) -> dict[str, Any]:
 
 
 class TagList(TunablesAPIView):
+    reads_need_sync = False
+
     def post(self, request: Request) -> Response:
         serializer = TagRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -113,6 +115,8 @@ class TagList(TunablesAPIView):
 
 
 class TagDetail(TunablesAPIView):
+    reads_need_sync = False
+
     def patch(self, request: Request, name: str) -> Response:
         serializer = TagDescriptionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

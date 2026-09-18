@@ -72,9 +72,9 @@ proxies attribute access to the underlying `HttpRequest`, so a callable that rea
 Endpoints that describe the catalogue in code, `groups/`, `groups/{group}/`, the two
 schema endpoints and `definitions/`, first check that the code matches the database.
 If not, the answer is `503 catalogue-out-of-sync` until `tunables_sync` has run.
-Endpoints that serve stored data, the values, change sets, snapshots and the export,
-answer from the latest snapshot regardless, so a deployment whose sync has not run yet
-keeps serving the previous state. Every write requires sync.
+Endpoints that serve stored data, the values, change sets, snapshots, the export, the
+diff and the two tag reads, answer from the database regardless, so a deployment whose
+sync has not run yet keeps serving the previous state. Every write requires sync.
 
 | Method and path | Response |
 |---|---|

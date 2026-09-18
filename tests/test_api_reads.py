@@ -133,6 +133,8 @@ def test_unknown_group_is_a_problem(api: APIClient, path: str) -> None:
 
 
 STORED_DATA_READS = [
+    "tags/",
+    "tags/money/",
     "values/",
     "groups/pricing/values/",
     "changesets/",
@@ -148,7 +150,6 @@ CATALOGUE_READS = [
     "schema/",
     "definitions/",
     "categories/",
-    "tags/",
 ]
 WRITES = [
     ("post", "changesets/", {"changes": [{"key": "pricing.vat_rate", "value": 0.3}]}),
