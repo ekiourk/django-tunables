@@ -1,9 +1,9 @@
-from collections.abc import Mapping
+from collections.abc import Mapping as ValueMapping
 from typing import Any
 
 from django import forms
 
-from tunables import Boolean, Catalogue, Enum, Float, Group, List, Tunable, TunableType
+from tunables import Boolean, Catalogue, Enum, Float, Group, List, Mapping, Tunable, TunableType
 from tunables.errors import ConstraintError, TypeCoercionError
 
 
@@ -32,7 +32,7 @@ class HexColour(TunableType):
         return {"name": self.name, "params": {}}
 
 
-def weights_sum_to_one(values: Mapping[str, Any]) -> None:
+def weights_sum_to_one(values: ValueMapping[str, Any]) -> None:
     """The three weights must sum to 1."""
     if abs(values["alpha"] + values["beta"] + values["gamma"] - 1.0) > 1e-9:
         raise ConstraintError("group", "weights must sum to 1")
@@ -51,6 +51,13 @@ pricing = Group(
             List(Enum(["EUR", "USD", "GBP"]), min_items=1, unique=True),
             ["EUR"],
             title="Accepted currencies",
+        ),
+        Tunable(
+            "shipping_rates",
+            Mapping(Enum(["EUR", "USD", "GBP"]), Float(min=0.0)),
+            {"EUR": 4.9},
+            title="Shipping rates",
+            unit="per currency",
         ),
         Tunable("allow_backorders", Boolean(), False, title="Allow backorders"),
     ],

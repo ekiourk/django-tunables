@@ -112,6 +112,7 @@ Duplicate group names raise `CatalogueError`.
 | `String(min_length=None, max_length=None, pattern=None)` | length, regex | `str` | string | `min_length`, `max_length`, `pattern` |
 | `Enum(choices)` | membership | `str` | string | `enum` |
 | `List(item, min_items=None, max_items=None, unique=False)` | size, uniqueness, per item | `list` | array | `min_items`, `max_items`, `unique`, plus the item's codes |
+| `Mapping(key, value, min_entries=None, max_entries=None)` | size, per key, per value | `dict` | object | `min_entries`, `max_entries`, plus the key and value codes |
 
 Every type also has the code `type` for input that is not of the right JSON kind.
 
@@ -125,10 +126,16 @@ Coercion and validation rules:
   `pattern` means. Write `^...$` for a full match.
 - `List(unique=True)` compares items by their JSON form, so lists of lists work.
 - Errors inside a list carry the item's code and a message prefixed with the index, such
-  as `[2]: must be >= 0`.
+  as `[2]: must be >= 0`. Errors inside a mapping are prefixed with the key, such as
+  `["EUR"]: must be >= 0`.
+- `Mapping` keys are JSON object keys and therefore strings. The key type must produce
+  strings: `String`, possibly with a pattern, or `Enum`. A lookup from a pair of integers
+  is declared as `Mapping(String(pattern=r"^\d+,\d+$"), Float())` with keys like `"3,5"`.
+  A declaration whose default has a key the key type refuses fails at import. The class
+  shadows `collections.abc.Mapping` in modules that import both, so alias one of them.
 - The admin uses `IntegerField`, `FloatField`, `BooleanField`, `CharField`,
-  `ChoiceField` and `JSONField` respectively, each carrying a validator that enforces
-  the same constraints as the API.
+  `ChoiceField`, and `JSONField` for both `List` and `Mapping`, each carrying a validator
+  that enforces the same constraints as the API.
 
 ## Custom types
 

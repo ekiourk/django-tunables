@@ -274,3 +274,75 @@ class List(TunableType):
             "unique": self.unique,
         }
         return {"name": self.name, "params": params}
+
+
+@dataclass(frozen=True)
+class Mapping(TunableType):
+    """A JSON object with string keys checked by `key` and values checked by `value`."""
+
+    name: ClassVar[str] = "mapping"
+    key: TunableType
+    value: TunableType
+    min_entries: int | None = None
+    max_entries: int | None = None
+
+    def coerce(self, raw: Any) -> dict[str, Any]:
+        if not isinstance(raw, dict):
+            raise TypeCoercionError("expected an object")
+        return {self._coerce_key(k): self._coerce_value(k, v) for k, v in raw.items()}
+
+    def _coerce_key(self, key: Any) -> str:
+        if not isinstance(key, str):
+            raise TypeCoercionError(f"[{key!r}]: keys must be strings")
+        try:
+            coerced = self.key.coerce(key)
+        except TypeCoercionError as error:
+            raise TypeCoercionError(f'["{key}"]: {error.message}') from error
+        if not isinstance(coerced, str):
+            raise TypeCoercionError(f'["{key}"]: key type must produce strings')
+        return coerced
+
+    def _coerce_value(self, key: str, value: Any) -> Any:
+        try:
+            return self.value.coerce(value)
+        except TypeCoercionError as error:
+            raise TypeCoercionError(f'["{key}"]: {error.message}') from error
+
+    def validate(self, value: Any) -> None:
+        if self.min_entries is not None and len(value) < self.min_entries:
+            raise ConstraintError("min_entries", f"must have at least {self.min_entries} entries")
+        if self.max_entries is not None and len(value) > self.max_entries:
+            raise ConstraintError("max_entries", f"must have at most {self.max_entries} entries")
+        for key, item in value.items():
+            try:
+                self.key.validate(key)
+                self.value.validate(item)
+            except ConstraintError as error:
+                raise ConstraintError(error.code, f'["{key}"]: {error.message}') from error
+
+    def to_json(self, value: Any) -> dict[str, Any]:
+        return {self.key.to_json(k): self.value.to_json(v) for k, v in value.items()}
+
+    def json_schema(self) -> dict[str, Any]:
+        schema: dict[str, Any] = {
+            "type": "object",
+            "propertyNames": self.key.json_schema(),
+            "additionalProperties": self.value.json_schema(),
+        }
+        if self.min_entries is not None:
+            schema["minProperties"] = self.min_entries
+        if self.max_entries is not None:
+            schema["maxProperties"] = self.max_entries
+        return schema
+
+    def form_field(self, **kwargs: Any) -> forms.Field:
+        return self._field(forms.JSONField, **kwargs)
+
+    def describe(self) -> dict[str, Any]:
+        params = {
+            "key": self.key.describe(),
+            "value": self.value.describe(),
+            "min_entries": self.min_entries,
+            "max_entries": self.max_entries,
+        }
+        return {"name": self.name, "params": params}

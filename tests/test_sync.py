@@ -64,8 +64,8 @@ def test_fresh_database_bootstraps_state_and_snapshot_zero() -> None:
 
 def test_mirror_rows() -> None:
     sync()
-    assert TunableDefinition.objects.count() == 12
-    assert TunableDefinition.objects.filter(is_active=True).count() == 12
+    assert TunableDefinition.objects.count() == 13
+    assert TunableDefinition.objects.filter(is_active=True).count() == 13
     vat = TunableDefinition.objects.get(key="pricing.vat_rate")
     assert (vat.group_name, vat.name, vat.order) == ("pricing", "vat_rate", 0)
     assert (vat.type_name, vat.type_params) == ("float", {"min": 0.0, "max": 1.0})
@@ -84,7 +84,7 @@ def test_second_sync_is_a_noop() -> None:
     assert sync() == SyncResult(created=False, rebuilt=False, version=0)
     assert Snapshot.objects.count() == 1
     assert ChangeSet.objects.count() == 0
-    assert TunableDefinition.objects.count() == 12
+    assert TunableDefinition.objects.count() == 13
 
 
 def test_wording_change_updates_mirror_without_new_version() -> None:
@@ -111,7 +111,7 @@ def test_added_tunable_writes_a_system_version() -> None:
     assert snapshot.catalogue_version == extended.version
     state = State.objects.get()
     assert (state.current_version, state.catalogue_version) == (1, extended.version)
-    assert TunableDefinition.objects.count() == 13
+    assert TunableDefinition.objects.count() == 14
 
 
 def test_removed_tunable_deactivates_and_drops_its_override() -> None:

@@ -92,6 +92,7 @@ def test_keys_follow_group_then_tunable_order() -> None:
         "pricing.vat_rate",
         "pricing.free_shipping_over",
         "pricing.currencies",
+        "pricing.shipping_rates",
         "pricing.allow_backorders",
         "thermostat.target_c",
         "thermostat.mode",
@@ -110,6 +111,7 @@ def test_defaults() -> None:
             "vat_rate": 0.24,
             "free_shipping_over": 50.0,
             "currencies": ["EUR"],
+            "shipping_rates": {"EUR": 4.9},
             "allow_backorders": False,
         },
         "thermostat": {

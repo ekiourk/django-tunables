@@ -48,7 +48,7 @@ def test_groups_list(api: APIClient) -> None:
             "title": "Pricing",
             "description": "Prices and shipping rules for the web shop.",
             "order": 1,
-            "tunable_count": 4,
+            "tunable_count": 5,
             "validators": [],
         },
         {
@@ -245,7 +245,13 @@ def test_group_values(api: APIClient) -> None:
     assert response["ETag"] == '"2"'
     assert response.json() == {
         "version": 2,
-        "values": {"vat_rate": 0.2, "free_shipping_over": 50.0, "currencies": ["USD"], "allow_backorders": False},
+        "values": {
+            "vat_rate": 0.2,
+            "free_shipping_over": 50.0,
+            "currencies": ["USD"],
+            "shipping_rates": {"EUR": 4.9},
+            "allow_backorders": False,
+        },
         "overridden": ["currencies", "vat_rate"],
     }
     assert api.get(BASE + "groups/pricing/values/", HTTP_IF_NONE_MATCH='"2"').status_code == 304

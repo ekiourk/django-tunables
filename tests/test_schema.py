@@ -50,6 +50,16 @@ def test_pricing_json_schema() -> None:
                 "x-key": "pricing.currencies",
                 "deprecated": False,
             },
+            "shipping_rates": {
+                "type": "object",
+                "propertyNames": {"type": "string", "enum": ["EUR", "USD", "GBP"]},
+                "additionalProperties": {"type": "number", "minimum": 0.0},
+                "title": "Shipping rates",
+                "default": {"EUR": 4.9},
+                "x-unit": "per currency",
+                "x-key": "pricing.shipping_rates",
+                "deprecated": False,
+            },
             "allow_backorders": {
                 "type": "boolean",
                 "title": "Allow backorders",
@@ -125,6 +135,7 @@ def test_pricing_ui_schema() -> None:
             {"type": "Control", "scope": "#/properties/vat_rate", "label": "VAT rate"},
             {"type": "Control", "scope": "#/properties/free_shipping_over", "label": "Free shipping over"},
             {"type": "Control", "scope": "#/properties/currencies", "label": "Accepted currencies"},
+            {"type": "Control", "scope": "#/properties/shipping_rates", "label": "Shipping rates"},
             {"type": "Control", "scope": "#/properties/allow_backorders", "label": "Allow backorders"},
         ],
     }
@@ -235,7 +246,13 @@ def test_document_schema_identifies_the_catalogue() -> None:
     assert schema["properties"]["catalogue_version"] == {"const": catalogue.version}
     assert schema["properties"]["groups"]["required"] == ["pricing", "thermostat", "weights"]
     pricing_schema = schema["properties"]["groups"]["properties"]["pricing"]
-    assert pricing_schema["required"] == ["vat_rate", "free_shipping_over", "currencies", "allow_backorders"]
+    assert pricing_schema["required"] == [
+        "vat_rate",
+        "free_shipping_over",
+        "currencies",
+        "shipping_rates",
+        "allow_backorders",
+    ]
     assert "$schema" not in pricing_schema
     assert "$id" not in pricing_schema
     assert "x-catalogue-version" not in pricing_schema
