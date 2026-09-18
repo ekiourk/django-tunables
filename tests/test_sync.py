@@ -272,3 +272,130 @@ def test_sync_result_reports_rule_violations() -> None:
     assert result.rebuilt is True
     assert result.violations == (CatalogueValidationError("catalogue", "only one currency may be accepted"),)
     assert Snapshot.objects.get(version=result.version).document["groups"]["pricing"]["currencies"] == ["EUR", "USD"]
+
+
+def _tunable_named(group: Group, name: str) -> Tunable:
+    return next(t for t in group.tunables if t.name == name)
+
+
+def retag(group: Group, name: str, tags: list[str]) -> Group:
+    return retype(group, replace(_tunable_named(group, name), tags=tags))
+
+
+no_comfort = alt(
+    [pricing, retag(retag(thermostat, "target_c", []), "mode", []), weights, limits],
+    validators=[currencies_within_limit],
+)
+alpha_money = alt(
+    [pricing, thermostat, retag(weights, "alpha", ["money"]), limits], validators=[currencies_within_limit]
+)
+weights_in_shop = alt(
+    [pricing, thermostat, replace(weights, category="shop"), limits], validators=[currencies_within_limit]
+)
+
+
+def seeded_pairs() -> set[tuple[str, str, bool]]:
+    from tunables.models import TunableDefinitionTag
+
+    return {
+        (r.definition.key, r.tag.name, r.seeded)
+        for r in TunableDefinitionTag.objects.select_related("definition", "tag")
+    }
+
+
+def tag_flags() -> dict[str, bool]:
+    from tunables.models import Tag
+
+    return {t.name: t.from_catalogue for t in Tag.objects.all()}
+
+
+SEEDED = {
+    ("pricing.vat_rate", "money", True),
+    ("pricing.shipping_rates", "money", True),
+    ("limits.max_currencies", "money", True),
+    ("thermostat.target_c", "comfort", True),
+    ("thermostat.mode", "comfort", True),
+}
+
+
+def test_sync_mirrors_categories_and_seeds_tags() -> None:
+    sync()
+    categories = dict(TunableDefinition.objects.values_list("key", "category_name"))
+    assert categories["pricing.vat_rate"] == "shop"
+    assert categories["thermostat.mode"] == "building"
+    assert categories["weights.alpha"] == "general"
+    assert categories["limits.max_currencies"] == "general"
+    assert tag_flags() == {"money": True, "comfort": True}
+    assert seeded_pairs() == SEEDED
+    assert sync() == SyncResult(created=False, rebuilt=False, version=0)
+    assert seeded_pairs() == SEEDED
+
+
+def test_manual_tags_survive_sync() -> None:
+    from tunables.models import Tag, TunableDefinitionTag
+
+    sync()
+    review = Tag.objects.create(name="review")
+    TunableDefinitionTag.objects.create(definition=TunableDefinition.objects.get(key="weights.beta"), tag=review)
+    sync()
+    assert tag_flags()["review"] is False
+    assert ("weights.beta", "review", False) in seeded_pairs()
+
+
+def test_dropped_seed_removes_assignment_and_keeps_the_tag() -> None:
+    sync()
+    with use("no_comfort"):
+        sync()
+    assert tag_flags() == {"money": True, "comfort": False}
+    assert seeded_pairs() == {pair for pair in SEEDED if pair[1] == "money"}
+
+
+def test_added_seed_creates_or_flips_the_assignment() -> None:
+    from tunables.models import Tag, TunableDefinitionTag
+
+    sync()
+    TunableDefinitionTag.objects.create(
+        definition=TunableDefinition.objects.get(key="weights.alpha"), tag=Tag.objects.get(name="money")
+    )
+    assert ("weights.alpha", "money", False) in seeded_pairs()
+    with use("alpha_money"):
+        sync()
+    assert ("weights.alpha", "money", True) in seeded_pairs()
+    assert TunableDefinitionTag.objects.filter(definition__key="weights.alpha").count() == 1
+
+
+def test_moving_a_group_updates_the_category() -> None:
+    sync()
+    with use("weights_in_shop"):
+        assert sync().rebuilt is False
+    assert TunableDefinition.objects.get(key="weights.alpha").category_name == "shop"
+
+
+def test_mirror_drift_and_check() -> None:
+    from io import StringIO
+
+    from django.core.management import CommandError, call_command
+
+    from tunables.sync import mirror_drift
+
+    sync()
+    assert mirror_drift() == []
+    with use("weights_in_shop"):
+        drift = mirror_drift()
+        assert drift == [
+            f"weights.{name}: category 'general' in the mirror, 'shop' in code" for name in ("alpha", "beta", "gamma")
+        ]
+        assert is_synced() is True
+        err = StringIO()
+        with pytest.raises(CommandError) as info:
+            call_command("tunables_sync", "--check", stdout=StringIO(), stderr=err)
+        assert info.value.returncode == 1
+        assert "weights.alpha: category" in str(info.value)
+    with use("alpha_money"):
+        assert mirror_drift() == ["weights.alpha: seed tag 'money' is not assigned"]
+    with use("no_comfort"):
+        assert sorted(mirror_drift()) == [
+            "comfort: tag is marked as coming from the catalogue but no tunable seeds it",
+            "thermostat.mode: assignment of 'comfort' is seeded but not in code",
+            "thermostat.target_c: assignment of 'comfort' is seeded but not in code",
+        ]

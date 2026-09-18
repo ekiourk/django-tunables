@@ -6,7 +6,7 @@ from django.core.management.base import CommandError, CommandParser
 from tunables.errors import CatalogueValidationError, GroupError, format_error
 from tunables.management.base import TunablesCommand
 from tunables.services import current_version, rule_violations
-from tunables.sync import is_synced, sync
+from tunables.sync import is_synced, mirror_drift, sync
 
 
 class Command(TunablesCommand):
@@ -23,6 +23,9 @@ class Command(TunablesCommand):
         if options["check"]:
             if not is_synced():
                 raise CommandError("out of sync; run tunables_sync", returncode=1)
+            drift = mirror_drift()
+            if drift:
+                raise CommandError("mirror out of date; run tunables_sync:\n" + "\n".join(drift), returncode=1)
             self.stdout.write(f"in sync at version {current_version()}")
             self._warn(rule_violations())
             return
