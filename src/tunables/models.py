@@ -1,9 +1,11 @@
 from typing import Any, TypeVar
 
+from django.core.validators import RegexValidator
 from django.db import models
 from django.utils import timezone
 
 from tunables.errors import HistoryIsAppendOnly
+from tunables.identifiers import TAG
 
 
 class ActorSource(models.TextChoices):
@@ -34,9 +36,19 @@ class State(models.Model):
         super().save(*args, **kwargs)
 
 
+class Tag(models.Model):
+    """A free-form label on definitions, seeded from the catalogue or created by hand."""
+
+    name = models.CharField(max_length=64, unique=True, validators=[RegexValidator(TAG.pattern)])
+    description = models.TextField(blank=True)
+    from_catalogue = models.BooleanField(default=False)
+    created_at = models.DateTimeField(default=timezone.now)
+
+
 class TunableDefinition(models.Model):
     key = models.CharField(max_length=255, unique=True)
     group_name = models.CharField(max_length=100)
+    category_name = models.CharField(max_length=100, default="general")
     name = models.CharField(max_length=100)
     order = models.IntegerField()
     type_name = models.CharField(max_length=100)
@@ -50,9 +62,23 @@ class TunableDefinition(models.Model):
     deprecated = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     synced_at = models.DateTimeField()
+    tags = models.ManyToManyField(Tag, through="TunableDefinitionTag", related_name="definitions", blank=True)
 
     class Meta:
         ordering = ["group_name", "order", "name"]
+
+
+class TunableDefinitionTag(models.Model):
+    """One tag on one definition. Seeded rows come from the catalogue and are managed by tunables_sync."""
+
+    definition = models.ForeignKey(TunableDefinition, on_delete=models.CASCADE)
+    tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
+    seeded = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["definition", "tag"], name="tunables_definitiontag_unique"),
+        ]
 
 
 _M = TypeVar("_M", bound="AppendOnlyModel")

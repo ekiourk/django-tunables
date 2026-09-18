@@ -1,6 +1,5 @@
 import hashlib
 import json
-import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -9,10 +8,8 @@ from typing import Any
 from django.utils.functional import Promise
 
 from tunables.errors import CatalogueError, ConstraintError, UnknownKey
+from tunables.identifiers import IDENTIFIER, TAG
 from tunables.types import TunableType
-
-IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
-TAG = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 
 GroupValidator = Callable[[Mapping[str, Any]], None]
 CatalogueValidator = Callable[[Mapping[str, Mapping[str, Any]]], None]
