@@ -186,6 +186,12 @@ Errors are RFC 9457 problem documents with content type `application/problem+jso
 An `errors` entry names a `key` for a single tunable, a `group` for a group validator,
 or `scope: "catalogue"` for a catalogue validator.
 
+`code` is the contract; `detail` is text for people. The package routes its messages
+through Django's translation machinery, so `detail` comes out in the request's active
+language when the host has translations for it, and in English otherwise. Clients that
+branch on an error should key on `code`, and clients that show messages can localise by
+`code` themselves or display `detail` as it comes.
+
 | `type` | Status | Extra members | When |
 |---|---|---|---|
 | `urn:tunables:problem:validation-failed` | 422 | `errors` | at least one change is invalid; every error is listed |

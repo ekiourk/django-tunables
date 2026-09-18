@@ -82,3 +82,20 @@ def django_db_modify_db_settings(
 @pytest.fixture
 def api(synced: SyncResult) -> APIClient:
     return APIClient()
+
+
+GERMAN = {
+    "must be >= %(minimum)s": "muss mindestens %(minimum)s sein",
+    "Reset to default": "Auf Standard zurücksetzen",
+}
+
+
+@pytest.fixture
+def german(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Install a tiny German catalogue so tests can prove messages go through translation."""
+    from django.utils.translation import trans_real
+
+    translation = trans_real.DjangoTranslation("de")
+    for msgid, msgstr in GERMAN.items():
+        translation._catalog[msgid] = msgstr
+    monkeypatch.setitem(trans_real._translations, "de", translation)

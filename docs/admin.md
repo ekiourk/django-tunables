@@ -72,6 +72,14 @@ message carries the reason.
 version, and the change set that produced it. Opening one shows the snapshot document
 formatted for reading. See `snapshot-format.md` for what the document contains.
 
+## Language
+
+Every label, message and heading the admin pages add goes through Django's translation
+machinery, so they follow the active language like the rest of the admin. The package
+ships no translation files; a host or contributor adds a language with `makemessages`
+against the package's source and templates. Constraint messages shown on the form come
+from the same strings the API returns as `detail`.
+
 ## Permissions
 
 The admin uses Django's standard permissions with one addition:

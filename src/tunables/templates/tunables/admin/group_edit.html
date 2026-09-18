@@ -1,9 +1,10 @@
 {% extends "admin/base_site.html" %}
+{% load i18n %}
 {% block breadcrumbs %}
 <div class="breadcrumbs">
-  <a href="{% url 'admin:index' %}">Home</a> &rsaquo;
+  <a href="{% url 'admin:index' %}">{% translate "Home" %}</a> &rsaquo;
   <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a> &rsaquo;
-  <a href="{{ index_url }}">Tunables</a> &rsaquo;
+  <a href="{{ index_url }}">{% translate "Tunables" %}</a> &rsaquo;
   {{ group.title|default:group.name }}
 </div>
 {% endblock %}
@@ -26,7 +27,7 @@
           {% if reset %}<label class="vCheckboxLabel" style="margin-left: 1em">{{ reset }} {{ reset.label }}</label>{% endif %}
         </div>
         {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
-        {% if tunable.deprecated %}<div class="help">Deprecated: {{ tunable.deprecated }}</div>{% endif %}
+        {% if tunable.deprecated %}<div class="help">{% translate "Deprecated:" %} {{ tunable.deprecated }}</div>{% endif %}
       </div>
       {% endfor %}
     </fieldset>
@@ -37,8 +38,8 @@
       </div>
     </fieldset>
     <div class="submit-row">
-      <input type="submit" class="default" value="Save">
-      <a class="closelink" href="{{ index_url }}">Cancel</a>
+      <input type="submit" class="default" value="{% translate 'Save' %}">
+      <a class="closelink" href="{{ index_url }}">{% translate "Cancel" %}</a>
     </div>
   </form>
 </div>

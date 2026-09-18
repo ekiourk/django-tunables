@@ -1,6 +1,8 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 
+from django.utils.translation import gettext_lazy as _
+
 
 class TunablesError(Exception):
     pass
@@ -24,7 +26,7 @@ class CatalogueError(TunablesError):
 
 class UnknownKey(TunablesError):
     def __init__(self, key: str) -> None:
-        super().__init__(f"unknown tunable {key!r}")
+        super().__init__(_("unknown tunable %(key)r") % {"key": key})
         self.key = key
 
 
@@ -90,5 +92,5 @@ class UnknownVersion(TunablesError):
 
 class GroupNotEditable(TunablesError):
     def __init__(self, group: str) -> None:
-        super().__init__(f"group {group!r} is not editable by this request")
+        super().__init__(_("group %(group)r is not editable by this request") % {"group": group})
         self.group = group

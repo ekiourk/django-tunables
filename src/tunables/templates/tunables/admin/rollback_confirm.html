@@ -1,17 +1,17 @@
 {% extends "admin/base_site.html" %}
+{% load i18n %}
 {% block breadcrumbs %}
 <div class="breadcrumbs">
-  <a href="{% url 'admin:index' %}">Home</a> &rsaquo;
+  <a href="{% url 'admin:index' %}">{% translate "Home" %}</a> &rsaquo;
   <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a> &rsaquo;
   <a href="{% url 'admin:tunables_changeset_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a> &rsaquo;
-  Roll back
+  {% translate "Roll back" %}
 </div>
 {% endblock %}
 {% block content %}
 <div id="content-main">
   <p>
-    This writes a new change set that restores every value to what it was at version {{ changeset.version }}
-    ({{ changeset.created_at }}, by {{ changeset.actor }}). Nothing is deleted from the history.
+    {% blocktranslate with version=changeset.version created=changeset.created_at actor=changeset.actor %}This writes a new change set that restores every value to what it was at version {{ version }} ({{ created }}, by {{ actor }}). Nothing is deleted from the history.{% endblocktranslate %}
   </p>
   <form method="post">
     {% csrf_token %}
@@ -22,14 +22,14 @@
     <fieldset class="module aligned">
       <div class="form-row{% if error %} errors{% endif %}">
         <div class="flex-container">
-          <label for="id_reason" class="required">Reason:</label>
+          <label for="id_reason" class="required">{% translate "Reason:" %}</label>
           <textarea name="reason" id="id_reason" rows="2" cols="60" required>{{ request.POST.reason }}</textarea>
         </div>
       </div>
     </fieldset>
     <div class="submit-row">
-      <input type="submit" class="default" value="Roll back to version {{ changeset.version }}">
-      <a class="closelink" href="{% url 'admin:tunables_changeset_changelist' %}">Cancel</a>
+      <input type="submit" class="default" value="{% blocktranslate with version=changeset.version %}Roll back to version {{ version }}{% endblocktranslate %}">
+      <a class="closelink" href="{% url 'admin:tunables_changeset_changelist' %}">{% translate "Cancel" %}</a>
     </div>
   </form>
 </div>

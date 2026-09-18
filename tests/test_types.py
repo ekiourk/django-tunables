@@ -397,3 +397,15 @@ class Numeric(TunableType):
 def test_mapping_refuses_a_key_type_that_does_not_produce_strings() -> None:
     with pytest.raises(TypeCoercionError, match="key type must produce strings"):
         Mapping(Numeric(), Integer()).coerce({"1": 2})
+
+
+def test_constraint_messages_are_translated(german: None) -> None:
+    from django.utils import translation
+
+    with pytest.raises(ConstraintError) as info:
+        Integer(min=0).validate(-1)
+    assert info.value.message == "must be >= 0"
+    with translation.override("de"), pytest.raises(ConstraintError) as info:
+        Integer(min=0).validate(-1)
+    assert info.value.message == "muss mindestens 0 sein"
+    assert info.value.code == "min"
