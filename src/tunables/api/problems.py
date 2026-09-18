@@ -12,6 +12,8 @@ from tunables.errors import (
     GroupError,
     GroupNotEditable,
     NothingToChange,
+    TagExists,
+    TagSeeded,
     UnknownVersion,
     ValidationFailed,
     VersionConflict,
@@ -45,6 +47,10 @@ def exception_handler(exc: Exception, _context: dict[str, Any]) -> Response | No
         return problem(422, "unknown-version", "Unknown version", str(exc), version=exc.version)
     if isinstance(exc, GroupNotEditable):
         return problem(403, "forbidden-group", "Forbidden group", str(exc), group=exc.group)
+    if isinstance(exc, TagExists):
+        return problem(409, "tag-exists", "Tag exists", str(exc), name=exc.name)
+    if isinstance(exc, TagSeeded):
+        return problem(409, "tag-seeded", "Tag seeded", str(exc), name=exc.name)
     if isinstance(exc, APIException):
         codes = exc.get_codes()
         slug = str(codes if isinstance(codes, str) else exc.default_code).replace("_", "-")

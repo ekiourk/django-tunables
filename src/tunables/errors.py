@@ -90,6 +90,18 @@ class UnknownVersion(TunablesError):
         self.version = version
 
 
+class TagExists(TunablesError):
+    def __init__(self, name: str) -> None:
+        super().__init__(_("tag %(name)r already exists") % {"name": name})
+        self.name = name
+
+
+class TagSeeded(TunablesError):
+    def __init__(self, name: str) -> None:
+        super().__init__(_("tag %(name)r is seeded by the catalogue and cannot be deleted") % {"name": name})
+        self.name = name
+
+
 class GroupNotEditable(TunablesError):
     def __init__(self, group: str) -> None:
         super().__init__(_("group %(group)r is not editable by this request") % {"group": group})

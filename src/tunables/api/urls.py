@@ -14,6 +14,7 @@ urlpatterns = [
     path("definitions/", views.DefinitionList.as_view(), name="definitions"),
     path("tags/", views.TagList.as_view(), name="tags"),
     path("tags/<str:name>/", views.TagDetail.as_view(), name="tag"),
+    path("definitions/<str:key>/tags/", writes.DefinitionTags.as_view(), name="definition-tags"),
     path("values/", views.Values.as_view(), name="values"),
     path("changesets/", views.ChangeSetList.as_view(), name="changesets"),
     path("changesets/<int:version>/", views.ChangeSetDetail.as_view(), name="changeset"),

@@ -142,6 +142,10 @@ tunable's default removes the override if there is one, the same as `reset`, so
 | `PATCH groups/{group}/values/` | `{"<name>": value, "<name>": null}` | form-shaped write of one group; `null` resets |
 | `POST rollback/` | `{"to_version": 40, "reason": ""}` | restores the overrides of that snapshot |
 | `POST import/` | a snapshot document | applies its `groups` as changes; `?strict=1` rejects unknown keys; `?mode=replace` also resets every override the document does not name |
+| `POST tags/` | `{"name", "description": ""}` | creates a manual tag, `201`; an existing name is `409 tag-exists` |
+| `PATCH tags/{name}/` | `{"description"}` | changes the description |
+| `DELETE tags/{name}/` | | deletes a manual tag and its assignments, `204`; a seeded tag is `409 tag-seeded` |
+| `PUT definitions/{key}/tags/` | `{"tags": ["a", "b"]}` | replaces the manual tags of one definition; seeded tags stay; unknown names are created; answers `{"key", "tags"}` with every tag on the definition |
 
 Each element of `changes` is either `{"key": "pricing.vat_rate", "value": 0.2}` or
 `{"key": "pricing.vat_rate", "reset": true}`. A `value` of `null` is a `type` validation
@@ -194,6 +198,12 @@ Errors are RFC 9457 problem documents with content type `application/problem+jso
 An `errors` entry names a `key` for a single tunable, a `group` for a group validator,
 or `scope: "catalogue"` for a catalogue validator.
 
+Tag writes change no value and create no change set, so `X-Tunables-Version` is the
+same before and after. They require sync like every write. `PUT definitions/{key}/tags/`
+is subject to `EDITABLE_GROUPS` through the definition's group; creating, editing and
+deleting tags is not, since a tag belongs to no group. No actor is recorded for tag
+writes.
+
 `code` is the contract; `detail` is text for people. The package routes its messages
 through Django's translation machinery, so `detail` comes out in the request's active
 language when the host has translations for it, and in English otherwise. Clients that
@@ -207,6 +217,8 @@ branch on an error should key on `code`, and clients that show messages can loca
 | `urn:tunables:problem:nothing-to-change` | 400 | | no change would alter a value |
 | `urn:tunables:problem:unknown-version` | 422 | `version` | `rollback` to a version with no snapshot |
 | `urn:tunables:problem:forbidden-group` | 403 | `group` | `EDITABLE_GROUPS` excludes a touched group |
+| `urn:tunables:problem:tag-exists` | 409 | `name` | `POST tags/` with a name that exists |
+| `urn:tunables:problem:tag-seeded` | 409 | `name` | `DELETE tags/{name}/` on a tag the catalogue seeds |
 | `urn:tunables:problem:catalogue-out-of-sync` | 503 | | code and database disagree; run `tunables_sync` |
 | `urn:tunables:problem:not-found` | 404 | | unknown group, version or page |
 | `urn:tunables:problem:invalid` | 400 | `errors` | malformed body, query parameter or `If-Match` header |

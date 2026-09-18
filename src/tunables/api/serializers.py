@@ -3,6 +3,7 @@ from typing import Any
 
 from rest_framework import serializers
 
+from tunables.identifiers import TAG
 from tunables.models import ChangeItem, ChangeSet
 
 
@@ -52,6 +53,19 @@ class ChangesRequestSerializer(serializers.Serializer[dict[str, Any]]):
     reason = serializers.CharField(required=False, allow_blank=True, default="")
     dry_run = serializers.BooleanField(default=False)
     metadata = serializers.DictField(required=False, default=dict)
+
+
+class TagRequestSerializer(serializers.Serializer[dict[str, Any]]):
+    name = serializers.RegexField(TAG.pattern, max_length=64)
+    description = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class TagDescriptionSerializer(serializers.Serializer[dict[str, Any]]):
+    description = serializers.CharField(allow_blank=True)
+
+
+class DefinitionTagsSerializer(serializers.Serializer[dict[str, Any]]):
+    tags = serializers.ListField(child=serializers.RegexField(TAG.pattern, max_length=64))
 
 
 class RollbackRequestSerializer(serializers.Serializer[dict[str, Any]]):
