@@ -347,3 +347,13 @@ def test_patch_reason_header(api: APIClient) -> None:
     assert response.json()["changeset"]["reason"] == "spring sale"
     response = api.patch(BASE + "groups/pricing/values/", {"vat_rate": 0.1}, format="json")
     assert response.json()["changeset"]["reason"] == ""
+
+
+def test_patch_with_the_default_value_resets_an_override(api: APIClient) -> None:
+    apply(Change("pricing.vat_rate", 0.2))
+    response = api.patch(BASE + "groups/pricing/values/", {"vat_rate": 0.24}, format="json")
+    assert response.status_code == 201
+    assert response.json()["changeset"]["items"] == [
+        {"key": "pricing.vat_rate", "old_value": 0.2, "new_value": None, "reset": True}
+    ]
+    assert api.get(BASE + "values/").json()["overridden"] == []

@@ -220,11 +220,21 @@ def test_missing_state(db: None) -> None:
         apply(Change("pricing.vat_rate", 0.2))
 
 
-def test_override_equal_to_default_is_a_real_change_when_overridden(synced: SyncResult) -> None:
+def test_setting_an_overridden_key_to_its_default_resets_it(synced: SyncResult) -> None:
     apply(Change("pricing.vat_rate", 0.2))
     result = apply(Change("pricing.vat_rate", 0.24))
-    assert TunableValue.objects.get(key="pricing.vat_rate").value == 0.24
-    assert result.snapshot.document["overridden"] == ["pricing.vat_rate"]
+    item = result.changeset.items.get()
+    assert (item.key, item.reset, item.old_value, item.new_value) == ("pricing.vat_rate", True, 0.2, None)
+    assert not TunableValue.objects.filter(key="pricing.vat_rate").exists()
+    assert result.snapshot.document["overridden"] == []
+    assert result.snapshot.document["groups"]["pricing"]["vat_rate"] == 0.24
+
+
+def test_setting_a_default_key_to_its_default_is_a_no_op(synced: SyncResult) -> None:
+    with pytest.raises(NothingToChange):
+        apply(Change("pricing.vat_rate", 0.24))
+    result = apply(Change("pricing.vat_rate", 0.24), Change("thermostat.mode", "heat"))
+    assert [item.key for item in result.changeset.items.all()] == ["thermostat.mode"]
 
 
 def test_validate(synced: SyncResult) -> None:
@@ -285,7 +295,7 @@ def test_rollback_to_current_or_unknown_version(synced: SyncResult) -> None:
     assert ChangeSet.objects.count() == 1
 
 
-def test_rollback_turns_pinned_default_into_reset(synced: SyncResult) -> None:
+def test_rollback_to_a_version_without_the_override_resets_it(synced: SyncResult) -> None:
     apply(Change("pricing.vat_rate", 0.2))
     apply(Change("pricing.vat_rate", 0.24))
     apply(Change("pricing.vat_rate", 0.3))

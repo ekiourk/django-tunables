@@ -117,7 +117,9 @@ default 50. Filters combine:
 All writes go through the same validation as the admin. Nothing is written unless
 every change in the request is valid. A change whose value equals the current
 effective value is dropped silently, and a request that changes nothing is
-`400 nothing-to-change`, so every version means something.
+`400 nothing-to-change`, so every version means something. A value equal to the
+tunable's default removes the override if there is one, the same as `reset`, so
+`overridden` never lists a key that holds its default.
 
 | Method and path | Body | Effect |
 |---|---|---|
