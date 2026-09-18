@@ -12,9 +12,9 @@ from tunables.api.base import TunablesAPIView
 from tunables.api.serializers import ChangeSetDetailSerializer, ChangesRequestSerializer, RollbackRequestSerializer
 from tunables.changes import Change
 from tunables.conf import settings
-from tunables.errors import FieldWarning, GroupNotEditable
+from tunables.errors import FieldWarning, GroupNotEditable, VersionConflict
 from tunables.models import ChangeSet
-from tunables.services import apply_changeset, document_changes, rollback_changes, validate
+from tunables.services import apply_changeset, current_version, document_changes, rollback_changes, validate
 
 
 def _expected_version(request: Request) -> int | None:
@@ -65,6 +65,9 @@ def write(
     expected_version = _expected_version(request)
     _check_editable(request, changes)
     if dry_run:
+        actual = current_version()
+        if expected_version is not None and expected_version != actual:
+            raise VersionConflict(expected_version, actual)
         warnings = [*extra_warnings, *validate(changes)]
         return Response({"valid": True, "warnings": [problems.describe(w) for w in warnings]})
     result = apply_changeset(

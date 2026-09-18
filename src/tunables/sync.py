@@ -6,6 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from tunables.catalogue import Catalogue, Group, Tunable
+from tunables.errors import ConstraintError
 from tunables.models import (
     ActorSource,
     ChangeItem,
@@ -37,10 +38,10 @@ def sync() -> SyncResult:
     """Mirror the catalogue, bootstrap State and snapshot 0, rebuild on catalogue change. Idempotent."""
     catalogue = get_catalogue()
     now = timezone.now()
-    _mirror(catalogue, now)
     state, created = State.objects.select_for_update().get_or_create(
         pk=1, defaults={"current_version": 0, "catalogue_version": catalogue.version}
     )
+    _mirror(catalogue, now)
     if created:
         write_snapshot(catalogue, version=0, changeset=None, created_at=now)
         return SyncResult(created=True, rebuilt=False, version=0)
@@ -57,6 +58,7 @@ def sync() -> SyncResult:
         catalogue_version=catalogue.version,
     )
     _drop_stale_overrides(catalogue, changeset)
+    _drop_invalid_overrides(catalogue, changeset)
     write_snapshot(catalogue, version=version, changeset=changeset, created_at=now)
     state.current_version = version
     state.catalogue_version = catalogue.version
@@ -96,7 +98,21 @@ def _definition_fields(group: Group, order: int, tunable: Tunable, now: datetime
 
 def _drop_stale_overrides(catalogue: Catalogue, changeset: ChangeSet) -> None:
     for row in TunableValue.objects.exclude(key__in=catalogue.keys()):
-        ChangeItem.objects.create(
-            changeset=changeset, key=row.key, definition=row.definition, old_value=row.value, new_value=None, reset=True
-        )
-        row.delete()
+        _reset_override(row, changeset)
+
+
+def _drop_invalid_overrides(catalogue: Catalogue, changeset: ChangeSet) -> None:
+    """Reset overrides whose stored value no longer coerces and validates under the current catalogue."""
+    for row in TunableValue.objects.filter(key__in=catalogue.keys()):
+        tunable = catalogue.get(row.key)
+        try:
+            tunable.type.validate(tunable.type.coerce(row.value))
+        except ConstraintError:
+            _reset_override(row, changeset)
+
+
+def _reset_override(row: TunableValue, changeset: ChangeSet) -> None:
+    ChangeItem.objects.create(
+        changeset=changeset, key=row.key, definition=row.definition, old_value=row.value, new_value=None, reset=True
+    )
+    row.delete()

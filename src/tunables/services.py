@@ -122,14 +122,7 @@ def rollback_changes(to_version: int) -> list[Change]:
             group, _, name = key.partition(".")
             target[key] = document["groups"][group][name]
     overrides = stored_overrides(catalogue)
-    changes: list[Change] = []
-    for key, value in target.items():
-        tunable = catalogue.get(key)
-        if value == tunable.type.to_json(tunable.default):
-            if key in overrides:
-                changes.append(Change(key, reset=True))
-        elif overrides.get(key) != value:
-            changes.append(Change(key, value))
+    changes = [Change(key, value) for key, value in target.items() if overrides.get(key) != value]
     changes.extend(Change(key, reset=True) for key in overrides if key not in target)
     return changes
 
@@ -237,8 +230,12 @@ def _prepare_one(
             report.errors.append(FieldError(change.key, error.code, error.message))
             return None
         new_value = tunable.type.to_json(value)
-        current = overrides[change.key] if change.key in overrides else tunable.type.to_json(tunable.default)
-        prepared = _Prepared(change.key, False, new_value, old_value) if new_value != current else None
+        default = tunable.type.to_json(tunable.default)
+        current = overrides.get(change.key, default)
+        if new_value == default:
+            prepared = _Prepared(change.key, True, None, old_value) if change.key in overrides else None
+        else:
+            prepared = _Prepared(change.key, False, new_value, old_value) if new_value != current else None
     if prepared is not None and tunable.deprecated:
         report.warnings.append(FieldWarning(change.key, "deprecated", f"deprecated: {tunable.deprecated}"))
     return prepared
@@ -256,17 +253,17 @@ def _group_errors(
     touched = {item.key.partition(".")[0] for item in prepared}
     errors: list[GroupError] = []
     for group in (group for group in catalogue.groups.values() if group.name in touched):
-        values = {
-            tunable.name: tunable.type.coerce(proposed[f"{group.name}.{tunable.name}"])
-            if f"{group.name}.{tunable.name}" in proposed
-            else tunable.default
-            for tunable in group.tunables
-        }
-        for validator in group.validators:
-            try:
+        try:
+            values = {
+                tunable.name: tunable.type.coerce(proposed[f"{group.name}.{tunable.name}"])
+                if f"{group.name}.{tunable.name}" in proposed
+                else tunable.default
+                for tunable in group.tunables
+            }
+            for validator in group.validators:
                 validator(values)
-            except ConstraintError as error:
-                errors.append(GroupError(group.name, error.code, error.message))
+        except ConstraintError as error:
+            errors.append(GroupError(group.name, error.code, error.message))
     return errors
 
 

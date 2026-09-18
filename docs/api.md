@@ -40,7 +40,7 @@ per group with `EDITABLE_GROUPS` below.
 | `X-Tunables-Actor` | request | Who is acting, when the request is not authenticated. Recorded with `actor_source: asserted`. Name configurable with `ACTOR_HEADER`. |
 | `X-Tunables-Client` | request | Which program is acting. Recorded as `client`. Name configurable with `CLIENT_HEADER`. |
 | `X-Request-ID` | request | Recorded as `request_id` on the change set. Name configurable with `REQUEST_ID_HEADER`. |
-| `X-Tunables-Reason` | request | Reason for a `PATCH` of group values, whose body has no room for one. |
+| `X-Tunables-Reason` | request | Reason for a `PATCH` of group values, whose body has no room for one. Name configurable with `REASON_HEADER`. |
 
 ## Actors
 
@@ -117,7 +117,9 @@ default 50. Filters combine:
 All writes go through the same validation as the admin. Nothing is written unless
 every change in the request is valid. A change whose value equals the current
 effective value is dropped silently, and a request that changes nothing is
-`400 nothing-to-change`, so every version means something.
+`400 nothing-to-change`, so every version means something. A value equal to the
+tunable's default removes the override if there is one, the same as `reset`, so
+`overridden` never lists a key that holds its default.
 
 | Method and path | Body | Effect |
 |---|---|---|
@@ -142,8 +144,8 @@ A successful write answers `201`:
 ```
 
 A dry run answers `200 {"valid": true, "warnings": [...]}` after the same checks,
-including `nothing-to-change` and the group restriction, so a client can show exactly
-what the real request would do.
+including `If-Match`, the group restriction and `nothing-to-change`, so a client can
+show exactly what the real request would do.
 
 Import skips keys that are not in the catalogue and reports each as a warning with code
 `unknown_key`, unless `?strict=1` turns them into errors. Only keys present in the

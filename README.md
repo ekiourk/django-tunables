@@ -139,6 +139,7 @@ All settings live in one dictionary, `TUNABLES`. Only `CATALOGUE` is required.
 | `ACTOR_HEADER` | `X-Tunables-Actor` | Header naming the actor of an unauthenticated request. |
 | `CLIENT_HEADER` | `X-Tunables-Client` | Header naming the client program. |
 | `REQUEST_ID_HEADER` | `X-Request-ID` | Header whose value is recorded as the change set's request id. |
+| `REASON_HEADER` | `X-Tunables-Reason` | Header carrying the reason for a `PATCH` of group values. |
 
 ## Management commands
 

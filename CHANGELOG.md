@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.1.1, 2026-09-18
+
+- `tunables_sync` now resets overrides that no longer coerce or validate after a
+  catalogue change, recording each as a reset item of the system change set. Before,
+  a retyped or narrowed tunable left its old value in the snapshot, and reading or
+  writing that group raised `TypeCoercionError`.
+- A stored value that cannot be coerced is reported as a group validation error
+  instead of escaping from `apply_changeset` and `validate`.
+- Writing a value equal to the tunable's default removes the override when one exists
+  and is a no-op otherwise, so `overridden` never lists a key holding its default. The
+  admin, the API and import all follow this rule.
+- Dry runs check `If-Match` and answer `412` on a mismatch, as the documentation said.
+- New setting `REASON_HEADER`, default `X-Tunables-Reason`, names the header that carries
+  the reason for `PATCH groups/{group}/values/`.
+- `tunables_sync` locks the state row before mirroring the catalogue, so concurrent
+  syncs run one at a time.
+
 ## 0.1.0, 2026-09-18
 
 First release.

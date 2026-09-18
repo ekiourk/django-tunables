@@ -15,6 +15,7 @@ DEFAULTS: dict[str, Any] = {
     "ACTOR_HEADER": "X-Tunables-Actor",
     "CLIENT_HEADER": "X-Tunables-Client",
     "REQUEST_ID_HEADER": "X-Request-ID",
+    "REASON_HEADER": "X-Tunables-Reason",
 }
 
 
