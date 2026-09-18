@@ -357,3 +357,20 @@ def test_patch_with_the_default_value_resets_an_override(api: APIClient) -> None
         {"key": "pricing.vat_rate", "old_value": 0.2, "new_value": None, "reset": True}
     ]
     assert api.get(BASE + "values/").json()["overridden"] == []
+
+
+@pytest.mark.parametrize("path", ["changesets/", "validate/"])
+def test_dry_run_honours_if_match(api: APIClient, path: str) -> None:
+    apply(Change("pricing.vat_rate", 0.2))
+    extra = {"dry_run": True} if path == "changesets/" else {}
+    body = changes({"key": "pricing.vat_rate", "value": 0.1}, **extra)
+    response = post(api, path, body, HTTP_IF_MATCH='"0"')
+    assert response.status_code == 412
+    assert response.json()["type"] == "urn:tunables:problem:version-conflict"
+    assert (response.json()["expected_version"], response.json()["current_version"]) == (0, 1)
+    response = post(api, path, body, HTTP_IF_MATCH='"1"')
+    assert response.status_code == 200
+    assert response.json()["valid"] is True
+    invalid = changes({"key": "pricing.vat_rate", "value": 5.0}, **extra)
+    assert post(api, path, invalid, HTTP_IF_MATCH='"0"').status_code == 412
+    assert counts() == (1, 1)

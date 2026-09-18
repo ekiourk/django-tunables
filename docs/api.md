@@ -144,8 +144,8 @@ A successful write answers `201`:
 ```
 
 A dry run answers `200 {"valid": true, "warnings": [...]}` after the same checks,
-including `nothing-to-change` and the group restriction, so a client can show exactly
-what the real request would do.
+including `If-Match`, the group restriction and `nothing-to-change`, so a client can
+show exactly what the real request would do.
 
 Import skips keys that are not in the catalogue and reports each as a warning with code
 `unknown_key`, unless `?strict=1` turns them into errors. Only keys present in the
