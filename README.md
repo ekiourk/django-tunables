@@ -208,6 +208,7 @@ shipped with the package, and the table contract are in
 | `POST changesets/`, `POST validate/` | apply or dry-run a list of changes |
 | `PATCH groups/{group}/values/` | form-shaped write of one group |
 | `POST rollback/`, `POST import/` | restore a version, import a document |
+| `POST tags/`, `PATCH`/`DELETE tags/{name}/`, `PUT definitions/{key}/tags/` | manage tags and their assignments |
 
 Writes accept `If-Match` for optimistic concurrency and every response carries
 `X-Tunables-Version`. Errors are RFC 9457 problem documents. The full reference,

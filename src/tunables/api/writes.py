@@ -2,7 +2,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from django.db.models import Count
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 
@@ -10,11 +10,18 @@ from tunables.access import check_editable
 from tunables.api import problems
 from tunables.api.actors import request_id, resolve_actor
 from tunables.api.base import TunablesAPIView
-from tunables.api.serializers import ChangeSetDetailSerializer, ChangesRequestSerializer, RollbackRequestSerializer
+from tunables.api.serializers import (
+    ChangeSetDetailSerializer,
+    ChangesRequestSerializer,
+    DefinitionTagsSerializer,
+    RollbackRequestSerializer,
+)
 from tunables.changes import Change
 from tunables.errors import FieldWarning, VersionConflict
 from tunables.models import ChangeSet
+from tunables.registry import get_catalogue
 from tunables.services import apply_changeset, current_version, document_changes, rollback_changes, validate
+from tunables.tags import set_manual_tags
 
 
 def _expected_version(request: Request) -> int | None:
@@ -103,3 +110,14 @@ class Import(TunablesAPIView):
             raise ValidationError({"mode": "expected 'replace' or no mode"})
         changes, warnings = document_changes(request.data, strict=strict, replace=mode == "replace")
         return write(request, changes, source="import", reason="", extra_warnings=warnings)
+
+
+class DefinitionTags(TunablesAPIView):
+    def put(self, request: Request, key: str) -> Response:
+        serializer = DefinitionTagsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        catalogue = get_catalogue()
+        if key not in set(catalogue.keys()):
+            raise NotFound(f"unknown tunable {key!r}")
+        check_editable(request, [Change(key, reset=True)])
+        return Response({"key": key, "tags": set_manual_tags(key, serializer.validated_data["tags"])})

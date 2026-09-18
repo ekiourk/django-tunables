@@ -12,7 +12,12 @@ from rest_framework.response import Response
 
 from tunables.api import problems
 from tunables.api.base import TunablesAPIView
-from tunables.api.serializers import ChangeSetDetailSerializer, ChangeSetSerializer
+from tunables.api.serializers import (
+    ChangeSetDetailSerializer,
+    ChangeSetSerializer,
+    TagDescriptionSerializer,
+    TagRequestSerializer,
+)
 from tunables.api.writes import parsed_changes, write
 from tunables.catalogue import Catalogue, Category, Group, Tunable
 from tunables.changes import Change
@@ -22,6 +27,7 @@ from tunables.models import ChangeSet, PublisherState, Snapshot, State, Tag, Tun
 from tunables.registry import get_catalogue
 from tunables.schema import describe_group, document_schema, validator_description
 from tunables.services import diff_versions, latest_snapshot, rule_violations
+from tunables.tags import create_tag, delete_tag, update_tag
 
 
 def _group(catalogue: Catalogue, name: str) -> Group:
@@ -102,12 +108,35 @@ def _tag_summary(tag: Tag) -> dict[str, Any]:
 
 
 class TagList(TunablesAPIView):
+    def post(self, request: Request) -> Response:
+        serializer = TagRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        tag = create_tag(serializer.validated_data["name"], serializer.validated_data["description"])
+        return Response(_tag_summary(tag), status=201)
+
     def get(self, request: Request) -> Response:
         tags = Tag.objects.annotate(definition_count=Count("definitions")).order_by("name")
         return Response([_tag_summary(tag) for tag in tags])
 
 
 class TagDetail(TunablesAPIView):
+    def patch(self, request: Request, name: str) -> Response:
+        serializer = TagDescriptionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            update_tag(name, serializer.validated_data["description"])
+        except Tag.DoesNotExist:
+            raise NotFound(f"unknown tag {name!r}") from None
+        tag = Tag.objects.annotate(definition_count=Count("definitions")).get(name=name)
+        return Response(_tag_summary(tag))
+
+    def delete(self, request: Request, name: str) -> Response:
+        try:
+            delete_tag(name)
+        except Tag.DoesNotExist:
+            raise NotFound(f"unknown tag {name!r}") from None
+        return Response(status=204)
+
     def get(self, request: Request, name: str) -> Response:
         tag = Tag.objects.annotate(definition_count=Count("definitions")).filter(name=name).first()
         if tag is None:

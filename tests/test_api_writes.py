@@ -444,3 +444,64 @@ def test_dry_run_ignores_metadata(api: APIClient) -> None:
     assert response.status_code == 200
     assert response.json()["valid"] is True
     assert counts() == (0, 0)
+
+
+def test_tag_create_update_delete(api: APIClient) -> None:
+    before = ChangeSet.objects.count()
+    response = post(api, "tags/", {"name": "review", "description": "Needs a second look."})
+    assert response.status_code == 201
+    assert response.json() == {
+        "name": "review",
+        "description": "Needs a second look.",
+        "from_catalogue": False,
+        "definition_count": 0,
+    }
+    assert response["X-Tunables-Version"] == "0"
+    response = post(api, "tags/", {"name": "review"})
+    assert response.status_code == 409
+    assert response.json() == {
+        "type": "urn:tunables:problem:tag-exists",
+        "title": "Tag exists",
+        "status": 409,
+        "detail": "tag 'review' already exists",
+        "name": "review",
+    }
+    response = post(api, "tags/", {"name": "Bad Name"})
+    assert response.status_code == 400
+    assert "name" in response.json()["errors"]
+    response = api.patch(BASE + "tags/review/", {"description": "Checked."}, format="json")
+    assert response.status_code == 200
+    assert response.json()["description"] == "Checked."
+    assert api.patch(BASE + "tags/nope/", {"description": "x"}, format="json").status_code == 404
+    assert api.delete(BASE + "tags/review/").status_code == 204
+    assert api.delete(BASE + "tags/review/").status_code == 404
+    response = api.delete(BASE + "tags/money/")
+    assert response.status_code == 409
+    assert response.json()["type"] == "urn:tunables:problem:tag-seeded"
+    assert ChangeSet.objects.count() == before
+
+
+def test_put_definition_tags(api: APIClient) -> None:
+    response = api.put(BASE + "definitions/weights.beta/tags/", {"tags": ["review", "q3"]}, format="json")
+    assert response.status_code == 200
+    assert response.json() == {"key": "weights.beta", "tags": ["q3", "review"]}
+    response = api.put(BASE + "definitions/weights.beta/tags/", {"tags": ["review"]}, format="json")
+    assert response.json()["tags"] == ["review"]
+    response = api.put(BASE + "definitions/pricing.vat_rate/tags/", {"tags": []}, format="json")
+    assert response.json()["tags"] == ["money"]
+    assert api.put(BASE + "definitions/weights.beta/tags/", {"tags": ["Bad"]}, format="json").status_code == 400
+    assert api.put(BASE + "definitions/weights.beta/tags/", {"tags": "review"}, format="json").status_code == 400
+    assert api.put(BASE + "definitions/weights.nope/tags/", {"tags": []}, format="json").status_code == 404
+    with settings_with(EDITABLE_GROUPS=f"{__name__}.only_pricing"):
+        response = api.put(BASE + "definitions/weights.beta/tags/", {"tags": []}, format="json")
+        assert response.status_code == 403
+        assert response.json()["group"] == "weights"
+        assert api.put(BASE + "definitions/pricing.vat_rate/tags/", {"tags": ["x"]}, format="json").status_code == 200
+    assert ChangeSet.objects.count() == 0
+    assert api.get(BASE + "values/")["X-Tunables-Version"] == "0"
+
+
+def test_tag_writes_require_sync(api: APIClient) -> None:
+    State.objects.update(catalogue_version="sha256:stale")
+    assert post(api, "tags/", {"name": "review"}).status_code == 503
+    assert api.put(BASE + "definitions/weights.beta/tags/", {"tags": []}, format="json").status_code == 503
