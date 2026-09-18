@@ -195,7 +195,9 @@ shipped with the package, and the table contract are in
 | Method and path | Purpose |
 |---|---|
 | `GET groups/`, `GET groups/{group}/` | groups and their definitions |
-| `GET groups/{group}/schema/`, `GET schema/` | JSON Schema and UI schema |
+| `GET definitions/` | every tunable with its type, default and texts |
+| `GET groups/{group}/schema/`, `GET schema/` | JSON Schema and UI schema per group |
+| `GET snapshots/schema/` | JSON Schema of snapshot documents for this catalogue |
 | `GET values/`, `GET groups/{group}/values/` | effective values, with `ETag` |
 | `GET changesets/`, `GET changesets/{version}/` | history, paginated and filterable |
 | `GET snapshots/latest/`, `GET snapshots/{version}/`, `GET export/` | snapshot documents |

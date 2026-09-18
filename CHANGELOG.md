@@ -1,6 +1,31 @@
 # Changelog
 
-## Unreleased
+## 0.2.0, 2026-09-18
+
+Reads survive a catalogue rollout, snapshots can be republished and diffed, imports can
+replace the whole state, and the type system gains mappings and catalogue-level rules.
+
+- Endpoints that serve stored data, the values, change sets, snapshots, export and the
+  new diff, answer while the catalogue in code differs from the database. Catalogue
+  reads and all writes still answer `503` until `tunables_sync` runs. New `GET status/`
+  reporting the sync state, versions, catalogue hashes, validator descriptions,
+  publisher states and rule violations.
+- `tunables_export --defaults` writes the version-zero document from the catalogue
+  alone, and `--schema` writes a JSON Schema specific to the catalogue in which every
+  group and tunable is a required, typed property. `GET snapshots/schema/` serves the
+  same schema.
+- New `Mapping(key, value, min_entries, max_entries)` type for keyed tables, with string
+  keys checked by a key type and values by a value type; edited as JSON in the admin.
+- `Catalogue(validators=[...])` for rules that span groups, run after the group
+  validators on every write and dry run, reported with scope `catalogue`.
+- Publisher outcomes are recorded per publisher and shown in `status/`;
+  `tunables_publish [VERSION] [--publisher PATH]` resends a snapshot.
+- `GET diff/?from=&to=` returns per-key changes between two versions.
+- `tunables_import --replace` and `POST import/?mode=replace` reset every override the
+  document does not name, so the document becomes the complete state.
+- `EDITABLE_GROUPS` applies in the admin as well as the API.
+- Messages and admin text go through Django translation; error codes stay the contract.
+- New setting `REASON_HEADER`, default `X-Tunables-Reason`, for the `PATCH` reason header.
 
 - `tunables_export --defaults` accepts `--created-at` with an ISO 8601 datetime and
   offset, so a committed defaults file can use a fixed timestamp and a drift test can
