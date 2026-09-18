@@ -6,7 +6,7 @@ from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.request import Request
 from rest_framework.response import Response
 
-from tunables.access import check_editable
+from tunables.access import check_editable, check_group_editable
 from tunables.api import problems
 from tunables.api.actors import request_id, resolve_actor
 from tunables.api.base import TunablesAPIView
@@ -119,5 +119,5 @@ class DefinitionTags(TunablesAPIView):
         catalogue = get_catalogue()
         if key not in set(catalogue.keys()):
             raise NotFound(f"unknown tunable {key!r}")
-        check_editable(request, [Change(key, reset=True)])
+        check_group_editable(request, key.partition(".")[0])
         return Response({"key": key, "tags": set_manual_tags(key, serializer.validated_data["tags"])})

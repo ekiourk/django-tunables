@@ -505,3 +505,18 @@ def test_tag_writes_require_sync(api: APIClient) -> None:
     State.objects.update(catalogue_version="sha256:stale")
     assert post(api, "tags/", {"name": "review"}).status_code == 503
     assert api.put(BASE + "definitions/weights.beta/tags/", {"tags": []}, format="json").status_code == 503
+
+
+def test_check_group_editable_helper(api: APIClient) -> None:
+    from django.test import RequestFactory
+
+    from tunables.access import check_group_editable
+    from tunables.errors import GroupNotEditable
+
+    request = RequestFactory().get("/")
+    check_group_editable(request, "thermostat")
+    with settings_with(EDITABLE_GROUPS=f"{__name__}.only_pricing"):
+        check_group_editable(request, "pricing")
+        with pytest.raises(GroupNotEditable) as info:
+            check_group_editable(request, "thermostat")
+    assert info.value.group == "thermostat"

@@ -19,12 +19,14 @@ def editable_groups(request: Any) -> Collection[str] | None:
     return editable
 
 
+def check_group_editable(request: Any, group: str) -> None:
+    """Raise GroupNotEditable when the request may not write this group."""
+    editable = editable_groups(request)
+    if editable is not None and group not in editable:
+        raise GroupNotEditable(group)
+
+
 def check_editable(request: Any, changes: Sequence[Change]) -> None:
     """Raise GroupNotEditable for the first change whose group the request may not write."""
-    editable = editable_groups(request)
-    if editable is None:
-        return
     for change in changes:
-        group = change.key.partition(".")[0]
-        if group not in editable:
-            raise GroupNotEditable(group)
+        check_group_editable(request, change.key.partition(".")[0])
