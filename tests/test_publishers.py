@@ -11,8 +11,8 @@ from django.test import override_settings
 from tests.test_services import apply
 from tunables import Change, publishers
 from tunables.errors import ValidationFailed
-from tunables.models import Snapshot
-from tunables.publishers import FilePublisher
+from tunables.models import PublisherState, Snapshot
+from tunables.publishers import FilePublisher, QueuedPublisher
 from tunables.signals import snapshot_published
 from tunables.sync import SyncResult, sync
 
@@ -40,6 +40,18 @@ class Failing:
     def publish(self, snapshot: Snapshot) -> None:
         if Failing.raise_error:
             raise RuntimeError("boom")
+
+
+class Queued(QueuedPublisher):
+    versions: list[int] = []
+
+    def enqueue(self, version: int) -> None:
+        Queued.versions.append(version)
+
+
+class QueueDown(QueuedPublisher):
+    def enqueue(self, version: int) -> None:
+        raise RuntimeError("queue unreachable")
 
 
 @pytest.fixture(autouse=True)
@@ -129,6 +141,37 @@ def test_file_publisher_writes_document_atomically(
         result = apply(Change("pricing.vat_rate", 0.2))
     assert json.loads(target.read_text()) == result.snapshot.document
     assert [p.name for p in tmp_path.iterdir()] == ["tunables.json"]
+
+
+def test_queued_publisher_passes_the_version(
+    synced: SyncResult, django_capture_on_commit_callbacks: Callable[..., Any]
+) -> None:
+    Queued.versions = []
+    with (
+        with_publishers(f"{__name__}.Queued"),
+        django_capture_on_commit_callbacks(execute=True),
+    ):
+        result = apply(Change("pricing.vat_rate", 0.2))
+    assert Queued.versions == [result.version]
+
+
+def test_queued_publisher_needs_enqueue(synced: SyncResult) -> None:
+    with pytest.raises(NotImplementedError):
+        QueuedPublisher().publish(Snapshot.objects.get(version=0))
+
+
+def test_a_failing_queue_is_recorded_like_any_publisher(
+    synced: SyncResult, django_capture_on_commit_callbacks: Callable[..., Any], caplog: pytest.LogCaptureFixture
+) -> None:
+    with (
+        with_publishers(f"{__name__}.QueueDown"),
+        django_capture_on_commit_callbacks(execute=True),
+        caplog.at_level(logging.ERROR, logger="tunables"),
+    ):
+        apply(Change("pricing.vat_rate", 0.2))
+    state = PublisherState.objects.get(publisher=f"{__name__}.QueueDown")
+    assert state.last_error == "queue unreachable"
+    assert state.last_version is None
 
 
 def test_file_publisher_requires_a_path() -> None:
