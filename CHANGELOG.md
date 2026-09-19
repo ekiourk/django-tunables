@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- `from tunables import values` reads the effective values inside the Django project:
+  `values.get("pricing.vat_rate")`, `values.group("pricing")` and `values.all()`, all
+  coerced to the tunable's Python type. Each process caches the whole set and checks the
+  stored version at most once per `READ_CACHE_TTL` seconds, one second by default. A
+  write in the process drops its cache at once. Before the first sync the reader serves
+  the defaults from code instead of raising.
+- New setting `READ_CACHE_TTL`.
+
 - `GET groups/{group}/schema/` and `GET schema/` take a repeatable `tag` parameter and
   describe only the tunables carrying every named tag. `properties` and the UI controls
   shrink to those tunables, a section left without controls is dropped, and `$id`,

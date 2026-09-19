@@ -132,6 +132,7 @@ All settings live in one dictionary, `TUNABLES`. Only `CATALOGUE` is required.
 | `PUBLISHERS` | `[]` | Dotted paths of publisher classes, instantiated once with no arguments. |
 | `FILE_PUBLISHER_PATH` | `None` | Target file of `tunables.publishers.FilePublisher`. |
 | `PAGE_SIZE` | `50` | Page size of the change set list endpoint. |
+| `READ_CACHE_TTL` | `1.0` | Seconds the in-process reader may serve values without checking the stored version. `0` checks on every read, `None` never checks. |
 | `API_AUTHENTICATION_CLASSES` | `None` | DRF authentication classes for the API. `None` uses the host's DRF defaults. |
 | `API_PERMISSION_CLASSES` | `None` | DRF permission classes for the API. `None` uses the host's DRF defaults. |
 | `ACTOR_RESOLVER` | `tunables.api.actors.default_actor_resolver` | Callable turning a request into an `Actor`. |
@@ -185,6 +186,22 @@ TUNABLES = {
 }
 ```
 
+## Reading values in Django code
+
+Code inside the project reads its tunables through one object, which caches the whole
+value set in the process:
+
+```python
+from tunables import values
+
+rate = values.get("pricing.vat_rate")
+pricing = values.group("pricing")
+```
+
+A read serves from memory. At most once per `READ_CACHE_TTL` seconds it checks the
+stored version with one small query and reloads when the version moved, and a write in
+the same process drops the cache at once. See [docs/reading.md](docs/reading.md).
+
 ## Reading snapshots from other processes
 
 A reader polls `tunables_state.current_version`, and when it changes fetches
@@ -226,6 +243,7 @@ A screenshot of the group edit form will be added here.
 ## Documentation
 
 - [Declaring the catalogue](docs/catalogue.md)
+- [Reading values in Django code](docs/reading.md)
 - [REST API](docs/api.md)
 - [Django admin](docs/admin.md)
 - [Snapshot format and reader contract](docs/snapshot-format.md)

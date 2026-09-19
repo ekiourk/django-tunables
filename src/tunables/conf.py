@@ -16,6 +16,7 @@ DEFAULTS: dict[str, Any] = {
     "CLIENT_HEADER": "X-Tunables-Client",
     "REQUEST_ID_HEADER": "X-Request-ID",
     "REASON_HEADER": "X-Tunables-Reason",
+    "READ_CACHE_TTL": 1.0,
 }
 
 
