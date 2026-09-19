@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- `GET groups/{group}/schema/` and `GET schema/` take a repeatable `tag` parameter and
+  describe only the tunables carrying every named tag. `properties` and the UI controls
+  shrink to those tunables, a section left without controls is dropped, and `$id`,
+  `x-validators` and `additionalProperties` stay as they are. A group with no matching
+  tunable is `404` on the group endpoint and omitted from `schema/`. Matching reads the
+  database, so a manual tag assignment takes effect without `tunables_sync`.
+- Every property of a group schema carries `x-tags`, the stored tag names of the tunable.
+  The snapshot schema from the API has them too; `tunables_export --schema` writes `[]`.
+- A `tag` query value that names no stored tag is `422 unknown-tag`, with the first
+  unknown name in `tag`. This also applies to `GET definitions/?tag=`, which used to
+  match nothing.
+
 ## 0.3.0, 2026-09-19
 
 Categories group the groups, tags label tunables across groups, and the admin and API

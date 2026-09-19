@@ -75,7 +75,9 @@ database, or from `GET snapshots/schema/` on the API, which answers only while t
 deployment is in sync. Its `$id` is `urn:tunables:snapshot:v1:<catalogue hash>`, so a
 reader can check that the schema it holds matches the documents it receives by
 comparing the hash with `catalogue_version`. Its top-level `x-validators` lists the
-catalogue-level rules that the server enforces and the schema cannot express.
+catalogue-level rules that the server enforces and the schema cannot express. Each
+tunable property carries `x-tags`: from the API, the tag names stored for it; from the
+export command, always `[]`, since the command reads no database.
 
 ## The version-zero document without a database
 
