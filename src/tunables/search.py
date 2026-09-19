@@ -1,7 +1,18 @@
 from collections.abc import Collection, Sequence
 
 from tunables.catalogue import Catalogue, Group, Tunable
-from tunables.models import TunableDefinitionTag
+from tunables.errors import UnknownTag
+from tunables.models import Tag, TunableDefinitionTag
+
+
+def require_tags(names: Collection[str]) -> None:
+    """Raise UnknownTag for the first name, in request order, that no Tag row carries."""
+    if not names:
+        return
+    known = set(Tag.objects.filter(name__in=names).values_list("name", flat=True))
+    for name in names:
+        if name not in known:
+            raise UnknownTag(name)
 
 
 def tags_by_key() -> dict[str, list[str]]:

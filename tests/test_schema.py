@@ -10,9 +10,11 @@ from tunables import Catalogue, Float, Group, Integer, Tunable
 from tunables.errors import CatalogueError
 from tunables.schema import JSON_SCHEMA_DIALECT, describe_group, json_schema, ui_schema
 
+TAGS = {"pricing.vat_rate": ["money"], "pricing.shipping_rates": ["money"], "thermostat.mode": ["comfort"]}
+
 
 def test_pricing_json_schema() -> None:
-    assert json_schema(catalogue, pricing) == {
+    assert json_schema(catalogue, pricing, tags=TAGS) == {
         "$schema": JSON_SCHEMA_DIALECT,
         "$id": "urn:tunables:group:pricing",
         "title": "Pricing",
@@ -29,6 +31,7 @@ def test_pricing_json_schema() -> None:
                 "x-unit": "",
                 "x-key": "pricing.vat_rate",
                 "deprecated": False,
+                "x-tags": ["money"],
             },
             "free_shipping_over": {
                 "type": "number",
@@ -38,6 +41,7 @@ def test_pricing_json_schema() -> None:
                 "x-unit": "EUR",
                 "x-key": "pricing.free_shipping_over",
                 "deprecated": False,
+                "x-tags": [],
             },
             "currencies": {
                 "type": "array",
@@ -49,6 +53,7 @@ def test_pricing_json_schema() -> None:
                 "x-unit": "",
                 "x-key": "pricing.currencies",
                 "deprecated": False,
+                "x-tags": [],
             },
             "shipping_rates": {
                 "type": "object",
@@ -59,6 +64,7 @@ def test_pricing_json_schema() -> None:
                 "x-unit": "per currency",
                 "x-key": "pricing.shipping_rates",
                 "deprecated": False,
+                "x-tags": ["money"],
             },
             "allow_backorders": {
                 "type": "boolean",
@@ -67,12 +73,72 @@ def test_pricing_json_schema() -> None:
                 "x-unit": "",
                 "x-key": "pricing.allow_backorders",
                 "deprecated": False,
+                "x-tags": [],
             },
         },
         "x-validators": [],
         "x-catalogue-version": catalogue.version,
         "x-category": "shop",
     }
+
+
+def test_x_tags_default_to_empty_and_sort() -> None:
+    properties = json_schema(catalogue, pricing)["properties"]
+    assert all(prop["x-tags"] == [] for prop in properties.values())
+    tagged = json_schema(catalogue, pricing, tags={"pricing.vat_rate": ["money", "audit"]})["properties"]
+    assert tagged["vat_rate"]["x-tags"] == ["audit", "money"]
+    assert tagged["currencies"]["x-tags"] == []
+
+
+def test_json_schema_restricted_to_names() -> None:
+    schema = json_schema(catalogue, pricing, tags=TAGS, names={"shipping_rates", "vat_rate"})
+    full = json_schema(catalogue, pricing, tags=TAGS)
+    assert list(schema["properties"]) == ["vat_rate", "shipping_rates"]
+    assert schema["properties"]["vat_rate"] == full["properties"]["vat_rate"]
+    assert schema["additionalProperties"] is False
+    assert schema["$id"] == full["$id"]
+    assert {k: v for k, v in schema.items() if k != "properties"} == {
+        k: v for k, v in full.items() if k != "properties"
+    }
+    assert json_schema(catalogue, weights, names=["beta"])["x-validators"] == ["The three weights must sum to 1."]
+
+
+def test_ui_schema_restricted_to_names() -> None:
+    assert ui_schema(thermostat, names=["display_colour"]) == {
+        "type": "VerticalLayout",
+        "elements": [{"type": "Control", "scope": "#/properties/display_colour", "label": "Display colour"}],
+    }
+    assert ui_schema(thermostat, names=["mode", "target_c"]) == {
+        "type": "VerticalLayout",
+        "elements": [
+            {
+                "type": "Group",
+                "label": "Control",
+                "elements": [
+                    {"type": "Control", "scope": "#/properties/target_c", "label": "Target temperature"},
+                    {"type": "Control", "scope": "#/properties/mode", "label": "Mode"},
+                ],
+            },
+        ],
+    }
+    assert ui_schema(thermostat, names=[]) == {"type": "VerticalLayout", "elements": []}
+
+
+def test_describe_group_passes_tags_and_names_through() -> None:
+    described = describe_group(catalogue, thermostat, tags=TAGS, names=["mode"])
+    assert described["json_schema"] == json_schema(catalogue, thermostat, tags=TAGS, names=["mode"])
+    assert described["ui_schema"] == ui_schema(thermostat, names=["mode"])
+    assert described["json_schema"]["properties"]["mode"]["x-tags"] == ["comfort"]
+
+
+def test_document_schema_carries_x_tags() -> None:
+    from tunables.schema import document_schema
+
+    groups = document_schema(catalogue, tags=TAGS)["properties"]["groups"]["properties"]
+    assert groups["pricing"]["properties"]["vat_rate"]["x-tags"] == ["money"]
+    assert groups["thermostat"]["properties"]["target_c"]["x-tags"] == []
+    plain = document_schema(catalogue)["properties"]["groups"]["properties"]
+    assert plain["pricing"]["properties"]["vat_rate"]["x-tags"] == []
 
 
 @pytest.mark.parametrize("group", list(catalogue.groups.values()), ids=list(catalogue.groups))

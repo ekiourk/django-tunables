@@ -81,9 +81,9 @@ sync has not run yet keeps serving the previous state. Every write requires sync
 | `GET categories/` | `[{name, title, description, order, groups: [names]}]` in catalogue order; `general` is always present |
 | `GET groups/[?category=]` | `[group summary]` in catalogue order, optionally one category's groups; unknown category is `404` |
 | `GET groups/{group}/` | group summary without `tunable_count`, plus `ui`, `metadata` and `definitions: [definition]` |
-| `GET groups/{group}/schema/` | `{"json_schema": ..., "ui_schema": ...}` |
-| `GET schema/` | `{"<group>": {"json_schema": ..., "ui_schema": ...}}` for every group |
-| `GET definitions/[?category=&group=&tag=&tag=&q=]` | `[definition]` in catalogue order; filters combine; `tag` repeats and every named tag must be present; `q` is a case-insensitive substring of the key, title or description; unknown category or group is `404`, an unknown tag matches nothing |
+| `GET groups/{group}/schema/[?tag=&tag=]` | `{"json_schema": ..., "ui_schema": ...}`; with `tag` only the tunables carrying every named tag are described, and `404` when none does |
+| `GET schema/[?tag=&tag=]` | `{"<group>": {"json_schema": ..., "ui_schema": ...}}` for every group; with `tag` each group is filtered the same way and groups left with no tunable are omitted |
+| `GET definitions/[?category=&group=&tag=&tag=&q=]` | `[definition]` in catalogue order; filters combine; `tag` repeats and every named tag must be present; `q` is a case-insensitive substring of the key, title or description; unknown category or group is `404` |
 | `GET tags/` | `[{name, description, from_catalogue, definition_count}]` by name |
 | `GET tags/{name}/` | the same plus `definitions: [keys]` in catalogue order; unknown is `404` |
 | `GET values/` | `{"version", "groups": {group: {name: value}}, "overridden": [key]}` with `ETag` |
@@ -112,6 +112,28 @@ item          = {key, old_value, new_value, reset}
 key was at its default before the change. `new_value` is `null` for a reset.
 `actor_source` is one of `verified`, `asserted`, `system`. `source` is one of `admin`,
 `api`, `import`, `rollback`, `system`.
+
+### Schemas by tag
+
+Every property of a group schema carries `x-tags`, the sorted tag names of that tunable
+as the database holds them, seeded and manual alike, or `[]` when it has none. The same
+lists appear in the group schemas embedded in `GET snapshots/schema/`. The file written
+by `tunables_export --schema` has `[]` everywhere, since the command reads no database.
+
+The `tag` parameter of the two schema endpoints repeats and combines with AND, as on
+`definitions/`. A filtered group schema keeps its `$id`, its `x-validators` in full and
+`additionalProperties: false`; only `properties` shrinks to the matching tunables, and
+the UI schema keeps only their controls. A section left with no controls disappears from
+the layout. A client that renders a filtered form should expect the server to enforce
+group rules over the whole group, including tunables the form does not show.
+
+All three endpoints check the tag names against the stored tags first. A name that no
+tag carries is `422 unknown-tag`, so a typo does not pass for an empty result. A tag
+that exists but is assigned to nothing in the requested group is a legitimate empty
+result: `404` on `groups/{group}/schema/`, the group omitted from `schema/`, and an
+empty list from `definitions/`. Because matching reads the mirror, a tag assigned in
+the admin or through `PUT definitions/{key}/tags/` changes the filtered schema at once,
+with no `tunables_sync` in between.
 
 ### Listing change sets
 
@@ -216,6 +238,7 @@ branch on an error should key on `code`, and clients that show messages can loca
 | `urn:tunables:problem:version-conflict` | 412 | `expected_version`, `current_version` | `If-Match` did not match |
 | `urn:tunables:problem:nothing-to-change` | 400 | | no change would alter a value |
 | `urn:tunables:problem:unknown-version` | 422 | `version` | `rollback` to a version with no snapshot |
+| `urn:tunables:problem:unknown-tag` | 422 | `tag` | a `tag` query value on `definitions/` or the schema endpoints that names no stored tag; `tag` is the first unknown name |
 | `urn:tunables:problem:forbidden-group` | 403 | `group` | `EDITABLE_GROUPS` excludes a touched group |
 | `urn:tunables:problem:tag-exists` | 409 | `name` | `POST tags/` with a name that exists |
 | `urn:tunables:problem:tag-seeded` | 409 | `name` | `DELETE tags/{name}/` on a tag the catalogue seeds |

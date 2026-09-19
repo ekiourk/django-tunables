@@ -12,6 +12,7 @@ from tests.test_services import apply
 from tunables import Actor, Change, services
 from tunables.models import ChangeSet, Snapshot, State
 from tunables.schema import describe_group
+from tunables.search import tags_by_key
 
 pytestmark = pytest.mark.django_db
 
@@ -107,10 +108,118 @@ def test_group_detail(api: APIClient) -> None:
 
 
 def test_group_schema(api: APIClient) -> None:
-    assert get(api, "groups/pricing/schema/").json() == describe_group(catalogue, pricing)
+    body = get(api, "groups/pricing/schema/").json()
+    assert body == describe_group(catalogue, pricing, tags=tags_by_key())
+    assert body["json_schema"]["properties"]["vat_rate"]["x-tags"] == ["money"]
+    assert body["json_schema"]["properties"]["currencies"]["x-tags"] == []
     body = get(api, "schema/").json()
     assert list(body) == ["pricing", "thermostat", "weights", "limits"]
-    assert body["thermostat"] == describe_group(catalogue, thermostat)
+    assert body["thermostat"] == describe_group(catalogue, thermostat, tags=tags_by_key())
+    assert body["thermostat"]["json_schema"]["properties"]["mode"]["x-tags"] == ["comfort"]
+
+
+def test_group_schema_filtered_by_tag(api: APIClient) -> None:
+    full = get(api, "groups/pricing/schema/").json()
+    body = get(api, "groups/pricing/schema/?tag=money").json()
+    assert list(body["json_schema"]["properties"]) == ["vat_rate", "shipping_rates"]
+    assert body["json_schema"]["properties"]["vat_rate"] == full["json_schema"]["properties"]["vat_rate"]
+    assert body["json_schema"]["additionalProperties"] is False
+    assert body["json_schema"]["x-validators"] == full["json_schema"]["x-validators"]
+    assert body["json_schema"]["$id"] == full["json_schema"]["$id"]
+    assert [c["scope"] for c in body["ui_schema"]["elements"]] == [
+        "#/properties/vat_rate",
+        "#/properties/shipping_rates",
+    ]
+    assert get(api, "groups/weights/schema/?tag=money").status_code == 404
+    limits = get(api, "groups/limits/schema/?tag=money").json()
+    assert list(limits["json_schema"]["properties"]) == ["max_currencies"]
+    assert get(api, "groups/limits/schema/").json() == get(api, "groups/limits/schema/?tag=money").json()
+
+
+def test_group_schema_two_tags_must_both_match(api: APIClient) -> None:
+    from tunables.models import Tag, TunableDefinition, TunableDefinitionTag
+
+    audit = Tag.objects.create(name="audit")
+    TunableDefinitionTag.objects.create(definition=TunableDefinition.objects.get(key="pricing.vat_rate"), tag=audit)
+    body = get(api, "groups/pricing/schema/?tag=money&tag=audit").json()
+    assert list(body["json_schema"]["properties"]) == ["vat_rate"]
+    assert body["json_schema"]["properties"]["vat_rate"]["x-tags"] == ["audit", "money"]
+    response = get(api, "groups/pricing/schema/?tag=comfort&tag=money")
+    assert response.status_code == 404
+    assert response["Content-Type"] == "application/problem+json"
+    assert response.json() == {
+        "type": "urn:tunables:problem:not-found",
+        "title": "Not Found",
+        "status": 404,
+        "detail": "no tunable in group 'pricing' carries tags ['comfort', 'money']",
+    }
+
+
+def test_filtered_ui_schema_drops_empty_sections(api: APIClient) -> None:
+    body = get(api, "groups/thermostat/schema/?tag=comfort").json()
+    assert list(body["json_schema"]["properties"]) == ["target_c", "mode"]
+    assert body["ui_schema"] == {
+        "type": "VerticalLayout",
+        "elements": [
+            {
+                "type": "Group",
+                "label": "Control",
+                "elements": [
+                    {"type": "Control", "scope": "#/properties/target_c", "label": "Target temperature"},
+                    {"type": "Control", "scope": "#/properties/mode", "label": "Mode"},
+                ],
+            },
+        ],
+    }
+
+
+def test_schema_list_filtered_by_tag(api: APIClient) -> None:
+    body = get(api, "schema/?tag=money").json()
+    assert list(body) == ["pricing", "limits"]
+    assert list(body["pricing"]["json_schema"]["properties"]) == ["vat_rate", "shipping_rates"]
+    assert body["limits"] == get(api, "groups/limits/schema/?tag=money").json()
+    assert get(api, "schema/?tag=money&tag=comfort").json() == {}
+    assert get(api, "schema/?tag=comfort").json() == {
+        "thermostat": get(api, "groups/thermostat/schema/?tag=comfort").json()
+    }
+
+
+def test_manual_tag_assignment_changes_the_filtered_schema(api: APIClient) -> None:
+    from tunables.models import Tag, TunableDefinition, TunableDefinitionTag
+
+    review = Tag.objects.create(name="review")
+    assert get(api, "groups/weights/schema/?tag=review").status_code == 404
+    assert get(api, "schema/?tag=review").json() == {}
+    TunableDefinitionTag.objects.create(definition=TunableDefinition.objects.get(key="weights.beta"), tag=review)
+    body = get(api, "groups/weights/schema/?tag=review").json()
+    assert list(body["json_schema"]["properties"]) == ["beta"]
+    assert body["json_schema"]["properties"]["beta"]["x-tags"] == ["review"]
+    assert body["json_schema"]["x-validators"] == ["The three weights must sum to 1."]
+    assert [c["scope"] for c in body["ui_schema"]["elements"]] == ["#/properties/beta"]
+    assert list(get(api, "schema/?tag=review").json()) == ["weights"]
+    assert get(api, "groups/weights/schema/").json()["json_schema"]["properties"]["beta"]["x-tags"] == ["review"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "groups/pricing/schema/?tag=money&tag=nope",
+        "schema/?tag=nope&tag=missing",
+        "definitions/?tag=nope&group=pricing",
+    ],
+    ids=["group-schema", "schema", "definitions"],
+)
+def test_unknown_tag_is_a_problem(api: APIClient, path: str) -> None:
+    response = get(api, path)
+    assert response.status_code == 422
+    assert response["Content-Type"] == "application/problem+json"
+    assert response.json() == {
+        "type": "urn:tunables:problem:unknown-tag",
+        "title": "Unknown tag",
+        "status": 422,
+        "detail": "unknown tag 'nope'",
+        "tag": "nope",
+    }
 
 
 def test_definitions(api: APIClient) -> None:
@@ -449,7 +558,10 @@ def test_snapshot_schema_endpoint(api: APIClient) -> None:
 
     response = api.get(BASE + "snapshots/schema/")
     assert response.status_code == 200
-    assert response.json() == document_schema(catalogue)
+    assert response.json() == document_schema(catalogue, tags=tags_by_key())
+    assert response.json()["properties"]["groups"]["properties"]["pricing"]["properties"]["vat_rate"]["x-tags"] == [
+        "money"
+    ]
     State.objects.update(catalogue_version="sha256:stale")
     assert api.get(BASE + "snapshots/schema/").status_code == 503
 
@@ -554,8 +666,9 @@ def test_definitions_filters(api: APIClient) -> None:
     assert keys_of(api, "q=vat") == ["pricing.vat_rate"]
     assert keys_of(api, "q=CURRENC") == ["pricing.currencies", "limits.max_currencies"]
     assert keys_of(api, "q=web shop") == []
-    assert keys_of(api, "tag=nope") == []
+    assert get(api, "definitions/?tag=nope").status_code == 422
     review = Tag.objects.create(name="review")
+    assert keys_of(api, "tag=review") == []
     TunableDefinitionTag.objects.create(definition=TunableDefinition.objects.get(key="weights.beta"), tag=review)
     assert keys_of(api, "tag=review") == ["weights.beta"]
     assert {d["key"]: d["tags"] for d in get(api, "definitions/").json()}["weights.beta"] == ["review"]
