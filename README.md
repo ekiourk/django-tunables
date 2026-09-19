@@ -168,6 +168,22 @@ A publisher is any object with a `publish(snapshot)` method. An exception inside
 `publish` is logged under the `tunables.publishers` logger and does not affect the
 write. Both the signal and the publishers run after the transaction commits.
 
+They also run inside the request or command that made the change, before the response
+goes out, so a publisher that calls a network service adds its latency to every write.
+Keep `publish` local, and put anything slower on a queue.
+`tunables.publishers.QueuedPublisher` is a base class for that: implement `enqueue` and
+it receives the version, which the worker reads back with `tunables_publish VERSION` or
+straight from the snapshot table.
+
+```python
+from tunables.publishers import QueuedPublisher
+
+
+class WebhookPublisher(QueuedPublisher):
+    def enqueue(self, version: int) -> None:
+        send_snapshot_webhook.delay(version)
+```
+
 Each publisher's outcome is recorded: the version it last received, when, and the last
 error if any. `GET status/` shows this per publisher, so a gap between the current version
 and a publisher's last version is visible. `manage.py tunables_publish [VERSION]
@@ -247,6 +263,7 @@ A screenshot of the group edit form will be added here.
 - [REST API](docs/api.md)
 - [Django admin](docs/admin.md)
 - [Snapshot format and reader contract](docs/snapshot-format.md)
+- [Deploying a new catalogue](docs/deployment.md)
 
 ## Development
 
