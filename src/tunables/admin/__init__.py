@@ -19,6 +19,7 @@ from tunables.errors import (
     FieldError,
     GroupNotEditable,
     NothingToChange,
+    UnknownVersion,
     ValidationFailed,
     VersionConflict,
     format_error,
@@ -27,7 +28,14 @@ from tunables.models import ChangeItem, ChangeSet, Snapshot, Tag, TunableDefinit
 from tunables.registry import get_catalogue
 from tunables.schema import validator_description
 from tunables.search import match_definitions, tags_by_key
-from tunables.services import apply_changeset, latest_snapshot, rollback, rollback_changes, rule_violations
+from tunables.services import (
+    apply_changeset,
+    diff_versions,
+    latest_snapshot,
+    rollback,
+    rollback_changes,
+    rule_violations,
+)
 from tunables.sync import is_synced
 from tunables.tags import set_manual_tags
 
@@ -222,15 +230,23 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             except NothingToChange:
                 form.add_error(None, _("Nothing changed."))
             except VersionConflict as conflict:
-                messages.warning(
-                    request,
-                    _(
-                        "The values changed while you were editing: version %(expected)s is now version %(actual)s. "
-                        "The form shows the current values; review and submit again."
+                moved = self._moved_names(found, conflict.expected, conflict.actual)
+                context = {"expected": conflict.expected, "actual": conflict.actual, "names": ", ".join(moved)}
+                if moved:
+                    text = _(
+                        "The values changed while you were editing: version %(expected)s is now version "
+                        "%(actual)s, and these changed: %(names)s. Your input is kept; review and submit again."
                     )
-                    % {"expected": conflict.expected, "actual": conflict.actual},
-                )
-                form = self._form_class(found)()
+                else:
+                    text = _(
+                        "The values changed while you were editing: version %(expected)s is now version "
+                        "%(actual)s. Your input is kept; review and submit again."
+                    )
+                messages.warning(request, text % context)
+                data = request.POST.copy()
+                data["expected_version"] = str(conflict.actual)
+                form = self._form_class(found)(data)
+                form.is_valid()
             else:
                 messages.success(
                     request,
@@ -256,6 +272,16 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             "index_url": index,
         }
         return TemplateResponse(request, "tunables/admin/group_edit.html", context)
+
+    @staticmethod
+    def _moved_names(group: Any, expected: int, actual: int) -> list[str]:
+        """Tunable names of this group that changed between two versions, for the conflict message."""
+        prefix = f"{group.name}."
+        try:
+            entries = diff_versions(expected, actual)
+        except UnknownVersion:
+            return []
+        return [entry.key.removeprefix(prefix) for entry in entries if entry.key.startswith(prefix)]
 
     @staticmethod
     def _form_class(group: Any) -> type[GroupForm]:

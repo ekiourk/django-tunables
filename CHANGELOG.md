@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- A version conflict in the admin keeps what the operator typed. The form comes back
+  with their own values, the hidden version updated to the current one, and a message
+  naming the tunables another change set moved in the meantime.
 - `from tunables import values` reads the effective values inside the Django project:
   `values.get("pricing.vat_rate")`, `values.group("pricing")` and `values.all()`, all
   coerced to the tunable's Python type. Each process caches the whole set and checks the
