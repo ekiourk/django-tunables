@@ -43,6 +43,20 @@ class FilePublisher:
         Path(handle.name).replace(self.path)
 
 
+class QueuedPublisher:
+    """Base for publishers that hand the snapshot to a queue instead of sending it inline.
+
+    Subclasses implement ``enqueue``; ``publish`` passes the version, which the worker reads back.
+    """
+
+    def publish(self, snapshot: Snapshot) -> None:
+        self.enqueue(snapshot.version)
+
+    def enqueue(self, version: int) -> None:
+        """Queue the work for this version. Implemented by the host."""
+        raise NotImplementedError
+
+
 _publishers: list[Publisher] | None = None
 
 

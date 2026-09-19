@@ -9,7 +9,15 @@
   write in the process drops its cache at once. Before the first sync the reader serves
   the defaults from code instead of raising.
 - New setting `READ_CACHE_TTL`.
-
+- A version conflict in the admin keeps what the operator typed. The form comes back
+  with their own values, the hidden version updated to the current one, and a message
+  naming the tunables another change set moved in the meantime.
+- New `tunables.publishers.QueuedPublisher`, a base class for publishers that hand the
+  version to a queue instead of sending the snapshot inline. Publishers run inside the
+  request that made the change, so anything doing network work belongs on a queue.
+- New page on deploying a catalogue change: what the structure hash covers, which
+  surfaces answer `503` in the window before `tunables_sync`, and how to order the steps
+  of a rolling deployment.
 - `GET groups/{group}/schema/` and `GET schema/` take a repeatable `tag` parameter and
   describe only the tunables carrying every named tag. `properties` and the UI controls
   shrink to those tunables, a section left without controls is dropped, and `$id`,

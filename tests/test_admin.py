@@ -140,15 +140,15 @@ def test_unchanged_submit_is_an_error(admin_client: Client, synced: SyncResult) 
     assert ChangeSet.objects.count() == 0
 
 
-def test_stale_version_rerenders_with_fresh_values(admin_client: Client, synced: SyncResult) -> None:
+def test_stale_version_rerenders_with_the_submitted_values(admin_client: Client, synced: SyncResult) -> None:
     data = form_data("pricing", vat_rate="0.1")
     apply(Change("pricing.vat_rate", 0.2))
     response = admin_client.post(edit_url("pricing"), data)
     assert response.status_code == 200
     form = response.context["form"]
-    assert form.is_bound is False
-    assert form.fields["vat_rate"].initial == 0.2
-    assert form.fields["expected_version"].initial == 1
+    assert form.is_bound is True
+    assert form["vat_rate"].value() == "0.1"
+    assert form["expected_version"].value() == "1"
     assert any("version 0" in m and "version 1" in m for m in messages_of(response))
     assert ChangeSet.objects.count() == 1
 
@@ -492,3 +492,38 @@ def test_seeded_tag_name_is_read_only_in_the_tag_admin(admin_client: Client, syn
     assert admin_client.post(change, {"name": "reviewed", "description": ""}).status_code == 302
     manual.refresh_from_db()
     assert manual.name == "reviewed"
+
+
+def test_version_conflict_keeps_the_submitted_values(admin_client: Client, synced: SyncResult) -> None:
+    data = form_data("pricing", vat_rate="0.19", currencies='["EUR", "USD"]')
+    apply(Change("pricing.free_shipping_over", 75.0), Change("pricing.vat_rate", 0.3))
+    response = admin_client.post(edit_url("pricing"), data)
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert 'value="0.19"' in content
+    assert "EUR" in content and "USD" in content
+    assert 'name="expected_version" value="1"' in content
+    assert ChangeSet.objects.count() == 1
+    warning = messages_of(response)[0]
+    assert "vat_rate" in warning and "free_shipping_over" in warning
+    assert "version 0 is now version 1" in warning
+
+
+def test_resubmitting_after_a_conflict_saves(admin_client: Client, synced: SyncResult) -> None:
+    data = form_data("pricing", vat_rate="0.19")
+    apply(Change("pricing.vat_rate", 0.3))
+    admin_client.post(edit_url("pricing"), data)
+    data["expected_version"] = 1
+    response = admin_client.post(edit_url("pricing"), data)
+    assert response.status_code == 302
+    assert TunableValue.objects.get(key="pricing.vat_rate").value == 0.19
+
+
+def test_conflict_without_a_readable_diff_still_keeps_input(admin_client: Client, synced: SyncResult) -> None:
+    data = form_data("pricing", vat_rate="0.19", expected_version=99)
+    response = admin_client.post(edit_url("pricing"), data)
+    assert response.status_code == 200
+    assert 'value="0.19"' in response.content.decode()
+    warning = messages_of(response)[0]
+    assert "version 99 is now version 0" in warning
+    assert "these changed" not in warning
