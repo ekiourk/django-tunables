@@ -402,6 +402,28 @@ def stored_overrides(catalogue: Catalogue) -> dict[str, Any]:
     return {row.key: row.value for row in TunableValue.objects.all() if row.key in known}
 
 
+def prune_snapshots(*, keep: int | None = None, before: datetime | None = None, dry_run: bool = False) -> list[int]:
+    """Remove snapshot documents outside the retention policy and return the versions removed, oldest first.
+
+    Version 0 and the current version always stay. Change sets and items are never touched.
+    """
+    if (keep is None) == (before is None):
+        raise ValueError("prune_snapshots takes keep or before, not both and not neither")
+    stored = sorted(Snapshot.objects.values_list("version", flat=True))
+    if not stored:
+        return []
+    protected = {0, stored[-1]}
+    if keep is not None:
+        candidates = stored[: max(len(stored) - keep, 0)]
+    else:
+        old = Snapshot.objects.filter(created_at__lt=before).values_list("version", flat=True)
+        candidates = sorted(old)
+    doomed = [version for version in candidates if version not in protected]
+    if doomed and not dry_run:
+        Snapshot.objects.filter(version__in=doomed).delete_rows()
+    return doomed
+
+
 def write_snapshot(
     catalogue: Catalogue, *, version: int, changeset: ChangeSet | None, created_at: datetime
 ) -> Snapshot:

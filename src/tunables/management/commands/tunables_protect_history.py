@@ -8,6 +8,9 @@ from tunables.models import ChangeItem, ChangeSet, Snapshot
 
 FUNCTION = "tunables_history_append_only"
 TABLES = [model._meta.db_table for model in (ChangeSet, ChangeItem, Snapshot)]
+# A snapshot is a materialisation of a version, rebuildable from the change items, so retention may
+# delete one. The change sets and items are the audit trail and stay undeletable.
+DELETABLE = [Snapshot._meta.db_table]
 
 CREATE_FUNCTION = f"""
 CREATE OR REPLACE FUNCTION {FUNCTION}() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -20,8 +23,8 @@ $$
 
 class Command(TunablesCommand):
     help = (
-        "Install PostgreSQL triggers that reject UPDATE, DELETE and TRUNCATE on the history tables. "
-        "Needs PostgreSQL 14 or newer."
+        "Install PostgreSQL triggers that reject UPDATE and TRUNCATE on the history tables, and DELETE on "
+        "every table but the snapshots, which retention may prune. Needs PostgreSQL 14 or newer."
     )
 
     def add_arguments(self, parser: CommandParser) -> None:
@@ -44,8 +47,9 @@ class Command(TunablesCommand):
                 return
             cursor.execute(CREATE_FUNCTION)
             for table in TABLES:
+                events = "UPDATE" if table in DELETABLE else "UPDATE OR DELETE"
                 cursor.execute(
-                    f"CREATE OR REPLACE TRIGGER {table}_append_only BEFORE UPDATE OR DELETE ON {table} "
+                    f"CREATE OR REPLACE TRIGGER {table}_append_only BEFORE {events} ON {table} "
                     f"FOR EACH ROW EXECUTE FUNCTION {FUNCTION}()"
                 )
                 cursor.execute(

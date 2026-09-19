@@ -105,13 +105,36 @@ Readers that share the database poll one table and fetch from another.
 |---|---|---|
 | `current_version` | integer | The version of the latest snapshot. |
 
-`tunables_snapshot`, one row per version:
+`tunables_snapshot`, one row per version that has not been pruned:
 
 | Column | Type | Meaning |
 |---|---|---|
 | `version` | integer, unique | Snapshot version. |
 | `document` | JSON | The document above. |
 | `created_at` | timestamp with time zone | Same instant as `created_at` inside the document. |
+
+## Retention
+
+Each version writes a full document, so the table grows with every change, and a large
+catalogue under frequent change fills it faster than anyone expects.
+`manage.py tunables_prune_snapshots --keep 200` keeps the newest 200 documents and
+removes the rest. `--before 2026-01-01T00:00:00+00:00` removes by age instead, and
+`--dry-run` reports without deleting.
+
+Version 0 and the current version always stay, whatever the policy asks for. Version 0
+is the all-defaults baseline and the current one is what every reader polls for. Change
+sets and change items are never touched, so the audit trail stays complete and a pruned
+document can be rebuilt from it.
+
+A pruned version is simply gone from the API: `GET snapshots/{version}/` answers `404`,
+`GET diff/` with it on either side answers `404`, and a rollback to it answers
+`422 unknown-version`. Keep enough history to cover the rollbacks and comparisons your
+operators actually reach for.
+
+`tunables_protect_history` reflects the same distinction. Its triggers reject every
+`UPDATE` and `TRUNCATE`, and they reject `DELETE` on the change sets and items. On the
+snapshot table `DELETE` is allowed, so retention runs on a protected deployment without
+lifting the protection first.
 
 An exported document can also be imported into another deployment with the same
 catalogue, through `tunables_import` or `POST import/`. In replace mode the target ends
