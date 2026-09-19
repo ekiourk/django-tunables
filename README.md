@@ -198,7 +198,7 @@ shipped with the package, and the table contract are in
 |---|---|
 | `GET categories/`, `GET groups/`, `GET groups/{group}/` | categories, groups and their definitions |
 | `GET definitions/`, `GET tags/`, `GET tags/{name}/` | every tunable with its type, default, texts and tags; filters by category, group, tag and text |
-| `GET groups/{group}/schema/`, `GET schema/` | JSON Schema and UI schema per group |
+| `GET groups/{group}/schema/`, `GET schema/` | JSON Schema and UI schema per group, optionally narrowed to the tunables carrying given tags |
 | `GET snapshots/schema/` | JSON Schema of snapshot documents for this catalogue |
 | `GET values/`, `GET groups/{group}/values/` | effective values, with `ETag` |
 | `GET changesets/`, `GET changesets/{version}/` | history, paginated and filterable |

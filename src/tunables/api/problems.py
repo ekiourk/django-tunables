@@ -14,6 +14,7 @@ from tunables.errors import (
     NothingToChange,
     TagExists,
     TagSeeded,
+    UnknownTag,
     UnknownVersion,
     ValidationFailed,
     VersionConflict,
@@ -45,6 +46,8 @@ def exception_handler(exc: Exception, _context: dict[str, Any]) -> Response | No
         return problem(400, "nothing-to-change", "Nothing to change", str(exc))
     if isinstance(exc, UnknownVersion):
         return problem(422, "unknown-version", "Unknown version", str(exc), version=exc.version)
+    if isinstance(exc, UnknownTag):
+        return problem(422, "unknown-tag", "Unknown tag", str(exc), tag=exc.name)
     if isinstance(exc, GroupNotEditable):
         return problem(403, "forbidden-group", "Forbidden group", str(exc), group=exc.group)
     if isinstance(exc, TagExists):

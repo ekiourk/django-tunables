@@ -90,6 +90,12 @@ class UnknownVersion(TunablesError):
         self.version = version
 
 
+class UnknownTag(TunablesError):
+    def __init__(self, name: str) -> None:
+        super().__init__(_("unknown tag %(name)r") % {"name": name})
+        self.name = name
+
+
 class TagExists(TunablesError):
     def __init__(self, name: str) -> None:
         super().__init__(_("tag %(name)r already exists") % {"name": name})
