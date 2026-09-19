@@ -8,6 +8,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from tunables import reader
 from tunables.catalogue import Catalogue, Group
 from tunables.changes import Actor, Change
 from tunables.conf import settings
@@ -419,5 +420,6 @@ def write_snapshot(
         catalogue_version=catalogue.version,
         document=document,
     )
+    reader.values.invalidate()
     transaction.on_commit(partial(publish, snapshot))
     return snapshot
