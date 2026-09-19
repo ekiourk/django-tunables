@@ -17,6 +17,8 @@ from tunables.sync import SyncResult
 pytestmark = [pytest.mark.postgres, pytest.mark.django_db]
 
 HISTORY = {ChangeSet: "reason = 'edited'", ChangeItem: "reset = NOT reset", Snapshot: "format_version = 9"}
+# Snapshots are materialisations rather than history, so retention may delete them while protection is on.
+UNDELETABLE = [ChangeSet, ChangeItem]
 TABLES = [model._meta.db_table for model in HISTORY]
 ALL_TABLES = [*TABLES, "tunables_tunablevalue"]
 
@@ -49,7 +51,10 @@ def test_protect_history_rejects_update_delete_and_truncate(synced: SyncResult) 
     before = counts()
     for model, assignment in HISTORY.items():
         table = model._meta.db_table
-        for sql in (f"UPDATE {table} SET {assignment}", f"DELETE FROM {table}"):
+        statements = [f"UPDATE {table} SET {assignment}"]
+        if model in UNDELETABLE:
+            statements.append(f"DELETE FROM {table}")
+        for sql in statements:
             with pytest.raises(DatabaseError, match="append-only"), transaction.atomic():
                 execute(sql)
     with pytest.raises(DatabaseError, match="append-only"), transaction.atomic():
@@ -59,6 +64,19 @@ def test_protect_history_rejects_update_delete_and_truncate(synced: SyncResult) 
     with pytest.raises(DatabaseError, match="append-only"), transaction.atomic():
         ChangeSet._base_manager.all().update(reason="edited")
     assert counts() == before
+
+
+def test_protection_allows_snapshot_retention(synced: SyncResult) -> None:
+    from tunables.services import prune_snapshots
+
+    for rate in (0.2, 0.3, 0.4):
+        apply(Change("pricing.vat_rate", rate))
+    protect()
+    assert prune_snapshots(keep=1) == [1, 2]
+    assert sorted(Snapshot.objects.values_list("version", flat=True)) == [0, 3]
+    assert ChangeSet.objects.count() == 3
+    with pytest.raises(DatabaseError, match="append-only"), transaction.atomic():
+        execute("DELETE FROM tunables_changeset")
 
 
 def test_protect_history_remove(synced: SyncResult) -> None:

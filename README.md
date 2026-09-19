@@ -150,7 +150,8 @@ All settings live in one dictionary, `TUNABLES`. Only `CATALOGUE` is required.
 | `tunables_show [--group NAME] [--json]` | Prints the effective values of the latest snapshot, one key per line, marking overrides. `--json` prints the snapshot document. |
 | `tunables_export [--output FILE] [--defaults [--created-at ISO8601]] [--schema]` | Writes the latest snapshot document as JSON to a file or to standard output. `--defaults` writes the version-zero document from the catalogue in code, `--schema` writes the JSON Schema of documents for that catalogue; both need no database. `--created-at` fixes the timestamp of the defaults document so repeated runs produce the same file. |
 | `tunables_import FILE --actor NAME [--reason TEXT] [--strict] [--replace]` | Applies the values of a snapshot document as one change set with `source: import`. Unknown keys are skipped with a warning, or rejected with `--strict`. `--replace` also resets every override the document does not name, so the document becomes the complete state. |
-| `tunables_protect_history [--remove] [--database ALIAS]` | Installs PostgreSQL triggers that reject `UPDATE`, `DELETE` and `TRUNCATE` on the history tables. |
+| `tunables_protect_history [--remove] [--database ALIAS]` | Installs PostgreSQL triggers that reject `UPDATE` and `TRUNCATE` on the history tables, and `DELETE` on the change sets and items. Snapshots stay deletable so retention can run. |
+| `tunables_prune_snapshots (--keep N \| --before ISO8601) [--dry-run]` | Removes snapshot documents outside the policy. Version 0 and the current version always stay, and change sets and items are never touched. |
 | `tunables_publish [VERSION] [--publisher PATH]` | Sends a stored snapshot, the latest by default, to the configured publishers again and records the outcome. Fails when a publisher fails. |
 
 `tunables_sync --check` compares the catalogue hash, the mirrored categories and the

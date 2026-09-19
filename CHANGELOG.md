@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- New command `tunables_prune_snapshots`, with `--keep N`, `--before ISO8601` and
+  `--dry-run`. It removes old snapshot documents while version 0, the current version,
+  and the whole change history stay in place.
+- `tunables_protect_history` now allows `DELETE` on the snapshot table, so retention runs
+  on a protected deployment. Its triggers still reject every `UPDATE` and `TRUNCATE`, and
+  still reject `DELETE` on the change sets and items, which are the audit trail. Reinstall
+  the triggers with `tunables_protect_history` after upgrading to pick up the change.
 - `from tunables import values` reads the effective values inside the Django project:
   `values.get("pricing.vat_rate")`, `values.group("pricing")` and `values.all()`, all
   coerced to the tunable's Python type. Each process caches the whole set and checks the

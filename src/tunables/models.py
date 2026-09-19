@@ -94,6 +94,10 @@ class AppendOnlyQuerySet(models.QuerySet[_M]):
     def delete(self) -> tuple[int, dict[str, int]]:
         raise HistoryIsAppendOnly("history rows cannot be deleted")
 
+    def delete_rows(self) -> int:
+        """Delete the selected rows for real. Snapshot retention is the only sanctioned caller."""
+        return int(models.QuerySet.delete(self)[0])
+
 
 class AppendOnlyModel(models.Model):
     objects = AppendOnlyQuerySet.as_manager()
