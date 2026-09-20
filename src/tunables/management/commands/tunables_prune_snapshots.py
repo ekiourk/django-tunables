@@ -15,12 +15,17 @@ class Command(TunablesCommand):
         parser.add_argument("--keep", type=int, help="Keep the newest N snapshots.")
         parser.add_argument("--before", help="Keep snapshots created at or after this ISO 8601 instant.")
         parser.add_argument("--dry-run", action="store_true", help="Report what would go without deleting.")
+        parser.add_argument("--batch-size", type=int, default=500, help="Versions deleted per statement.")
 
     def handle(self, *_: Any, **options: Any) -> None:
         if (options["keep"] is None) == (options["before"] is None):
             raise CommandError("pass --keep or --before, not both and not neither")
+        if options["batch_size"] < 1:
+            raise CommandError("--batch-size must be at least 1")
         before = _instant(options["before"]) if options["before"] else None
-        removed = prune_snapshots(keep=options["keep"], before=before, dry_run=options["dry_run"])
+        removed = prune_snapshots(
+            keep=options["keep"], before=before, dry_run=options["dry_run"], batch_size=options["batch_size"]
+        )
         if not removed:
             self.stdout.write("no snapshots to remove")
             return

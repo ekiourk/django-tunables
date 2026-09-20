@@ -115,18 +115,25 @@ Readers that share the database poll one table and fetch from another.
 
 ## Retention
 
-Each version writes a full document, so the table grows with every change, and a large
-catalogue under frequent change fills it faster than anyone expects.
+Each version writes a full document holding every tunable, so the table grows by the
+size of the whole parameter set on every change.
 `manage.py tunables_prune_snapshots --keep 200` keeps the newest 200 documents and
 removes the rest. `--before 2026-01-01T00:00:00+00:00` removes by age instead, and
 `--dry-run` reports without deleting.
+
+Deletion runs in batches of 500 versions per statement, which `--batch-size` changes. A
+first prune on a table that has grown for years therefore avoids one enormous
+transaction.
+
+Every prune that deletes something writes an info line to the `tunables.services` logger
+naming the policy and the versions removed. Grep for it when a version has gone missing.
 
 Version 0 and the current version always stay, whatever the policy asks for. Version 0
 is the all-defaults baseline and the current one is what every reader polls for. Change
 sets and change items are never touched, so the audit trail stays complete and a pruned
 document can be rebuilt from it.
 
-A pruned version is simply gone from the API: `GET snapshots/{version}/` answers `404`,
+A pruned version is gone from the API: `GET snapshots/{version}/` answers `404`,
 `GET diff/` with it on either side answers `404`, and a rollback to it answers
 `422 unknown-version`. Keep enough history to cover the rollbacks and comparisons your
 operators actually reach for.

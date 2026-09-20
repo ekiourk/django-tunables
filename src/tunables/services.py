@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -29,6 +30,8 @@ from tunables.errors import (
 from tunables.models import ChangeItem, ChangeSet, Snapshot, State, TunableDefinition, TunableValue
 from tunables.publishers import publish
 from tunables.registry import get_catalogue
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -402,11 +405,16 @@ def stored_overrides(catalogue: Catalogue) -> dict[str, Any]:
     return {row.key: row.value for row in TunableValue.objects.all() if row.key in known}
 
 
-def prune_snapshots(*, keep: int | None = None, before: datetime | None = None, dry_run: bool = False) -> list[int]:
+def prune_snapshots(
+    *, keep: int | None = None, before: datetime | None = None, dry_run: bool = False, batch_size: int = 500
+) -> list[int]:
     """Remove snapshot documents outside the retention policy and return the versions removed, oldest first.
 
     Version 0 and the current version always stay. Change sets and items are never touched.
+    Deletion runs in batches of ``batch_size`` versions, and every real prune is logged.
     """
+    if batch_size < 1:
+        raise ValueError("prune_snapshots needs a batch_size of at least 1")
     if (keep is None) == (before is None):
         raise ValueError("prune_snapshots takes keep or before, not both and not neither")
     stored = sorted(Snapshot.objects.values_list("version", flat=True))
@@ -419,8 +427,14 @@ def prune_snapshots(*, keep: int | None = None, before: datetime | None = None, 
         old = Snapshot.objects.filter(created_at__lt=before).values_list("version", flat=True)
         candidates = sorted(old)
     doomed = [version for version in candidates if version not in protected]
-    if doomed and not dry_run:
-        Snapshot.objects.filter(version__in=doomed).delete_rows()
+    if not doomed or dry_run:
+        return doomed
+    for start in range(0, len(doomed), batch_size):
+        Snapshot.objects.filter(version__in=doomed[start : start + batch_size]).delete_rows()
+    policy = f"keep={keep}" if keep is not None else f"before={before}"
+    subject = f"version {doomed[0]}" if len(doomed) == 1 else f"versions {doomed[0]} to {doomed[-1]}"
+    plural = "snapshot" if len(doomed) == 1 else "snapshots"
+    logger.info("pruned %d %s, %s, policy %s", len(doomed), plural, subject, policy)
     return doomed
 
 

@@ -2,9 +2,11 @@
 
 ## Unreleased
 
-- New command `tunables_prune_snapshots`, with `--keep N`, `--before ISO8601` and
-  `--dry-run`. It removes old snapshot documents while version 0, the current version,
-  and the whole change history stay in place.
+- New command `tunables_prune_snapshots`, with `--keep N`, `--before ISO8601`,
+  `--dry-run` and `--batch-size N`. It removes old snapshot documents while version 0,
+  the current version, and the whole change history stay in place. Deletion runs in
+  batches of 500 versions by default, and every prune is logged under the
+  `tunables.services` logger with its policy and the versions removed.
 - `tunables_protect_history` now allows `DELETE` on the snapshot table, so retention runs
   on a protected deployment. Its triggers still reject every `UPDATE` and `TRUNCATE`, and
   still reject `DELETE` on the change sets and items, which are the audit trail. Reinstall

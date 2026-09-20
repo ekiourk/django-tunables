@@ -2,8 +2,7 @@
 
 The catalogue lives in code, and the database holds a mirror of it plus a hash of its
 structure. `tunables_sync` brings the two together. Between a deploy and that command
-there is a window where the code and the database disagree, and this page describes what
-happens in it.
+the code and the database disagree, and some of the package stops answering.
 
 ## What the hash covers
 
