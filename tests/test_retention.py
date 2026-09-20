@@ -1,5 +1,7 @@
+import logging
 from datetime import UTC, datetime
 from io import StringIO
+from typing import Any
 
 import pytest
 from django.core.management import call_command
@@ -138,3 +140,58 @@ def test_delete_rows_is_the_only_way_through_the_guard(history: None) -> None:
 
 def test_prune_needs_no_catalogue_state(db: None) -> None:
     assert prune_snapshots(keep=2) == []
+
+
+@pytest.fixture
+def long_history(synced: SyncResult) -> None:
+    for rate in [0.10 + step / 100 for step in range(9)]:
+        apply(Change("pricing.vat_rate", round(rate, 2)))
+
+
+def test_deletion_runs_in_batches(long_history: None, django_assert_num_queries: Any) -> None:
+    assert versions() == list(range(10))
+    # One query lists the versions, then one delete per batch of three.
+    with django_assert_num_queries(4):
+        removed = prune_snapshots(keep=1, batch_size=3)
+    assert removed == [1, 2, 3, 4, 5, 6, 7, 8]
+    assert versions() == [0, 9]
+
+
+def test_a_batch_larger_than_the_work_deletes_once(long_history: None, django_assert_num_queries: Any) -> None:
+    with django_assert_num_queries(2):
+        prune_snapshots(keep=1, batch_size=500)
+    assert versions() == [0, 9]
+
+
+def test_batch_size_must_be_positive(history: None) -> None:
+    for size in (0, -1):
+        with pytest.raises(ValueError, match="batch_size"):
+            prune_snapshots(keep=1, batch_size=size)
+    with pytest.raises(CommandError, match="--batch-size"):
+        run("--keep", "1", "--batch-size", "0")
+
+
+def test_a_prune_is_logged(history: None, caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.INFO, logger="tunables.services"):
+        prune_snapshots(keep=2)
+    assert len(caplog.records) == 1
+    assert caplog.records[0].getMessage() == "pruned 3 snapshots, versions 1 to 3, policy keep=2"
+
+
+def test_a_before_prune_names_its_policy(history: None, caplog: pytest.LogCaptureFixture) -> None:
+    Snapshot._base_manager.filter(version=1).update(created_at=datetime(2026, 5, 1, tzinfo=UTC))
+    with caplog.at_level(logging.INFO, logger="tunables.services"):
+        prune_snapshots(before=datetime(2026, 6, 1, tzinfo=UTC))
+    assert caplog.records[0].getMessage() == ("pruned 1 snapshot, version 1, policy before=2026-06-01 00:00:00+00:00")
+
+
+def test_a_dry_run_logs_nothing(history: None, caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.INFO, logger="tunables.services"):
+        assert prune_snapshots(keep=2, dry_run=True) == [1, 2, 3]
+        assert prune_snapshots(keep=99) == []
+    assert caplog.records == []
+
+
+def test_the_command_passes_the_batch_size(long_history: None, django_assert_num_queries: Any) -> None:
+    assert run("--keep", "1", "--batch-size", "4") == "removed 8 snapshots: versions 1 to 8\n"
+    assert versions() == [0, 9]

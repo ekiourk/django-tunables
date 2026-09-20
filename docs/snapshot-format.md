@@ -121,6 +121,13 @@ catalogue under frequent change fills it faster than anyone expects.
 removes the rest. `--before 2026-01-01T00:00:00+00:00` removes by age instead, and
 `--dry-run` reports without deleting.
 
+Deletion runs in batches of 500 versions per statement, which `--batch-size` changes. A
+first prune on a table that has grown for years therefore avoids one enormous
+transaction.
+
+Every prune that deletes something writes an info line to the `tunables.services` logger
+naming the policy and the versions removed. Grep for it when a version has gone missing.
+
 Version 0 and the current version always stay, whatever the policy asks for. Version 0
 is the all-defaults baseline and the current one is what every reader polls for. Change
 sets and change items are never touched, so the audit trail stays complete and a pruned
