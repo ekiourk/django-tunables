@@ -39,11 +39,11 @@ drops the cache by hand, which tests and long-running commands sometimes want.
 
 ## Before the first sync
 
-The reader never refuses to answer. A database with no state row serves the defaults
-declared in code at version 0, so a process that starts before `tunables_sync` still
-runs. A catalogue whose structure no longer matches the mirror keeps serving overrides
-for the keys the running code declares, since the API's `503` exists to protect writes,
-not reads in your own code.
+A database with no state row serves the defaults declared in code at version 0, so a
+process that starts before `tunables_sync` still runs. A catalogue whose structure no
+longer matches the mirror keeps serving overrides for the keys the running code
+declares. The `503` on the API guards writes against a mirror that has never seen the
+catalogue, and your own reads have nothing to guard against.
 
 ## Choosing between the reader and a snapshot
 
