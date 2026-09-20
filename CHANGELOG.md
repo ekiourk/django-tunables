@@ -1,43 +1,53 @@
 # Changelog
 
-## Unreleased
+## 0.4.0, 2026-09-20
 
-- New command `tunables_prune_snapshots`, with `--keep N`, `--before ISO8601`,
-  `--dry-run` and `--batch-size N`. It removes old snapshot documents while version 0,
-  the current version, and the whole change history stay in place. Deletion runs in
-  batches of 500 versions by default, and every prune is logged under the
-  `tunables.services` logger with its policy and the versions removed.
-- `tunables_protect_history` now allows `DELETE` on the snapshot table, so retention runs
-  on a protected deployment. Its triggers still reject every `UPDATE` and `TRUNCATE`, and
-  still reject `DELETE` on the change sets and items, which are the audit trail. Reinstall
-  the triggers with `tunables_protect_history` after upgrading to pick up the change.
+Django code can read its own tunables through a cached in-process reader, the schema
+endpoints filter by tag, and snapshots can be pruned.
+
+Changes to existing behaviour:
+
+- `tunables_protect_history` allows `DELETE` on the snapshot table, so retention runs on
+  a protected deployment. Its triggers still reject every `UPDATE` and `TRUNCATE`, and
+  still reject `DELETE` on the change sets and items, which are the audit trail. Run
+  `tunables_protect_history` again after upgrading to pick the change up.
+- A `tag` query value that names no stored tag is `422 unknown-tag`, with the first
+  unknown name in `tag`. `GET definitions/?tag=` used to match nothing for an unknown
+  name; it now answers the problem, like the two schema endpoints.
+- A version conflict in the Django admin keeps what the operator typed. The form comes
+  back with their own values, the hidden version updated to the current one, and a
+  message naming the tunables another change set moved in the meantime. It used to come
+  back holding the stored values.
+
+Additions:
+
 - `from tunables import values` reads the effective values inside the Django project:
   `values.get("pricing.vat_rate")`, `values.group("pricing")` and `values.all()`, all
   coerced to the tunable's Python type. Each process caches the whole set and checks the
   stored version at most once per `READ_CACHE_TTL` seconds, one second by default. A
-  write in the process drops its cache at once. Before the first sync the reader serves
-  the defaults from code instead of raising.
-- New setting `READ_CACHE_TTL`.
-- A version conflict in the admin keeps what the operator typed. The form comes back
-  with their own values, the hidden version updated to the current one, and a message
-  naming the tunables another change set moved in the meantime.
-- New `tunables.publishers.QueuedPublisher`, a base class for publishers that hand the
-  version to a queue instead of sending the snapshot inline. Publishers run inside the
-  request that made the change, so anything doing network work belongs on a queue.
-- New page on deploying a catalogue change: what the structure hash covers, which
-  surfaces answer `503` in the window before `tunables_sync`, and how to order the steps
-  of a rolling deployment.
+  write in the process drops its cache at once, and before the first sync the reader
+  serves the defaults from code. New setting `READ_CACHE_TTL`, and a new page,
+  `docs/reading.md`.
 - `GET groups/{group}/schema/` and `GET schema/` take a repeatable `tag` parameter and
   describe only the tunables carrying every named tag. `properties` and the UI controls
   shrink to those tunables, a section left without controls is dropped, and `$id`,
   `x-validators` and `additionalProperties` stay as they are. A group with no matching
   tunable is `404` on the group endpoint and omitted from `schema/`. Matching reads the
   database, so a manual tag assignment takes effect without `tunables_sync`.
-- Every property of a group schema carries `x-tags`, the stored tag names of the tunable.
-  The snapshot schema from the API has them too; `tunables_export --schema` writes `[]`.
-- A `tag` query value that names no stored tag is `422 unknown-tag`, with the first
-  unknown name in `tag`. This also applies to `GET definitions/?tag=`, which used to
-  match nothing.
+- Every property of a group schema carries `x-tags`, the stored tag names of the
+  tunable. The snapshot schema from the API has them too; `tunables_export --schema`
+  writes `[]`, since it reads no database.
+- New command `tunables_prune_snapshots`, with `--keep N`, `--before ISO8601`,
+  `--dry-run` and `--batch-size N`. It removes old snapshot documents while version 0,
+  the current version, and the whole change history stay in place. Deletion runs in
+  batches of 500 versions by default, and every prune is logged under the
+  `tunables.services` logger with its policy and the versions removed.
+- `tunables.publishers.QueuedPublisher`, a base class for publishers that hand the
+  version to a queue instead of sending the snapshot inline. Publishers run inside the
+  request that made the change, so anything doing network work belongs on a queue.
+- A new page, `docs/deployment.md`: what the structure hash covers, which surfaces
+  answer `503` in the window before `tunables_sync`, and how to order the steps of a
+  rolling deployment.
 
 ## 0.3.0, 2026-09-19
 
