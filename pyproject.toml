@@ -1,6 +1,6 @@
 [project]
 name = "django-tunables"
-version = "0.4.0"
+version = "0.5.0"
 requires-python = ">=3.12"
 description = "Runtime-tunable parameters for Django with change sets, versioned snapshots and schema-described forms."
 license = {text = "MIT"}
