@@ -95,6 +95,10 @@ class Group:
                 raise CatalogueError(f"duplicate tunable {tunable.name!r} in group {self.name!r}")
             seen.add(tunable.name)
         self._check_sections()
+        for validator in self.validators:
+            check = getattr(validator, "check_group", None)
+            if check is not None:
+                check(self)
 
     def _check_sections(self) -> None:
         names = {tunable.name for tunable in self.tunables}
