@@ -85,7 +85,23 @@ A reader that starts before any snapshot is reachable needs the all-defaults doc
 `manage.py tunables_export --defaults` writes it from the catalogue in code, with
 `version` 0, an empty `overridden`, the catalogue hash and the host's `environment`,
 and needs neither a database nor `tunables_sync`. The same document is available in
-Python as `tunables.document.defaults_document(catalogue)`.
+Python as `tunables.document.defaults_document(catalogue, environment="production")`,
+where `environment` defaults to the empty string.
+
+Both that function and `tunables.schema.document_schema(catalogue)` work with no Django
+settings configured, so a build script in a contracts package can write the committed
+artifacts from the catalogue alone:
+
+```python
+from tunables.document import defaults_document
+from tunables.schema import document_schema
+
+Path("defaults.json").write_text(json.dumps(defaults_document(catalogue), indent=2))
+Path("snapshot.schema.json").write_text(json.dumps(document_schema(catalogue), indent=2))
+```
+
+Generating them through `manage.py tunables_export` needs a Django project, and reads
+`TUNABLES["ENVIRONMENT"]` for you.
 
 The output equals the snapshot 0 that `tunables_sync` writes on a fresh database with
 the same catalogue and environment, except for `created_at`, which is the time of the

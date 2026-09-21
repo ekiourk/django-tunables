@@ -197,6 +197,11 @@ def test_export_schema_needs_no_database(db: None, tmp_path: Path) -> None:
     assert json.loads(run("tunables_export", "--schema"))["$id"] == f"urn:tunables:snapshot:v1:{catalogue.version}"
 
 
+@override_settings(TUNABLES={"CATALOGUE": "tests.catalogue.catalogue", "ENVIRONMENT": "staging"})
+def test_export_defaults_stamps_the_configured_environment(db: None) -> None:
+    assert json.loads(run("tunables_export", "--defaults"))["environment"] == "staging"
+
+
 def test_export_defaults_and_schema_are_exclusive(db: None) -> None:
     with pytest.raises(CommandError, match="cannot be combined"):
         run("tunables_export", "--defaults", "--schema")

@@ -13,6 +13,11 @@
 - `ConstraintError` and `CatalogueError` are exported from the package root, so a
   catalogue module imports everything it needs from `tunables`. The service-level errors
   stay in `tunables.errors`.
+- `defaults_document(catalogue, *, created_at=None, environment="")` takes the
+  environment as an argument and stamps `datetime.now(UTC)` when no `created_at` is
+  given, so it needs no Django settings. `tunables_export --defaults` passes
+  `TUNABLES["ENVIRONMENT"]`, so the command is unchanged. A host with `USE_TZ = False`
+  used to get a `ValueError` from the default timestamp; it now gets a UTC one.
 
 ## 0.4.0, 2026-09-20
 

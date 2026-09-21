@@ -5,6 +5,7 @@ from typing import Any
 
 from django.core.management.base import CommandError, CommandParser
 
+from tunables.conf import settings
 from tunables.document import defaults_document
 from tunables.management.base import TunablesCommand
 from tunables.registry import get_catalogue
@@ -43,7 +44,7 @@ class Command(TunablesCommand):
         if options["schema"]:
             payload = document_schema(get_catalogue())
         elif options["defaults"]:
-            payload = defaults_document(get_catalogue(), created_at=created_at)
+            payload = defaults_document(get_catalogue(), created_at=created_at, environment=settings.ENVIRONMENT)
         else:
             payload = latest_snapshot().document
         text = json.dumps(payload, indent=2) + "\n"
