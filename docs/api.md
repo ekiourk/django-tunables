@@ -259,8 +259,20 @@ or `scope: "catalogue"` for a catalogue validator.
 Tag writes change no value and create no change set, so `X-Tunables-Version` is the
 same before and after. They require sync like every write. `PUT definitions/{key}/tags/`
 is subject to `EDITABLE_GROUPS` through the definition's group; creating, editing and
-deleting tags is not, since a tag belongs to no group. No actor is recorded for tag
-writes.
+deleting tags is not, since a tag belongs to no group.
+
+The actor is resolved the same way as for a change set, from `ACTOR_HEADER` or the
+authenticated user. It is written to the assignment row as `assigned_by`, alongside
+`assigned_at`, and every tag change writes one line at info level to the
+`tunables.tags` logger:
+
+```
+tag 'review' created by alice
+tags of 'pricing.vat_rate' set by alice: was [money], now [money, review]
+```
+
+Rows that `tunables_sync` seeds from the catalogue say `system`. A call from a shell
+leaves `assigned_by` empty and logs "an unnamed caller".
 
 `code` is the contract; `detail` is text for people. The package routes its messages
 through Django's translation machinery, so `detail` comes out in the request's active

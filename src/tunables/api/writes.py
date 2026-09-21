@@ -120,4 +120,5 @@ class DefinitionTags(TunablesAPIView):
         if key not in set(catalogue.keys()):
             raise NotFound(f"unknown tunable {key!r}")
         check_group_editable(request, key.partition(".")[0])
-        return Response({"key": key, "tags": set_manual_tags(key, serializer.validated_data["tags"])})
+        tags = set_manual_tags(key, serializer.validated_data["tags"], actor=resolve_actor(request).identity)
+        return Response({"key": key, "tags": tags})

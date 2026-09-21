@@ -133,7 +133,8 @@ The admin uses Django's standard permissions with one addition:
 
 Every value write in the admin creates a change set, which is why `add_changeset` is
 the write permission for values. Tags are metadata and create no change set, so they
-take the `Tag` permissions instead. Someone can label tunables without being able to
+take the `Tag` permissions instead. Tag edits in the admin record the logged-in user on
+the assignment row and write a line to the `tunables.tags` logger. Someone can label tunables without being able to
 change them, and the other way round. `TUNABLES["EDITABLE_GROUPS"]` narrows it further, with the same
 callable the API uses: the index shows an Edit link only for groups the callable
 returns, the edit view refuses the others, and the rollback action refuses a rollback

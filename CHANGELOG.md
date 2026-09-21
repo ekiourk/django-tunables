@@ -25,6 +25,12 @@ Changes to existing behaviour:
 
 Additions:
 
+- Tag changes leave a record. The assignment row gains `assigned_by` and `assigned_at`,
+  migration `0005`, and every tag change writes one info line to the `tunables.tags`
+  logger naming the actor and, for an assignment, the tags before and after. Rows seeded
+  by `tunables_sync` say `system`. Tags still create no change set and do not move the
+  version.
+
 - `tunables.api.permissions.TunablesPermissions`, a DRF permission class that answers
   with the same Django permissions the admin checks: the view permission for reads, the
   `Tag` permissions for tag writes, `add_changeset` for everything else. Name it in

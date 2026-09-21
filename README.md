@@ -249,10 +249,11 @@ Writes accept `If-Match` for optimistic concurrency and every response carries
 `X-Tunables-Version`. Errors are RFC 9457 problem documents. The full reference,
 including the problem types and error codes, is in [docs/api.md](docs/api.md).
 
-Tags are metadata and sit outside the audit trail. Creating a tag, renaming it, or
-attaching it to a tunable writes no change set and records no actor or reason, and it
-does not move the version. Values are the audited part of the package; labels on them
-are not.
+Tags are metadata and sit outside the change history. Creating a tag, renaming it, or
+attaching it to a tunable writes no change set, takes no reason, and does not move the
+version. They are still traceable: an assignment row stores who attached the tag and
+when, and every tag change writes a line to the `tunables.tags` logger. Values are the
+versioned part of the package; labels on them are recorded but not versioned.
 
 ## Admin
 

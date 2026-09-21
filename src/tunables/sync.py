@@ -21,6 +21,7 @@ from tunables.models import (
 )
 from tunables.registry import get_catalogue
 from tunables.services import rule_violations, write_snapshot
+from tunables.tags import SYSTEM
 
 
 @dataclass(frozen=True)
@@ -152,7 +153,7 @@ def _seed_tags(catalogue: Catalogue) -> None:
     tags = Tag.objects.in_bulk(seed_names, field_name="name")
     for key, tag in seeds:
         TunableDefinitionTag.objects.update_or_create(
-            definition=definitions[key], tag=tags[tag], defaults={"seeded": True}
+            definition=definitions[key], tag=tags[tag], defaults={"seeded": True, "assigned_by": SYSTEM}
         )
     for row in TunableDefinitionTag.objects.filter(seeded=True).select_related("definition", "tag"):
         if (row.definition.key, row.tag.name) not in seeds:

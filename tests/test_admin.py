@@ -636,3 +636,29 @@ def test_the_definitions_page_links_tags_for_a_tagger(synced: SyncResult) -> Non
     assert "/tags/" in content
     plain = staff("tunables.view_tunabledefinition")
     assert "/tags/" not in plain.get(f"{INDEX}definitions/").content.decode()
+
+
+def test_admin_tagging_records_the_logged_in_user(synced: SyncResult) -> None:
+    from tunables.models import TunableDefinitionTag
+
+    tagger = staff("tunables.view_tunabledefinition", "tunables.change_tag")
+    tagger.post(tags_url("pricing.vat_rate"), {"tags": "review"})
+    row = TunableDefinitionTag.objects.get(tag__name="review")
+    assert row.assigned_by == "staff"
+
+
+def test_the_tag_admin_logs_its_writes(admin_client: Client, synced: SyncResult, caplog: Any) -> None:
+    import logging
+
+    from tunables.models import Tag
+
+    with caplog.at_level(logging.INFO, logger="tunables.tags"):
+        admin_client.post("/admin/tunables/tag/add/", {"name": "review", "description": "Look again"})
+        tag = Tag.objects.get(name="review")
+        admin_client.post(f"/admin/tunables/tag/{tag.pk}/change/", {"name": "review", "description": "Changed"})
+        admin_client.post(f"/admin/tunables/tag/{tag.pk}/delete/", {"post": "yes"})
+    assert [record.getMessage() for record in caplog.records] == [
+        "tag 'review' created by admin",
+        "tag 'review' described by admin",
+        "tag 'review' deleted by admin",
+    ]

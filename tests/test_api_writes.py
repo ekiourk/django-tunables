@@ -520,3 +520,16 @@ def test_check_group_editable_helper(api: APIClient) -> None:
         with pytest.raises(GroupNotEditable) as info:
             check_group_editable(request, "thermostat")
     assert info.value.group == "thermostat"
+
+
+def test_tag_writes_record_the_actor(api: APIClient) -> None:
+    from tunables.models import TunableDefinitionTag
+
+    api.put(
+        BASE + "definitions/pricing.vat_rate/tags/",
+        {"tags": ["review"]},
+        format="json",
+        HTTP_X_TUNABLES_ACTOR="alice",
+    )
+    row = TunableDefinitionTag.objects.get(tag__name="review")
+    assert row.assigned_by == "alice"

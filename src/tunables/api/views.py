@@ -12,6 +12,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 
 from tunables.api import problems
+from tunables.api.actors import resolve_actor
 from tunables.api.base import TunablesAPIView
 from tunables.api.serializers import (
     ChangeSetDetailSerializer,
@@ -136,7 +137,11 @@ class TagList(TunablesAPIView):
     def post(self, request: Request) -> Response:
         serializer = TagRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        tag = create_tag(serializer.validated_data["name"], serializer.validated_data["description"])
+        tag = create_tag(
+            serializer.validated_data["name"],
+            serializer.validated_data["description"],
+            actor=resolve_actor(request).identity,
+        )
         return Response(_tag_summary(tag), status=201)
 
     def get(self, request: Request) -> Response:
@@ -151,7 +156,7 @@ class TagDetail(TunablesAPIView):
         serializer = TagDescriptionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
-            update_tag(name, serializer.validated_data["description"])
+            update_tag(name, serializer.validated_data["description"], actor=resolve_actor(request).identity)
         except Tag.DoesNotExist:
             raise NotFound(f"unknown tag {name!r}") from None
         tag = Tag.objects.annotate(definition_count=Count("definitions")).get(name=name)
@@ -159,7 +164,7 @@ class TagDetail(TunablesAPIView):
 
     def delete(self, request: Request, name: str) -> Response:
         try:
-            delete_tag(name)
+            delete_tag(name, actor=resolve_actor(request).identity)
         except Tag.DoesNotExist:
             raise NotFound(f"unknown tag {name!r}") from None
         return Response(status=204)
