@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Sequence
+from functools import partial
 
 from django.db import transaction
 from django.utils import timezone
@@ -17,6 +18,11 @@ def _who(actor: str) -> str:
     return actor or "an unnamed caller"
 
 
+def _log(message: str, *args: object) -> None:
+    """Log after the transaction commits, so a rolled back change leaves no line."""
+    transaction.on_commit(partial(logger.info, message, *args))
+
+
 def _check_name(name: str) -> None:
     if not TAG.match(name):
         raise ValueError(f"tag name {name!r} must match {TAG.pattern}")
@@ -28,7 +34,7 @@ def create_tag(name: str, description: str = "", *, actor: str = "") -> Tag:
     if Tag.objects.filter(name=name).exists():
         raise TagExists(name)
     tag = Tag.objects.create(name=name, description=description)
-    logger.info("tag %r created by %s", name, _who(actor))
+    _log("tag %r created by %s", name, _who(actor))
     return tag
 
 
@@ -37,8 +43,23 @@ def update_tag(name: str, description: str, *, actor: str = "") -> Tag:
     tag = Tag.objects.get(name=name)
     tag.description = description
     tag.save(update_fields=["description"])
-    logger.info("tag %r described by %s", name, _who(actor))
+    _log("tag %r described by %s", name, _who(actor))
     return tag
+
+
+def log_admin_save(before: str | None, after: str, *, actor: str = "") -> None:
+    """Log a save from the tag admin, which edits the row rather than calling the helpers."""
+    if before is None:
+        _log("tag %r created by %s", after, _who(actor))
+    elif before != after:
+        _log("tag %r renamed to %r by %s", before, after, _who(actor))
+    else:
+        _log("tag %r described by %s", after, _who(actor))
+
+
+def log_admin_delete(name: str, *, actor: str = "") -> None:
+    """Log a delete from the tag admin."""
+    _log("tag %r deleted by %s", name, _who(actor))
 
 
 def delete_tag(name: str, *, actor: str = "") -> None:
@@ -47,7 +68,7 @@ def delete_tag(name: str, *, actor: str = "") -> None:
     if tag.from_catalogue:
         raise TagSeeded(name)
     tag.delete()
-    logger.info("tag %r deleted by %s", name, _who(actor))
+    _log("tag %r deleted by %s", name, _who(actor))
 
 
 @transaction.atomic
@@ -78,5 +99,5 @@ def set_manual_tags(key: str, names: Sequence[str], *, actor: str = "", may_crea
         )
     after = sorted(TunableDefinitionTag.objects.filter(definition=definition).values_list("tag__name", flat=True))
     if after != before:
-        logger.info("tags of %r set by %s: was [%s], now [%s]", key, _who(actor), ", ".join(before), ", ".join(after))
+        _log("tags of %r set by %s: was [%s], now [%s]", key, _who(actor), ", ".join(before), ", ".join(after))
     return after

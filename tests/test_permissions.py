@@ -97,3 +97,15 @@ def test_assigning_an_unknown_tag_needs_the_create_permission(synced: SyncResult
     maker = client_with("view_tunabledefinition", "change_tag", "add_tag")
     assert maker.put(url, {"tags": ["brandnew"]}, format="json").status_code == 200
     assert Tag.objects.filter(name="brandnew").exists()
+
+
+def test_the_scope_comes_from_the_view_not_a_class_list() -> None:
+    import inspect
+
+    from tunables.api import permissions, views, writes
+
+    assert "from tunables.api.views import" not in inspect.getsource(permissions)
+    assert views.TagList.permission_scope == "tag"
+    assert views.TagDetail.permission_scope == "tag"
+    assert writes.DefinitionTags.permission_scope == "tag"
+    assert views.GroupList.permission_scope == "value"

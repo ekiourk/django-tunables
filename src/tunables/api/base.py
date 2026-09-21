@@ -1,4 +1,5 @@
 from collections.abc import Callable, Sequence
+from functools import cached_property
 from typing import Any, ClassVar
 
 from django.utils.module_loading import import_string
@@ -23,6 +24,7 @@ class TunablesAPIView(APIView):
     """Shared behaviour: settings-driven auth, sync check, X-Tunables-Version header, problem responses."""
 
     reads_need_sync: ClassVar[bool] = True
+    permission_scope: ClassVar[str] = "value"
 
     def get_authenticators(self) -> list[BaseAuthentication]:
         configured = settings.API_AUTHENTICATION_CLASSES
@@ -35,24 +37,26 @@ class TunablesAPIView(APIView):
     def get_exception_handler(self) -> Callable[..., Response | None]:
         return problems.exception_handler
 
+    @cached_property
+    def state(self) -> State | None:
+        """The state row as it was when this request first needed it."""
+        return State.objects.filter(pk=1).first()
+
     def initial(self, request: Request, *args: Any, **kwargs: Any) -> None:
         super().initial(request, *args, **kwargs)
-        self._state = State.objects.filter(pk=1).first()
-        self._state_loaded = True
         if request.method in SAFE_METHODS and not self.reads_need_sync:
             return
-        if not is_current(self._state):
+        if not is_current(self.state):
             raise CatalogueOutOfSync("catalogue changed since the last sync; run tunables_sync")
 
     def finalize_response(self, request: Request, response: Response, *args: Any, **kwargs: Any) -> Response:
         response = super().finalize_response(request, response, *args, **kwargs)
-        version = self._version(request)
+        version = self._version()
         if version is not None:
             response["X-Tunables-Version"] = str(version)
         return response
 
-    def _version(self, request: Request) -> int | None:
-        """The row read in initial. A write moved the version, and a rejected request never read it."""
-        fresh = request.method not in SAFE_METHODS or not getattr(self, "_state_loaded", False)
-        state = State.objects.filter(pk=1).first() if fresh else self._state
+    def _version(self) -> int | None:
+        """Read after the handler, so the header can never be older than the body it describes."""
+        state = State.objects.filter(pk=1).first()
         return state.current_version if state is not None else None

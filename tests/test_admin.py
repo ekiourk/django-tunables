@@ -647,20 +647,24 @@ def test_admin_tagging_records_the_logged_in_user(synced: SyncResult) -> None:
     assert row.assigned_by == "staff"
 
 
-def test_the_tag_admin_logs_its_writes(admin_client: Client, synced: SyncResult, caplog: Any) -> None:
+def test_the_tag_admin_logs_its_writes(
+    admin_client: Client, synced: SyncResult, caplog: Any, django_capture_on_commit_callbacks: Any
+) -> None:
     import logging
 
     from tunables.models import Tag
 
-    with caplog.at_level(logging.INFO, logger="tunables.tags"):
+    with caplog.at_level(logging.INFO, logger="tunables.tags"), django_capture_on_commit_callbacks(execute=True):
         admin_client.post("/admin/tunables/tag/add/", {"name": "review", "description": "Look again"})
         tag = Tag.objects.get(name="review")
         admin_client.post(f"/admin/tunables/tag/{tag.pk}/change/", {"name": "review", "description": "Changed"})
+        admin_client.post(f"/admin/tunables/tag/{tag.pk}/change/", {"name": "recheck", "description": "Changed"})
         admin_client.post(f"/admin/tunables/tag/{tag.pk}/delete/", {"post": "yes"})
     assert [record.getMessage() for record in caplog.records] == [
         "tag 'review' created by admin",
         "tag 'review' described by admin",
-        "tag 'review' deleted by admin",
+        "tag 'review' renamed to 'recheck' by admin",
+        "tag 'recheck' deleted by admin",
     ]
 
 

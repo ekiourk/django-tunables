@@ -59,7 +59,7 @@ narrowing writes by group.
 
 | Header | Direction | Meaning |
 |---|---|---|
-| `X-Tunables-Version` | response | The current version, on every response including errors. After a write it is the new version. |
+| `X-Tunables-Version` | response | The current version, read after the handler, so it is never older than the body. On every response including errors. After a write it is the new version. |
 | `ETag` | response | `"<version>"` on `values/`, `groups/{group}/values/`, `snapshots/latest/` and `snapshots/{version}/`. |
 | `If-None-Match` | request | On the endpoints above, a matching tag answers `304 Not Modified` with no body. |
 | `If-Match` | request | On writes, `"<version>"` sets the expected version. A mismatch is `412`. `*` or no header means the write is applied regardless. |
@@ -274,6 +274,9 @@ tags of 'pricing.vat_rate' set by alice: was [money], now [money, review]
 Rows that `tunables_sync` seeds from the catalogue say `system`. A call from a shell
 leaves `assigned_by` empty and logs "an unnamed caller". An actor longer than 255
 characters is truncated to fit the column.
+
+A view declares which family it belongs to with `permission_scope`, `"tag"` or the
+default `"value"`, so a host subclassing a view inherits the right rule.
 
 `PUT definitions/{key}/tags/` creates a tag it has never seen, which under
 `TunablesPermissions` needs `tunables.add_tag`. A caller holding only

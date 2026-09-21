@@ -38,8 +38,7 @@ from tunables.services import (
     rule_violations,
 )
 from tunables.sync import is_synced
-from tunables.tags import logger as tag_logger
-from tunables.tags import set_manual_tags
+from tunables.tags import log_admin_delete, log_admin_save, set_manual_tags
 
 if TYPE_CHECKING:
     ModelAdmin = admin.ModelAdmin[Any]
@@ -397,14 +396,14 @@ class TagAdmin(ModelAdmin):
         return queryset.annotate(definition_count=Count("definitions"))
 
     def save_model(self, request: HttpRequest, obj: Tag, form: Any, change: bool) -> None:
+        before = Tag.objects.filter(pk=obj.pk).values_list("name", flat=True).first() if change else None
         super().save_model(request, obj, form, change)
-        verb = "described" if change else "created"
-        tag_logger.info("tag %r %s by %s", obj.name, verb, request.user.get_username())
+        log_admin_save(before, obj.name, actor=request.user.get_username())
 
     def delete_model(self, request: HttpRequest, obj: Tag) -> None:
         name = obj.name
         super().delete_model(request, obj)
-        tag_logger.info("tag %r deleted by %s", name, request.user.get_username())
+        log_admin_delete(name, actor=request.user.get_username())
 
     @admin.display(description=gettext_lazy("Definitions"), ordering="definition_count")
     def definition_count(self, tag: Tag) -> int:

@@ -114,6 +114,8 @@ class Import(TunablesAPIView):
 
 
 class DefinitionTags(TunablesAPIView):
+    permission_scope = "tag"
+
     def put(self, request: Request, key: str) -> Response:
         serializer = DefinitionTagsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

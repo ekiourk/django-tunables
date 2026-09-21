@@ -25,11 +25,12 @@ from tunables.catalogue import Catalogue, Category, Group, Tunable, validator_de
 from tunables.changes import Change
 from tunables.conf import settings
 from tunables.errors import UnknownVersion
-from tunables.models import ChangeSet, PublisherState, Snapshot, State, Tag
+from tunables.models import ChangeSet, PublisherState, Snapshot, Tag
 from tunables.registry import get_catalogue
 from tunables.schema import describe_group, document_schema
 from tunables.search import match_definitions, require_tags, tags_by_key
 from tunables.services import diff_versions, latest_snapshot, rule_violations
+from tunables.sync import is_current
 from tunables.tags import create_tag, delete_tag, update_tag
 
 
@@ -132,6 +133,8 @@ def _tag_summary(tag: Tag) -> dict[str, Any]:
 
 
 class TagList(TunablesAPIView):
+    permission_scope = "tag"
+
     reads_need_sync = False
 
     def post(self, request: Request) -> Response:
@@ -150,6 +153,8 @@ class TagList(TunablesAPIView):
 
 
 class TagDetail(TunablesAPIView):
+    permission_scope = "tag"
+
     reads_need_sync = False
 
     def patch(self, request: Request, name: str) -> Response:
@@ -397,10 +402,10 @@ class Status(TunablesAPIView):
 
     def get(self, request: Request) -> Response:
         code_version = get_catalogue().version
-        state = State.objects.filter(pk=1).first()
+        state = self.state
         return Response(
             {
-                "synced": state is not None and state.catalogue_version == code_version,
+                "synced": is_current(state),
                 "version": None if state is None else state.current_version,
                 "catalogue_version": None if state is None else state.catalogue_version,
                 "code_catalogue_version": code_version,

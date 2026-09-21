@@ -782,18 +782,42 @@ def test_the_index_links_to_the_mount_that_served_it(api: APIClient) -> None:
     assert second["groups"] == "http://testserver/internal/tunables/groups/"
 
 
-def test_a_read_touches_the_state_row_once(api: APIClient) -> None:
+def test_a_read_touches_the_state_row_twice_at_most(api: APIClient) -> None:
     from django.db import connection
     from django.test.utils import CaptureQueriesContext
 
-    with CaptureQueriesContext(connection) as captured:
-        assert get(api, "groups/").status_code == 200
-    state_reads = [q["sql"] for q in captured.captured_queries if "tunables_state" in q["sql"]]
-    assert len(state_reads) == 1, state_reads
+    # Once for the sync check before the handler, once for the header after it, so the
+    # header cannot describe an older version than the body.
+    for path in ("groups/", "status/", "values/"):
+        with CaptureQueriesContext(connection) as captured:
+            assert get(api, path).status_code == 200
+        state_reads = [q["sql"] for q in captured.captured_queries if "tunables_state" in q["sql"]]
+        assert len(state_reads) <= 2, (path, state_reads)
 
 
 def test_a_write_reports_the_version_it_produced(api: APIClient) -> None:
     body = {"changes": [{"key": "pricing.vat_rate", "value": 0.3}], "reason": "r"}
     response = api.post(BASE + "changesets/", body, format="json")
     assert response.status_code == 201
+    assert response["X-Tunables-Version"] == "1"
+
+
+def test_the_header_never_lags_the_body(api: APIClient) -> None:
+    from tunables.api import base
+
+    original = base.TunablesAPIView.initial
+    written: list[int] = []
+
+    def write_between(self: Any, request: Any, *args: Any, **kwargs: Any) -> None:
+        original(self, request, *args, **kwargs)
+        if not written:
+            written.append(apply(Change("pricing.vat_rate", 0.3)).version)
+
+    base.TunablesAPIView.initial = write_between  # type: ignore[method-assign]
+    try:
+        response = api.get(BASE + "values/")
+    finally:
+        base.TunablesAPIView.initial = original  # type: ignore[method-assign]
+    assert written == [1]
+    assert response.json()["version"] == 1
     assert response["X-Tunables-Version"] == "1"
