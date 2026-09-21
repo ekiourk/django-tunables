@@ -100,8 +100,30 @@ Path("defaults.json").write_text(json.dumps(defaults_document(catalogue), indent
 Path("snapshot.schema.json").write_text(json.dumps(document_schema(catalogue), indent=2))
 ```
 
-Generating them through `manage.py tunables_export` needs a Django project, and reads
-`TUNABLES["ENVIRONMENT"]` for you.
+`tunables.export.keys_module(catalogue)` is the third offline generator. It returns a
+Python module of string constants, one per key, named from the key in upper case and
+grouped by group, with `ALL_KEYS` listing them all:
+
+```python
+# pricing
+PRICING_VAT_RATE = "pricing.vat_rate"
+
+ALL_KEYS: tuple[str, ...] = (
+    PRICING_VAT_RATE,
+)
+```
+
+Committing that module gives a consumer an import error for a typo, where a bare string
+gives a runtime failure on the first message. The text is deterministic and already
+formatted in ruff's default style, with a trailing comma that keeps one name per line at
+any line length, so a host's formatter leaves the committed file alone and no drift
+check fails on whitespace. Two keys that produce the same constant, such as
+`pricing.vat_rate` and `pricing_vat.rate`, raise `CatalogueError`.
+
+Generating any of them through `manage.py tunables_export` needs a Django project.
+`--keys` writes the constants, `--defaults` the document, reading
+`TUNABLES["ENVIRONMENT"]` for you, and `--schema` the JSON Schema. The three cannot be
+combined.
 
 The output equals the snapshot 0 that `tunables_sync` writes on a fresh database with
 the same catalogue and environment, except for `created_at`, which is the time of the
@@ -128,6 +150,20 @@ Readers that share the database poll one table and fetch from another.
 | `version` | integer, unique | Snapshot version. |
 | `document` | JSON | The document above. |
 | `created_at` | timestamp with time zone | Same instant as `created_at` inside the document. |
+
+The column types the migrations create follow the backend. On PostgreSQL `document` is
+`jsonb` and `created_at` is `timestamptz`. On SQLite `document` is `TEXT` holding the
+serialised JSON. `current_version` is a plain integer column on every backend, which is
+what makes the polling loop cheap.
+
+That difference reaches the reader through its driver. A PostgreSQL driver hands back
+`document` already parsed into a dictionary, while a SQLite driver hands back the string
+it stored, and some drivers can be configured either way. A reader that may meet more
+than one backend should accept both:
+
+```python
+document = json.loads(raw) if isinstance(raw, str) else raw
+```
 
 ## Retention
 
