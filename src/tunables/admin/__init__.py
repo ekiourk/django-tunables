@@ -90,7 +90,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             wanted_tags=request.GET.getlist("tag"),
             query=request.GET.get("q", ""),
         )
-        can_tag = self.has_write_permission(request)
+        can_tag = self.has_tag_permission(request)
         editable = editable_groups(request)
         rows = [
             {
@@ -121,7 +121,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
 
     def definition_tags(self, request: HttpRequest, key: str) -> HttpResponse:
         """Edit the manual tags of one definition; seeded tags are shown read-only."""
-        if not self.has_write_permission(request):
+        if not self.has_tag_permission(request):
             raise PermissionDenied
         catalogue = get_catalogue()
         if key not in set(catalogue.keys()):
@@ -156,6 +156,10 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
 
     def has_write_permission(self, request: HttpRequest) -> bool:
         return bool(request.user.has_perm("tunables.add_changeset"))
+
+    def has_tag_permission(self, request: HttpRequest) -> bool:
+        """Labelling is metadata, so it takes the Tag permission rather than the change set one."""
+        return bool(request.user.has_perm("tunables.change_tag"))
 
     def changelist_view(self, request: HttpRequest, extra_context: dict[str, Any] | None = None) -> HttpResponse:
         if not self.has_view_or_change_permission(request):

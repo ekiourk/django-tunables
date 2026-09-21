@@ -4,13 +4,9 @@ import threading
 import time
 from typing import Any
 
-from django.core.signals import setting_changed
-from django.dispatch import receiver
-
 from tunables.conf import settings
 from tunables.errors import CatalogueError
 from tunables.registry import get_catalogue
-from tunables.signals import snapshot_published
 
 
 def _now() -> float:
@@ -90,12 +86,10 @@ class Values:
 values = Values()
 
 
-@receiver(snapshot_published)
 def _invalidate_on_publish(**_: Any) -> None:
     values.invalidate()
 
 
-@receiver(setting_changed)
 def _invalidate_on_setting_changed(*, setting: str, **_: Any) -> None:
     if setting == "TUNABLES":
         values.invalidate()
