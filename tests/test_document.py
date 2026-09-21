@@ -5,6 +5,7 @@ from importlib import resources
 from typing import Any
 
 import pytest
+from django.test import override_settings
 from jsonschema import Draft202012Validator, ValidationError
 
 from tests.catalogue import catalogue
@@ -138,15 +139,11 @@ def test_schema_rejects_broken_documents(break_document: Callable[[dict[str, Any
 
 
 def test_defaults_document_matches_build_document_with_no_overrides() -> None:
-    from django.test import override_settings
-
     from tunables.document import defaults_document
 
     assert defaults_document(catalogue, created_at=CREATED_AT) == build_document(
         catalogue, {}, version=0, created_at=CREATED_AT
     )
-    with override_settings(TUNABLES={"CATALOGUE": "tests.catalogue.catalogue", "ENVIRONMENT": "staging"}):
-        assert defaults_document(catalogue, created_at=CREATED_AT)["environment"] == "staging"
 
 
 def test_defaults_document_stamps_now_by_default() -> None:
@@ -160,3 +157,45 @@ def test_defaults_document_stamps_now_by_default() -> None:
     created_at = datetime.fromisoformat(defaults_document(catalogue)["created_at"])
     assert created_at.tzinfo is not None
     assert before - timedelta(seconds=5) <= created_at <= timezone.now()
+
+
+def test_environment_comes_from_the_argument() -> None:
+    from tunables.document import defaults_document
+
+    assert defaults_document(catalogue, created_at=CREATED_AT, environment="offline")["environment"] == "offline"
+    assert defaults_document(catalogue, created_at=CREATED_AT)["environment"] == ""
+
+
+@override_settings(TUNABLES={"CATALOGUE": "tests.catalogue.catalogue", "ENVIRONMENT": "staging"})
+def test_the_setting_no_longer_reaches_the_document() -> None:
+    from tunables.document import defaults_document
+
+    assert defaults_document(catalogue, created_at=CREATED_AT)["environment"] == ""
+
+
+def test_the_timestamp_fallback_is_utc_aware() -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from tunables.document import defaults_document
+
+    stamped = datetime.fromisoformat(defaults_document(catalogue)["created_at"])
+    assert stamped.tzinfo is not None
+    assert abs(stamped - datetime.now(UTC)) < timedelta(seconds=5)
+
+
+def test_the_document_and_the_schema_build_with_no_django_settings() -> None:
+    import json
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    script = Path(__file__).parent / "offline_document.py"
+    env = {k: v for k, v in os.environ.items() if k != "DJANGO_SETTINGS_MODULE"}
+    result = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, env=env)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout) == {
+        "environment": "offline",
+        "version": 0,
+        "id": json.loads(result.stdout)["id"],
+    }

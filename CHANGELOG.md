@@ -13,6 +13,17 @@
 - `ConstraintError` and `CatalogueError` are exported from the package root, so a
   catalogue module imports everything it needs from `tunables`. The service-level errors
   stay in `tunables.errors`.
+- `tunables.export.keys_module(catalogue)` returns a Python module of key constants,
+  one per key plus `ALL_KEYS`, and `tunables_export --keys` writes it. The text is
+  deterministic and formatted, so a committed copy survives a host's formatter
+  untouched. Two keys producing the same constant name raise `CatalogueError`.
+- The reader contract now states the column types per backend, and that a driver may
+  hand back the snapshot document parsed or as a string.
+- `defaults_document(catalogue, *, created_at=None, environment="")` takes the
+  environment as an argument and stamps `datetime.now(UTC)` when no `created_at` is
+  given, so it needs no Django settings. `tunables_export --defaults` passes
+  `TUNABLES["ENVIRONMENT"]`, so the command is unchanged. A host with `USE_TZ = False`
+  used to get a `ValueError` from the default timestamp; it now gets a UTC one.
 
 ## 0.4.0, 2026-09-20
 
