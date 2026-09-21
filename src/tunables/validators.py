@@ -22,7 +22,9 @@ def describes(text: str) -> Callable[[F], F]:
 
 def _number(value: float) -> str:
     """1.0 as '1', 0.25 as '0.25', for the numbers in messages."""
-    return str(int(value)) if float(value).is_integer() else str(value)
+    if isinstance(value, int):
+        return str(value)
+    return str(int(value)) if value.is_integer() else str(value)
 
 
 def _listed(names: tuple[str, ...]) -> str:
@@ -44,11 +46,23 @@ class _NamedValidator:
     def check_group(self, group: Group) -> None:
         """Raise CatalogueError when a name is missing from the group or is not a number."""
         types = {tunable.name: tunable.type for tunable in group.tunables}
+        seen: set[str] = set()
         for name in self.names:
+            if name in seen:
+                raise CatalogueError(f"validator of group {group.name!r} names {name!r} more than once")
+            seen.add(name)
             if name not in types:
                 raise CatalogueError(f"validator of group {group.name!r} names unknown tunable {name!r}")
             if not isinstance(types[name], Integer | Float):
                 raise CatalogueError(f"validator of group {group.name!r} needs a number, but {name!r} is not one")
+
+
+def _within(actual: float, total: float, tolerance: float) -> bool:
+    """A value too large for a float is never within tolerance, and must not raise OverflowError."""
+    try:
+        return abs(actual - total) <= tolerance
+    except OverflowError:
+        return False
 
 
 class _SumsTo(_NamedValidator):
@@ -60,7 +74,7 @@ class _SumsTo(_NamedValidator):
 
     def __call__(self, values: Mapping[str, Any]) -> None:
         actual = sum(values[name] for name in self.names)
-        if abs(actual - self.total) > self.tolerance:
+        if not _within(actual, self.total, self.tolerance):
             raise ConstraintError(
                 "sum", f"{' + '.join(self.names)} must sum to {_number(self.total)}, got {_number(actual)}"
             )

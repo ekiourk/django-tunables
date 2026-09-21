@@ -4,8 +4,8 @@ import pytest
 from django.test import override_settings
 
 from tunables import Actor, Catalogue, Change, Float, Group, Integer, String, Tunable, services
+from tunables.catalogue import validator_description
 from tunables.errors import CatalogueError, ConstraintError, ValidationFailed
-from tunables.schema import validator_description
 from tunables.sync import sync
 from tunables.validators import _NamedValidator, ascending, descending, describes, sums_to
 
@@ -205,3 +205,22 @@ def test_a_rule_without_a_description_still_reports_itself() -> None:
 
 def test_a_rule_reprs_as_its_description() -> None:
     assert repr(sums_to(1.0, "alpha", "beta")) == "_SumsTo('alpha + beta must sum to 1.')"
+
+
+def test_a_value_too_large_for_float_is_a_violation_not_a_crash() -> None:
+    huge = 10**400
+    error = raised(sums_to(1.0, "alpha", "beta"), {"alpha": huge, "beta": 0})
+    assert error.code == "sum"
+    assert error.message.endswith(f"must sum to 1, got {huge}")
+    order = raised(descending("high", "low"), {"high": 0, "low": huge})
+    assert order.code == "order"
+    assert order.message == f"high must be greater than low, got 0 and {huge}"
+    pin = raised(descending("high", "low", floor=0.0), {"high": huge + 1, "low": huge})
+    assert pin.code == "floor"
+
+
+def test_repeated_names_are_rejected_at_construction() -> None:
+    with pytest.raises(CatalogueError, match="alpha"):
+        Group("weights", weights(), validators=[sums_to(1.0, "alpha", "alpha", "beta")])
+    with pytest.raises(CatalogueError, match="beta"):
+        Group("weights", weights(), validators=[descending("beta", "beta")])

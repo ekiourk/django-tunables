@@ -772,3 +772,11 @@ def test_every_parameterless_read_route_is_indexed_or_listed_as_omitted() -> Non
         if pattern.pattern.regex.groupindex:
             continue
         assert name in indexed or name in omitted, name
+
+
+@override_settings(ROOT_URLCONF="tests.urls_two_mounts")
+def test_the_index_links_to_the_mount_that_served_it(api: APIClient) -> None:
+    first = api.get("/api/tunables/").json()
+    second = api.get("/internal/tunables/").json()
+    assert first["groups"] == "http://testserver/api/tunables/groups/"
+    assert second["groups"] == "http://testserver/internal/tunables/groups/"

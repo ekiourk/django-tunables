@@ -63,14 +63,8 @@ SHOWN_WIDTH = 40
 
 def _default_text(tunable: Tunable) -> str:
     """The default as JSON with its unit, the way the API shows it."""
-    rendered = json.dumps(tunable.type.to_json(tunable.default))
+    rendered = json.dumps(tunable.type.to_json(tunable.default), ensure_ascii=False)
     return f"{rendered} {tunable.unit}" if tunable.unit else rendered
-
-
-def _shown(tunable: Tunable) -> str:
-    """The default for the reset label, cut to SHOWN_WIDTH with an ellipsis."""
-    text = _default_text(tunable)
-    return text if len(text) <= SHOWN_WIDTH else text[: SHOWN_WIDTH - 1] + "\u2026"
 
 
 def build_group_form(
@@ -87,8 +81,8 @@ def build_group_form(
             required=False,
         )
         if tunable.name in overridden:
-            shown = _shown(tunable)
             full = _default_text(tunable)
+            shown = full if len(full) <= SHOWN_WIDTH else full[: SHOWN_WIDTH - 1] + "\u2026"
             attrs[f"reset_{tunable.name}"] = forms.BooleanField(
                 label=format_lazy(_("Reset to default ({value})"), value=shown),
                 help_text="" if shown == full else full,

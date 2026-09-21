@@ -7,6 +7,9 @@ generated with no Django project, and the admin and the API say more for themsel
 
 Changes to existing behaviour:
 
+- `validator_description` moved from `tunables.schema` to `tunables.catalogue`, where
+  the `Catalogue` itself needs it. A host importing it from `tunables.schema` must
+  change the import.
 - `defaults_document(catalogue)` no longer reads `TUNABLES["ENVIRONMENT"]`. It takes
   `environment=""` as an argument, and `tunables_export --defaults` passes the setting,
   so the command is unchanged. A caller in Python that relied on the setting must pass

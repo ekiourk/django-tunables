@@ -20,13 +20,13 @@ from tunables.api.serializers import (
     TagRequestSerializer,
 )
 from tunables.api.writes import parsed_changes, write
-from tunables.catalogue import Catalogue, Category, Group, Tunable
+from tunables.catalogue import Catalogue, Category, Group, Tunable, validator_description
 from tunables.changes import Change
 from tunables.conf import settings
 from tunables.errors import UnknownVersion
 from tunables.models import ChangeSet, PublisherState, Snapshot, State, Tag
 from tunables.registry import get_catalogue
-from tunables.schema import describe_group, document_schema, validator_description
+from tunables.schema import describe_group, document_schema
 from tunables.search import match_definitions, require_tags, tags_by_key
 from tunables.services import diff_versions, latest_snapshot, rule_violations
 from tunables.tags import create_tag, delete_tag, update_tag
@@ -94,8 +94,13 @@ class Index(TunablesAPIView):
     reads_need_sync = False
 
     def get(self, request: Request) -> Response:
+        match = request.resolver_match
+        current = match.namespace if match is not None else None
         return Response(
-            {name: request.build_absolute_uri(reverse(f"tunables:{route}")) for name, route in INDEX.items()}
+            {
+                name: request.build_absolute_uri(reverse(f"tunables:{route}", current_app=current))
+                for name, route in INDEX.items()
+            }
         )
 
 

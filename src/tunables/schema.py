@@ -3,8 +3,7 @@ from collections.abc import Collection, Mapping, Sequence
 from importlib import resources
 from typing import Any
 
-from tunables.catalogue import Catalogue, Group, Tunable
-from tunables.catalogue import validator_description as validator_description
+from tunables.catalogue import Catalogue, Group, Tunable, validator_description
 
 JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 

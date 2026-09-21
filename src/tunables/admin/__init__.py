@@ -13,6 +13,7 @@ from django.utils.translation import gettext_lazy
 
 from tunables.access import check_editable, check_group_editable, editable_groups
 from tunables.admin.forms import DefinitionTagsForm, GroupForm, build_group_form
+from tunables.catalogue import validator_description
 from tunables.changes import Actor
 from tunables.errors import (
     CatalogueOutOfSync,
@@ -26,7 +27,6 @@ from tunables.errors import (
 )
 from tunables.models import ChangeItem, ChangeSet, Snapshot, Tag, TunableDefinition, TunableDefinitionTag
 from tunables.registry import get_catalogue
-from tunables.schema import validator_description
 from tunables.search import match_definitions, tags_by_key
 from tunables.services import (
     apply_changeset,

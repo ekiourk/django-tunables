@@ -602,3 +602,13 @@ def test_a_truncated_default_is_shown_in_full_on_the_page(admin_client: Client, 
     assert "Reset to default ({&quot;EUR&quot;: 4.9" in content
     assert "…)" in content
     assert "&quot;SEK&quot;: 6.0} per currency" in content
+
+
+def test_a_non_ascii_default_is_shown_as_written() -> None:
+    from tunables import Group, String, Tunable
+    from tunables.admin.forms import build_group_form
+
+    tunable = Tunable("greeting", String(), "Café ☕", title="Greeting")
+    group = Group("shop", [tunable])
+    form = build_group_form(group, {"greeting": "hi"}, {"greeting"}, 1)()
+    assert str(form.fields["reset_greeting"].label) == 'Reset to default ("Café ☕")'
