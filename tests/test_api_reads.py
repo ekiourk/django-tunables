@@ -759,3 +759,16 @@ def test_the_root_honours_the_permission_classes(api: APIClient) -> None:
     denied = {"CATALOGUE": CATALOGUE, "API_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"]}
     with override_settings(TUNABLES=denied):
         assert api.get(BASE + "").status_code == 403
+
+
+def test_every_parameterless_read_route_is_indexed_or_listed_as_omitted() -> None:
+    from tunables.api import urls, views
+
+    omitted = {"index", "snapshot-schema", "export", "diff", "validate", "rollback", "import"}
+    indexed = set(views.INDEX.values())
+    for pattern in urls.urlpatterns:
+        name = pattern.name
+        assert name is not None
+        if pattern.pattern.regex.groupindex:
+            continue
+        assert name in indexed or name in omitted, name

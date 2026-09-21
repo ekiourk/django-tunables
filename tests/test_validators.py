@@ -34,13 +34,12 @@ def raised(validator: Any, values: dict[str, Any]) -> ConstraintError:
 
 
 def test_describes_sets_the_description_and_returns_the_function() -> None:
-    @describes("The three weights must sum to 1.")
     def rule(values: dict[str, Any]) -> None:
         """Docstring that should lose to the decorator."""
 
-    assert rule.description == "The three weights must sum to 1."
+    assert describes("The three weights must sum to 1.")(rule) is rule
+    assert rule.description == "The three weights must sum to 1."  # type: ignore[attr-defined]
     assert validator_description(rule) == "The three weights must sum to 1."
-    assert rule({}) is None
 
 
 def test_the_docstring_fallback_still_works() -> None:
@@ -165,3 +164,21 @@ def test_a_group_built_this_way_reports_a_group_error(db: None) -> None:
     error = info.value.errors[0]
     assert (error.group, error.code) == ("weights", "sum")
     assert error.message == "alpha + beta + gamma must sum to 1, got 1.4"
+
+
+def test_a_rule_needs_at_least_two_names() -> None:
+    for call in (
+        lambda: sums_to(1.0),  # type: ignore[call-arg]
+        lambda: sums_to(1.0, "alpha"),  # type: ignore[call-arg]
+        lambda: descending(),  # type: ignore[call-arg]
+        lambda: descending("critical_min"),  # type: ignore[call-arg]
+        lambda: ascending("low_min"),  # type: ignore[call-arg]
+    ):
+        with pytest.raises(TypeError):
+            call()
+
+
+def test_a_group_rule_cannot_be_a_catalogue_validator() -> None:
+    group = Group("weights", weights(), validators=[sums_to(1.0, "alpha", "beta", "gamma")])
+    with pytest.raises(CatalogueError, match="group validator"):
+        Catalogue([group], validators=[sums_to(1.0, "alpha", "beta")])

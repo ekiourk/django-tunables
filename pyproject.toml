@@ -28,7 +28,7 @@ Repository = "https://github.com/ekiourk/django-tunables"
 Changelog = "https://github.com/ekiourk/django-tunables/blob/master/CHANGELOG.md"
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "pytest-django", "jsonschema[format]", "django-tunables[fixtures]", "ipdb"]
+dev = ["pytest", "pytest-cov", "pytest-django", "jsonschema[format]", "django-tunables[fixtures]", "ipdb", "ruff"]
 fixtures = ["testcontainers[postgres]==4.12.0", "psycopg[binary]"]
 lint = ["ruff", "mypy", "django-stubs", "djangorestframework-stubs"]
 

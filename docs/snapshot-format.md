@@ -93,6 +93,9 @@ settings configured, so a build script in a contracts package can write the comm
 artifacts from the catalogue alone:
 
 ```python
+import json
+from pathlib import Path
+
 from tunables.document import defaults_document
 from tunables.schema import document_schema
 
@@ -108,16 +111,15 @@ grouped by group, with `ALL_KEYS` listing them all:
 # pricing
 PRICING_VAT_RATE = "pricing.vat_rate"
 
-ALL_KEYS: tuple[str, ...] = (
-    PRICING_VAT_RATE,
-)
+ALL_KEYS: tuple[str, ...] = (PRICING_VAT_RATE,)
 ```
 
-Committing that module gives a consumer an import error for a typo, where a bare string
-gives a runtime failure on the first message. The text is deterministic and already
+Committing that module turns a typo into an import error, while a bare string fails
+only when the key is first read. The text is deterministic and already
 formatted in ruff's default style, with a trailing comma that keeps one name per line at
 any line length, so a host's formatter leaves the committed file alone and no drift
-check fails on whitespace. Two keys that produce the same constant, such as
+check fails on whitespace. A catalogue with a single key gets the tuple on one line,
+since a formatter collapses a one-element tuple whatever the comma. Two keys that produce the same constant, such as
 `pricing.vat_rate` and `pricing_vat.rate`, raise `CatalogueError`.
 
 Generating any of them through `manage.py tunables_export` needs a Django project.
@@ -153,8 +155,8 @@ Readers that share the database poll one table and fetch from another.
 
 The column types the migrations create follow the backend. On PostgreSQL `document` is
 `jsonb` and `created_at` is `timestamptz`. On SQLite `document` is `TEXT` holding the
-serialised JSON. `current_version` is a plain integer column on every backend, which is
-what makes the polling loop cheap.
+serialised JSON. `current_version` is a plain integer column on every backend, so the
+polling query stays cheap.
 
 That difference reaches the reader through its driver. A PostgreSQL driver hands back
 `document` already parsed into a dictionary, while a SQLite driver hands back the string

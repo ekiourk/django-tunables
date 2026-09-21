@@ -4,7 +4,7 @@ from typing import Any
 import pytest
 from django.contrib.auth.models import Permission, User
 from django.contrib.messages import get_messages
-from django.test import Client
+from django.test import Client, override_settings
 
 from tests.catalogue import catalogue
 from tests.test_services import apply
@@ -547,7 +547,7 @@ def test_reset_labels_name_the_default(admin_client: Client, synced: SyncResult)
 def test_a_long_default_is_truncated_into_the_help_text() -> None:
     from tunables import Enum, Float, Group, Tunable
     from tunables import Mapping as MappingType
-    from tunables.admin.forms import build_group_form
+    from tunables.admin.forms import SHOWN_WIDTH, build_group_form
 
     rates = {"EUR": 4.9, "USD": 5.4, "GBP": 4.2, "CHF": 5.1, "SEK": 6.0}
     tunable = Tunable(
@@ -562,7 +562,7 @@ def test_a_long_default_is_truncated_into_the_help_text() -> None:
     label, help_text = str(field.label), str(field.help_text)
     assert label.startswith('Reset to default ({"EUR": 4.9')
     assert label.endswith("…)")
-    assert len(label) == len("Reset to default (") + 40 + len(")")
+    assert len(label) == len("Reset to default (") + SHOWN_WIDTH + len(")")
     assert help_text == f"{json.dumps(rates)} per currency"
 
 
@@ -570,3 +570,35 @@ def test_the_default_reaches_the_rendered_page(admin_client: Client, synced: Syn
     apply(Change("pricing.vat_rate", 0.2))
     content = admin_client.get(edit_url("pricing")).content.decode()
     assert "Reset to default (0.24)" in content
+
+
+WIDE_RATES = {"EUR": 4.9, "USD": 5.4, "GBP": 4.2, "CHF": 5.1, "SEK": 6.0}
+
+
+def wide_catalogue() -> Any:
+    from tunables import Catalogue, Enum, Float, Group, Tunable
+    from tunables import Mapping as MappingType
+
+    rates = Tunable(
+        "rates",
+        MappingType(Enum(list(WIDE_RATES)), Float(min=0.0)),
+        WIDE_RATES,
+        title="Rates",
+        unit="per currency",
+    )
+    return Catalogue([Group("shipping", [rates])])
+
+
+wide = wide_catalogue()
+
+
+@override_settings(TUNABLES={"CATALOGUE": f"{__name__}.wide"})
+def test_a_truncated_default_is_shown_in_full_on_the_page(admin_client: Client, db: None) -> None:
+    from tunables.sync import sync
+
+    sync()
+    apply(Change("shipping.rates", {"EUR": 1.0}))
+    content = admin_client.get(edit_url("shipping")).content.decode()
+    assert "Reset to default ({&quot;EUR&quot;: 4.9" in content
+    assert "…)" in content
+    assert "&quot;SEK&quot;: 6.0} per currency" in content

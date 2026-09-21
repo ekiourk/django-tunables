@@ -2,41 +2,49 @@
 
 ## Unreleased
 
-- `GET` at the API mount point returns the endpoint map instead of `404`, with absolute
-  URLs built from the request so they survive an ingress or a path prefix. It answers
-  while the catalogue is out of sync, and its route is named `index` for a host that
-  prefers to leave it out.
+Catalogues get ready-made validators and a single import point, artifacts can be
+generated with no Django project, and the admin and the API say more for themselves.
 
-## Unreleased
+Changes to existing behaviour:
 
-- The "Reset to default" box in the admin group form names the default it restores, as
-  JSON with the unit, for example "Reset to default (30.0 s)". A default longer than 40
-  characters is cut in the label and given in full as the box's help text.
+- `defaults_document(catalogue)` no longer reads `TUNABLES["ENVIRONMENT"]`. It takes
+  `environment=""` as an argument, and `tunables_export --defaults` passes the setting,
+  so the command is unchanged. A caller in Python that relied on the setting must pass
+  it. The default timestamp is now `datetime.now(UTC)`, so a host with `USE_TZ = False`
+  gets a UTC timestamp where that path used to raise `ValueError`.
+- The "Reset to default" box in the admin group form names the default it restores, so
+  its message id changed from `Reset to default` to `Reset to default ({value})`. A host
+  translating that string needs the new id.
 
-## Unreleased
+Additions:
 
 - `sums_to`, `descending` and `ascending` in the new `tunables.validators`, exported
-  from the package root, cover the two group rules catalogues repeat. They raise codes
-  `sum`, `order`, `floor` and `ceiling`, name the fields and numbers in the message,
-  write their own `x-validators` description, and check their names against the group
-  when it is built, so a typo or a non-numeric name is a `CatalogueError` at import.
+  from the package root, cover the two group rules that catalogues repeat. They raise
+  codes `sum`, `order`, `floor` and `ceiling`, name the fields and numbers in the
+  message, write their own `x-validators` description, and check their names against the
+  group when it is built, so a typo or a non-numeric name is a `CatalogueError` at
+  import. Each takes at least two names.
 - `describes("...")` sets the description of any validator, replacing the undocumented
   `validator.description = "..."` that needed a `type: ignore` under mypy strict. The
   docstring fallback is unchanged.
 - `ConstraintError` and `CatalogueError` are exported from the package root, so a
   catalogue module imports everything it needs from `tunables`. The service-level errors
   stay in `tunables.errors`.
-- `tunables.export.keys_module(catalogue)` returns a Python module of key constants,
-  one per key plus `ALL_KEYS`, and `tunables_export --keys` writes it. The text is
+- `tunables.export.keys_module(catalogue)` returns a Python module of key constants, one
+  per key plus `ALL_KEYS`, and `tunables_export --keys` writes it. The text is
   deterministic and formatted, so a committed copy survives a host's formatter
   untouched. Two keys producing the same constant name raise `CatalogueError`.
-- The reader contract now states the column types per backend, and that a driver may
-  hand back the snapshot document parsed or as a string.
-- `defaults_document(catalogue, *, created_at=None, environment="")` takes the
-  environment as an argument and stamps `datetime.now(UTC)` when no `created_at` is
-  given, so it needs no Django settings. `tunables_export --defaults` passes
-  `TUNABLES["ENVIRONMENT"]`, so the command is unchanged. A host with `USE_TZ = False`
-  used to get a `ValueError` from the default timestamp; it now gets a UTC one.
+- `defaults_document` and `document_schema` both work with no Django settings
+  configured, so a contracts package can write its artifacts from the catalogue alone.
+- The reset box in the admin names the default as JSON with the unit, for example
+  "Reset to default (30.0 s)". A default longer than 40 characters is cut in the label
+  and shown in full under the field.
+- `GET` at the API mount point returns the endpoint map instead of `404`, with absolute
+  URLs built from the request so they survive an ingress or a path prefix. It answers
+  while the catalogue is out of sync, and its route is named `index` for a host that
+  prefers to leave it out.
+- The reader contract states the column types per backend, and that a driver may hand
+  back the snapshot document parsed or as a string.
 
 ## 0.4.0, 2026-09-20
 

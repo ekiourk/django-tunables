@@ -71,7 +71,7 @@ proxies attribute access to the underlying `HttpRequest`, so a callable that rea
 
 The index at the mount point lists `categories`, `groups`, `definitions`, `values`,
 `tags`, `changesets`, `snapshots`, `schema` and `status`. Each URL is absolute and built
-from the request, so it is right behind an ingress or a path prefix. Routes that take a
+from the request, so it stays correct behind an ingress or a path prefix. Routes that take a
 group name or a version are reached from their collection, and `snapshots` points at
 `snapshots/latest/`. The route is named `index`, so a host that prefers no root view can
 write its own URLconf and leave it out.
@@ -82,12 +82,12 @@ If not, the answer is `503 catalogue-out-of-sync` until `tunables_sync` has run.
 Endpoints that serve stored data, the values, change sets, snapshots, the export, the
 diff and the two tag reads, answer from the database regardless, so a deployment whose
 sync has not run yet keeps serving the previous state. The index answers regardless too,
-since it describes routes rather than the catalogue, and a base URL that fails is a poor
-greeting for anyone diagnosing the sync state. Every write requires sync.
+since it describes routes rather than the catalogue, so the base URL still works for
+someone diagnosing the sync state. Every write requires sync.
 
 | Method and path | Response |
 |---|---|
-| `GET ` (the mount point) | `{"<name>": "<absolute url>"}` for the nine collections, as a starting point for a browser or a client |
+| `GET` at the mount point | `{"<name>": "<absolute url>"}` for the nine routes below, as a starting point for a browser or a client |
 | `GET categories/` | `[{name, title, description, order, groups: [names]}]` in catalogue order; `general` is always present |
 | `GET groups/[?category=]` | `[group summary]` in catalogue order, optionally one category's groups; unknown category is `404` |
 | `GET groups/{group}/` | group summary without `tunable_count`, plus `ui`, `metadata` and `definitions: [definition]` |

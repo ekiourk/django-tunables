@@ -426,6 +426,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-django" },
+    { name = "ruff" },
     { name = "testcontainers" },
 ]
 fixtures = [
@@ -453,6 +454,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-cov", marker = "extra == 'dev'" },
     { name = "pytest-django", marker = "extra == 'dev'" },
+    { name = "ruff", marker = "extra == 'dev'" },
     { name = "ruff", marker = "extra == 'lint'" },
     { name = "testcontainers", extras = ["postgres"], marker = "extra == 'fixtures'", specifier = "==4.12.0" },
 ]
