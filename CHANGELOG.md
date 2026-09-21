@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- `sums_to`, `descending` and `ascending` in the new `tunables.validators`, exported
+  from the package root, cover the two group rules catalogues repeat. They raise codes
+  `sum`, `order`, `floor` and `ceiling`, name the fields and numbers in the message,
+  write their own `x-validators` description, and check their names against the group
+  when it is built, so a typo or a non-numeric name is a `CatalogueError` at import.
+- `describes("...")` sets the description of any validator, replacing the undocumented
+  `validator.description = "..."` that needed a `type: ignore` under mypy strict. The
+  docstring fallback is unchanged.
+- `ConstraintError` and `CatalogueError` are exported from the package root, so a
+  catalogue module imports everything it needs from `tunables`. The service-level errors
+  stay in `tunables.errors`.
+
 ## 0.4.0, 2026-09-20
 
 Django code can read its own tunables through a cached in-process reader, the schema

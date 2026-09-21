@@ -69,24 +69,52 @@ everywhere they are listed.
 
 `validators` is a sequence of callables that receive the effective values of the whole
 group as a mapping from tunable name to Python value, including values that are not
-being changed, and raise `ConstraintError("group", message)` when the combination is
-invalid:
+being changed, and raise `ConstraintError(code, message)` when the combination is
+invalid.
+
+Two rules come ready made:
 
 ```python
-from tunables.errors import ConstraintError
+from tunables import ascending, descending, sums_to
 
-
-def weights_sum_to_one(values):
-    """The three weights must sum to 1."""
-    if abs(values["alpha"] + values["beta"] + values["gamma"] - 1.0) > 1e-9:
-        raise ConstraintError("group", "weights must sum to 1")
+Group("threat", pillars, validators=[sums_to(1.0, "intent_w", "capability_w", "opportunity_w")])
+Group("levels", thresholds, validators=[descending("critical_min", "high_min", "low_min", floor=0.0)])
 ```
 
-The validator's description is shown to people in the admin group index and to
-clients in the JSON Schema's `x-validators`. It is taken from a `description`
-attribute on the callable if present, else from the first paragraph of its docstring,
-else from its name. Cross-field rules cannot be expressed in JSON Schema, which is why
-the API has dry-run endpoints.
+`sums_to(total, *names, tolerance=1e-9)` checks that the named values add up, and raises
+code `sum`. `descending(*names, strict=True, floor=None, ceiling=None)` and its mirror
+`ascending` check that the named values move one way through the list, and raise code
+`order` for the first pair out of place. `strict=False` allows equal neighbours. `floor`
+pins the smallest value and `ceiling` the largest, raising codes `floor` and `ceiling`;
+for `descending` those are the last and first names, and for `ascending` the other way
+round. Each message names the fields and the numbers involved, for example
+`intent_w + capability_w + opportunity_w must sum to 1, got 1.1`.
+
+All three check their names against the group when the `Group` is built, so a typo or a
+name whose type is not `Integer` or `Float` raises `CatalogueError` at import rather
+than failing on the first write.
+
+Anything else is a plain callable:
+
+```python
+from tunables import ConstraintError, describes
+
+
+@describes("Beta must stay under alpha.")
+def beta_under_alpha(values):
+    if values["beta"] >= values["alpha"]:
+        raise ConstraintError("group", "beta must stay under alpha")
+```
+
+The validator's description is shown to people in the admin group index and to clients
+in the JSON Schema's `x-validators`. `describes` sets it. Without the decorator it comes
+from the first paragraph of the docstring, else from the name of the callable. The
+ready-made validators write their own, such as
+`"intent_w + capability_w + opportunity_w must sum to 1."`
+
+Clients branch on the code, so keep a code stable once it ships. The message text can
+change. Cross-field rules cannot be expressed in JSON Schema, which is why the API has
+dry-run endpoints.
 
 ## Catalogue
 
@@ -207,8 +235,8 @@ from typing import Any, ClassVar
 
 from django import forms
 
-from tunables import TunableType
-from tunables.errors import ConstraintError, TypeCoercionError
+from tunables import ConstraintError, TunableType
+from tunables.errors import TypeCoercionError
 
 
 class HexColour(TunableType):
