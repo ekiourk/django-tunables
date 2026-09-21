@@ -353,9 +353,9 @@ def test_admin_form_labels_are_translated(admin_client: Client, synced: SyncResu
         response = admin_client.get(edit_url("pricing"))
         assert response.status_code == 200
         # The label is a lazy string; it resolves in the language active when it is read.
-        assert str(response.context["form"].fields["reset_vat_rate"].label) == "Auf Standard zurücksetzen"
-    assert "Auf Standard zurücksetzen" in response.content.decode()
-    assert str(response.context["form"].fields["reset_vat_rate"].label) == "Reset to default"
+        assert str(response.context["form"].fields["reset_vat_rate"].label) == "Auf Standard zurücksetzen (0.24)"
+    assert "Auf Standard zurücksetzen (0.24)" in response.content.decode()
+    assert str(response.context["form"].fields["reset_vat_rate"].label) == "Reset to default (0.24)"
 
 
 def test_group_index_shows_rule_violations(admin_client: Client, synced: SyncResult) -> None:
@@ -527,3 +527,46 @@ def test_conflict_without_a_readable_diff_still_keeps_input(admin_client: Client
     warning = messages_of(response)[0]
     assert "version 99 is now version 0" in warning
     assert "these changed" not in warning
+
+
+def test_reset_labels_name_the_default(admin_client: Client, synced: SyncResult) -> None:
+    apply(
+        Change("pricing.vat_rate", 0.2),
+        Change("pricing.free_shipping_over", 75.0),
+        Change("pricing.currencies", ["EUR", "USD"]),
+        Change("pricing.allow_backorders", True),
+    )
+    fields = admin_client.get(edit_url("pricing")).context["form"].fields
+    assert str(fields["reset_vat_rate"].label) == "Reset to default (0.24)"
+    assert str(fields["reset_free_shipping_over"].label) == "Reset to default (50.0 EUR)"
+    assert str(fields["reset_currencies"].label) == 'Reset to default (["EUR"])'
+    assert str(fields["reset_allow_backorders"].label) == "Reset to default (false)"
+    assert fields["reset_vat_rate"].help_text == ""
+
+
+def test_a_long_default_is_truncated_into_the_help_text() -> None:
+    from tunables import Enum, Float, Group, Tunable
+    from tunables import Mapping as MappingType
+    from tunables.admin.forms import build_group_form
+
+    rates = {"EUR": 4.9, "USD": 5.4, "GBP": 4.2, "CHF": 5.1, "SEK": 6.0}
+    tunable = Tunable(
+        "shipping_rates",
+        MappingType(Enum(["EUR", "USD", "GBP", "CHF", "SEK"]), Float(min=0.0)),
+        rates,
+        unit="per currency",
+    )
+    group = Group("pricing", [tunable])
+    form = build_group_form(group, {"shipping_rates": rates}, {"shipping_rates"}, 1)()
+    field = form.fields["reset_shipping_rates"]
+    label, help_text = str(field.label), str(field.help_text)
+    assert label.startswith('Reset to default ({"EUR": 4.9')
+    assert label.endswith("…)")
+    assert len(label) == len("Reset to default (") + 40 + len(")")
+    assert help_text == f"{json.dumps(rates)} per currency"
+
+
+def test_the_default_reaches_the_rendered_page(admin_client: Client, synced: SyncResult) -> None:
+    apply(Change("pricing.vat_rate", 0.2))
+    content = admin_client.get(edit_url("pricing")).content.decode()
+    assert "Reset to default (0.24)" in content

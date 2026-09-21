@@ -1,10 +1,12 @@
+import json
 from collections.abc import Collection, Mapping
 from typing import Any
 
 from django import forms
+from django.utils.text import format_lazy
 from django.utils.translation import gettext_lazy as _
 
-from tunables.catalogue import Group
+from tunables.catalogue import Group, Tunable
 from tunables.changes import Change
 from tunables.identifiers import TAG
 
@@ -56,6 +58,21 @@ class DefinitionTagsForm(forms.Form):
         return names
 
 
+SHOWN_WIDTH = 40
+
+
+def _default_text(tunable: Tunable) -> str:
+    """The default as JSON with its unit, the way the API shows it."""
+    rendered = json.dumps(tunable.type.to_json(tunable.default))
+    return f"{rendered} {tunable.unit}" if tunable.unit else rendered
+
+
+def _shown(tunable: Tunable) -> str:
+    """The default for the reset label, cut to SHOWN_WIDTH with an ellipsis."""
+    text = _default_text(tunable)
+    return text if len(text) <= SHOWN_WIDTH else text[: SHOWN_WIDTH - 1] + "\u2026"
+
+
 def build_group_form(
     group: Group, values: Mapping[str, Any], overridden: Collection[str], version: int
 ) -> type[GroupForm]:
@@ -70,6 +87,12 @@ def build_group_form(
             required=False,
         )
         if tunable.name in overridden:
-            attrs[f"reset_{tunable.name}"] = forms.BooleanField(label=_("Reset to default"), required=False)
+            shown = _shown(tunable)
+            full = _default_text(tunable)
+            attrs[f"reset_{tunable.name}"] = forms.BooleanField(
+                label=format_lazy(_("Reset to default ({value})"), value=shown),
+                help_text="" if shown == full else full,
+                required=False,
+            )
     attrs["expected_version"] = forms.IntegerField(widget=forms.HiddenInput, initial=version)
     return type(f"{group.name.title()}GroupForm", (GroupForm,), attrs)

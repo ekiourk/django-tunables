@@ -54,8 +54,11 @@ API leave no record; edits made in the admin appear in Django's admin log.
   and a deprecated tunable shows its reason below the field.
 - The field starts at the current effective value, whether that is the default or an
   override.
-- A "Reset to default" box next to every tunable that currently has an override. Ticking
-  it removes the override whatever the field says.
+- A "Reset to default" box next to every tunable that currently has an override, naming
+  the default it would restore, for example "Reset to default (0.24)" or "Reset to
+  default (30.0 s)". Ticking it removes the override whatever the field says. The value
+  is shown as JSON, so a list reads `["EUR"]`. A default longer than 40 characters is
+  cut in the label and given in full as the box's help text.
 - A required Reason, stored on the change set.
 - A hidden version number, used to detect concurrent edits.
 
