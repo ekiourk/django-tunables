@@ -7,6 +7,10 @@ generated with no Django project, and the admin and the API say more for themsel
 
 Changes to existing behaviour:
 
+- Editing a definition's tags in the admin now needs `tunables.change_tag` rather than
+  `tunables.add_changeset`. Staff who tag tunables need that permission granted. Values
+  still need `add_changeset`, so labelling and changing values come apart.
+
 - `validator_description` moved from `tunables.schema` to `tunables.catalogue`, where
   the `Catalogue` itself needs it. A host importing it from `tunables.schema` must
   change the import.
@@ -20,6 +24,12 @@ Changes to existing behaviour:
   translating that string needs the new id.
 
 Additions:
+
+- `tunables.api.permissions.TunablesPermissions`, a DRF permission class that answers
+  with the same Django permissions the admin checks: the view permission for reads, the
+  `Tag` permissions for tag writes, `add_changeset` for everything else. Name it in
+  `API_PERMISSION_CLASSES` to give both surfaces one permission model. Hosts that
+  authenticate without Django accounts keep their own class, which stays the default.
 
 - The admin app index calls the page Tunables, matching the page itself, through a
   verbose name on the definition model and migration `0004`.
