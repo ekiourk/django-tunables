@@ -47,6 +47,12 @@ def update_tag(name: str, description: str, *, actor: str = "") -> Tag:
     return tag
 
 
+def log_seed_removed(key: str, name: str, *, kept: bool) -> None:
+    """Log tunables_sync dropping a seed, whether the row survives as a manual assignment or goes."""
+    outcome = "kept as a manual assignment" if kept else "removed"
+    _log("seed tag %r of %r dropped by the catalogue, %s", name, key, outcome)
+
+
 def log_admin_save(before: str | None, after: str, *, actor: str = "") -> None:
     """Log a save from the tag admin, which edits the row rather than calling the helpers."""
     if before is None:

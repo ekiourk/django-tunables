@@ -120,7 +120,6 @@ def test_sync_keeps_who_attached_a_tag_it_later_seeds(synced: SyncResult) -> Non
 
     from tests.catalogue import limits, pricing, thermostat, weights
     from tests.test_sync import alt
-    from tunables import Tunable
     from tunables.sync import sync
 
     set_manual_tags("weights.alpha", ["review"], actor="alice")
@@ -134,7 +133,6 @@ def test_sync_keeps_who_attached_a_tag_it_later_seeds(synced: SyncResult) -> Non
     row.refresh_from_db()
     assert (row.seeded, row.assigned_by) == (True, "alice")
     assert row.assigned_at == stamped
-    assert isinstance(tunables[0], Tunable)
 
 
 def test_dropping_a_seed_keeps_a_human_assignment(synced: SyncResult) -> None:
@@ -166,3 +164,32 @@ def test_a_committed_change_still_logs(
     with caplog.at_level(logging.INFO, logger="tunables.tags"), django_capture_on_commit_callbacks(execute=True):
         create_tag("review", actor="alice")
     assert [record.getMessage() for record in caplog.records] == ["tag 'review' created by alice"]
+
+
+def test_a_shell_assignment_survives_a_seed_coming_and_going(synced: SyncResult) -> None:
+    from tunables.sync import sync
+
+    set_manual_tags("weights.alpha", ["review"])
+    assert TunableDefinitionTag.objects.get(tag__name="review").assigned_by == ""
+    TunableDefinitionTag.objects.filter(tag__name="review").update(seeded=True)
+    sync()
+    row = TunableDefinitionTag.objects.filter(tag__name="review").first()
+    assert row is not None
+    assert (row.seeded, row.assigned_by) == (False, "")
+
+
+def test_sync_logs_the_seed_it_drops(
+    synced: SyncResult, caplog: pytest.LogCaptureFixture, django_capture_on_commit_callbacks: Any
+) -> None:
+    from tunables.sync import sync
+
+    set_manual_tags("weights.alpha", ["review"], actor="alice")
+    TunableDefinitionTag.objects.filter(tag__name="review").update(seeded=True)
+    TunableDefinitionTag.objects.filter(tag__name="comfort", definition__key="thermostat.mode").update(
+        assigned_by="system"
+    )
+    with caplog.at_level(logging.INFO, logger="tunables.tags"), django_capture_on_commit_callbacks(execute=True):
+        sync()
+    assert [record.getMessage() for record in caplog.records] == [
+        "seed tag 'review' of 'weights.alpha' dropped by the catalogue, kept as a manual assignment"
+    ]

@@ -21,7 +21,7 @@ from tunables.models import (
 )
 from tunables.registry import get_catalogue
 from tunables.services import rule_violations, write_snapshot
-from tunables.tags import SYSTEM
+from tunables.tags import SYSTEM, log_seed_removed
 
 
 @dataclass(frozen=True)
@@ -161,12 +161,14 @@ def _seed_tags(catalogue: Catalogue) -> None:
     for row in TunableDefinitionTag.objects.filter(seeded=True).select_related("definition", "tag"):
         if (row.definition.key, row.tag.name) in seeds:
             continue
-        if row.assigned_by and row.assigned_by != SYSTEM:
-            # A person attached this before the catalogue seeded it, so the seed going away leaves it manual.
+        # Only rows this command created carry SYSTEM, so anything else was attached by a caller.
+        kept = row.assigned_by != SYSTEM
+        if kept:
             row.seeded = False
             row.save(update_fields=["seeded"])
         else:
             row.delete()
+        log_seed_removed(row.definition.key, row.tag.name, kept=kept)
 
 
 def _drop_stale_overrides(catalogue: Catalogue, changeset: ChangeSet) -> None:

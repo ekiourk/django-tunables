@@ -1,7 +1,7 @@
 from django.utils.module_loading import import_string
 from rest_framework.request import Request
 
-from tunables.changes import Actor
+from tunables.changes import FIELD_WIDTH, Actor
 from tunables.conf import settings
 
 
@@ -25,5 +25,5 @@ def resolve_actor(request: Request) -> Actor:
 
 
 def request_id(request: Request) -> str:
-    """Value of the TUNABLES["REQUEST_ID_HEADER"] header, or an empty string."""
-    return str(request.headers.get(settings.REQUEST_ID_HEADER, ""))
+    """Value of the TUNABLES["REQUEST_ID_HEADER"] header, or an empty string. Cut to the column width."""
+    return str(request.headers.get(settings.REQUEST_ID_HEADER, ""))[:FIELD_WIDTH]

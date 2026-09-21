@@ -271,9 +271,11 @@ tag 'review' created by alice
 tags of 'pricing.vat_rate' set by alice: was [money], now [money, review]
 ```
 
-Rows that `tunables_sync` seeds from the catalogue say `system`. A call from a shell
-leaves `assigned_by` empty and logs "an unnamed caller". An actor longer than 255
-characters is truncated to fit the column.
+Rows that `tunables_sync` seeds from the catalogue say `system`, and only those rows
+do, which is how a later sync knows an assignment was a person's and keeps it when the
+seed goes away. A call from a shell leaves `assigned_by` empty and logs "an unnamed
+caller". An actor or request id longer than 255 characters is truncated to fit its
+column.
 
 A view declares which family it belongs to with `permission_scope`, `"tag"` or the
 default `"value"`, so a host subclassing a view inherits the right rule.

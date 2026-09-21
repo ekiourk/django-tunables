@@ -34,10 +34,12 @@ Additions:
   tag without it is `403 forbidden-tag` on the API and a form error in the admin.
   Deployments with their own permission class keep today's behaviour.
 - `tunables_sync` no longer rewrites who attached a tag when the catalogue starts
-  seeding it, and dropping a seed leaves a human assignment in place as a manual one
-  instead of deleting it.
-- An actor identity longer than 255 characters is truncated rather than failing the
-  write on PostgreSQL.
+  seeding it, and dropping a seed leaves a caller's assignment in place as a manual one
+  instead of deleting it. Only rows the command created carry `system`, so an assignment
+  made from a shell with no actor survives too. Dropping a seed writes a line to the
+  `tunables.tags` logger saying whether the row was kept or removed.
+- An actor identity or request id longer than 255 characters is truncated rather than
+  failing the write on PostgreSQL.
 
 - Tag changes leave a record. The assignment row gains `assigned_by` and `assigned_at`,
   migration `0005`, and every tag change writes one info line to the `tunables.tags`

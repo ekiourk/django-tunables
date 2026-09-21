@@ -550,3 +550,11 @@ def test_a_very_long_actor_header_is_truncated(api: APIClient) -> None:
         HTTP_X_TUNABLES_ACTOR=long_name,
     )
     assert len(TunableDefinitionTag.objects.get(tag__name="review").assigned_by) == 255
+
+
+def test_a_very_long_request_id_is_truncated(api: APIClient) -> None:
+    from tunables.models import ChangeSet
+
+    body = {"changes": [{"key": "pricing.vat_rate", "value": 0.3}], "reason": "r"}
+    assert api.post(BASE + "changesets/", body, format="json", HTTP_X_REQUEST_ID="r" * 400).status_code == 201
+    assert len(ChangeSet.objects.get(version=1).request_id) == 255
