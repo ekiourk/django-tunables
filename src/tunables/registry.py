@@ -1,8 +1,6 @@
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
-from django.core.signals import setting_changed
-from django.dispatch import receiver
 from django.utils.module_loading import import_string
 
 from tunables.catalogue import Catalogue
@@ -28,7 +26,6 @@ def reset() -> None:
     _catalogue = None
 
 
-@receiver(setting_changed)
 def _on_setting_changed(*, setting: str, **_: Any) -> None:
     if setting == "TUNABLES":
         reset()
