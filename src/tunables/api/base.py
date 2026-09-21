@@ -12,7 +12,7 @@ from tunables.api import problems
 from tunables.conf import settings
 from tunables.errors import CatalogueOutOfSync
 from tunables.models import State
-from tunables.sync import is_synced
+from tunables.sync import is_current
 
 
 def _instantiate(entries: Sequence[Any]) -> list[Any]:
@@ -37,14 +37,22 @@ class TunablesAPIView(APIView):
 
     def initial(self, request: Request, *args: Any, **kwargs: Any) -> None:
         super().initial(request, *args, **kwargs)
+        self._state = State.objects.filter(pk=1).first()
+        self._state_loaded = True
         if request.method in SAFE_METHODS and not self.reads_need_sync:
             return
-        if not is_synced():
+        if not is_current(self._state):
             raise CatalogueOutOfSync("catalogue changed since the last sync; run tunables_sync")
 
     def finalize_response(self, request: Request, response: Response, *args: Any, **kwargs: Any) -> Response:
         response = super().finalize_response(request, response, *args, **kwargs)
-        version = State.objects.filter(pk=1).values_list("current_version", flat=True).first()
+        version = self._version(request)
         if version is not None:
             response["X-Tunables-Version"] = str(version)
         return response
+
+    def _version(self, request: Request) -> int | None:
+        """The row read in initial. A write moved the version, and a rejected request never read it."""
+        fresh = request.method not in SAFE_METHODS or not getattr(self, "_state_loaded", False)
+        state = State.objects.filter(pk=1).first() if fresh else self._state
+        return state.current_version if state is not None else None

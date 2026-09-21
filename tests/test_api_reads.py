@@ -780,3 +780,20 @@ def test_the_index_links_to_the_mount_that_served_it(api: APIClient) -> None:
     second = api.get("/internal/tunables/").json()
     assert first["groups"] == "http://testserver/api/tunables/groups/"
     assert second["groups"] == "http://testserver/internal/tunables/groups/"
+
+
+def test_a_read_touches_the_state_row_once(api: APIClient) -> None:
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+
+    with CaptureQueriesContext(connection) as captured:
+        assert get(api, "groups/").status_code == 200
+    state_reads = [q["sql"] for q in captured.captured_queries if "tunables_state" in q["sql"]]
+    assert len(state_reads) == 1, state_reads
+
+
+def test_a_write_reports_the_version_it_produced(api: APIClient) -> None:
+    body = {"changes": [{"key": "pricing.vat_rate", "value": 0.3}], "reason": "r"}
+    response = api.post(BASE + "changesets/", body, format="json")
+    assert response.status_code == 201
+    assert response["X-Tunables-Version"] == "1"

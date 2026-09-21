@@ -3,6 +3,8 @@
 from collections.abc import Callable, Mapping
 from typing import Any, TypeVar
 
+from django.utils.translation import gettext as _
+
 from tunables.catalogue import Group, GroupValidator
 from tunables.errors import CatalogueError, ConstraintError
 from tunables.types import Float, Integer
@@ -76,7 +78,13 @@ class _SumsTo(_NamedValidator):
         actual = sum(values[name] for name in self.names)
         if not _within(actual, self.total, self.tolerance):
             raise ConstraintError(
-                "sum", f"{' + '.join(self.names)} must sum to {_number(self.total)}, got {_number(actual)}"
+                "sum",
+                _("%(names)s must sum to %(total)s, got %(actual)s")
+                % {
+                    "names": " + ".join(self.names),
+                    "total": _number(self.total),
+                    "actual": _number(actual),
+                },
             )
 
 
@@ -107,17 +115,25 @@ class _Ordered(_NamedValidator):
         return self.names[0] if self.down else self.names[-1]
 
     def __call__(self, values: Mapping[str, Any]) -> None:
-        relation = "greater than" if self.down else "less than"
-        if not self.strict:
-            relation += " or equal to"
         for first, second in zip(self.names, self.names[1:], strict=False):
             left, right = values[first], values[second]
             if not self._ordered(left, right):
                 raise ConstraintError(
-                    "order", f"{first} must be {relation} {second}, got {_number(left)} and {_number(right)}"
+                    "order",
+                    self._relation()
+                    % {"first": first, "second": second, "left": _number(left), "right": _number(right)},
                 )
         self._check_pin("floor", self.floor, self._floor_name(), values)
         self._check_pin("ceiling", self.ceiling, self._ceiling_name(), values)
+
+    def _relation(self) -> str:
+        if self.down:
+            if self.strict:
+                return _("%(first)s must be greater than %(second)s, got %(left)s and %(right)s")
+            return _("%(first)s must be greater than or equal to %(second)s, got %(left)s and %(right)s")
+        if self.strict:
+            return _("%(first)s must be less than %(second)s, got %(left)s and %(right)s")
+        return _("%(first)s must be less than or equal to %(second)s, got %(left)s and %(right)s")
 
     def _ordered(self, left: float, right: float) -> bool:
         if self.down:
@@ -126,7 +142,11 @@ class _Ordered(_NamedValidator):
 
     def _check_pin(self, code: str, pinned: float | None, name: str, values: Mapping[str, Any]) -> None:
         if pinned is not None and values[name] != pinned:
-            raise ConstraintError(code, f"{name} must be {_number(pinned)}, got {_number(values[name])}")
+            raise ConstraintError(
+                code,
+                _("%(name)s must be %(pinned)s, got %(actual)s")
+                % {"name": name, "pinned": _number(pinned), "actual": _number(values[name])},
+            )
 
 
 def sums_to(total: float, first: str, second: str, *rest: str, tolerance: float = 1e-9) -> GroupValidator:

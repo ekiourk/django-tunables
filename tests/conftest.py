@@ -87,6 +87,7 @@ def api(synced: SyncResult) -> APIClient:
 GERMAN = {
     "must be >= %(minimum)s": "muss mindestens %(minimum)s sein",
     "Reset to default ({value})": "Auf Standard zurücksetzen ({value})",
+    "%(names)s must sum to %(total)s, got %(actual)s": "%(names)s muss %(total)s ergeben, ist %(actual)s",
 }
 
 

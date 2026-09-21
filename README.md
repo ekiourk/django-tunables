@@ -136,7 +136,7 @@ All settings live in one dictionary, `TUNABLES`. Only `CATALOGUE` is required.
 | `API_AUTHENTICATION_CLASSES` | `None` | DRF authentication classes for the API. `None` uses the host's DRF defaults. |
 | `API_PERMISSION_CLASSES` | `None` | DRF permission classes for the API. `None` uses the host's DRF defaults. |
 | `ACTOR_RESOLVER` | `tunables.api.actors.default_actor_resolver` | Callable turning a request into an `Actor`. |
-| `EDITABLE_GROUPS` | `None` | Callable returning the group names a request may write, or `None` for all. Applied by the API and the admin. |
+| `EDITABLE_GROUPS` | `None` | Callable returning the group names a request may write, or `None` for all. Applied by the API and the admin, so it receives DRF's `Request` from one and Django's `HttpRequest` from the other. |
 | `ACTOR_HEADER` | `X-Tunables-Actor` | Header naming the actor of an unauthenticated request. |
 | `CLIENT_HEADER` | `X-Tunables-Client` | Header naming the client program. |
 | `REQUEST_ID_HEADER` | `X-Request-ID` | Header whose value is recorded as the change set's request id. |
@@ -248,6 +248,11 @@ shipped with the package, and the table contract are in
 Writes accept `If-Match` for optimistic concurrency and every response carries
 `X-Tunables-Version`. Errors are RFC 9457 problem documents. The full reference,
 including the problem types and error codes, is in [docs/api.md](docs/api.md).
+
+Tags are metadata and sit outside the audit trail. Creating a tag, renaming it, or
+attaching it to a tunable writes no change set and records no actor or reason, and it
+does not move the version. Values are the audited part of the package; labels on them
+are not.
 
 ## Admin
 

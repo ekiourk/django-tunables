@@ -224,3 +224,13 @@ def test_repeated_names_are_rejected_at_construction() -> None:
         Group("weights", weights(), validators=[sums_to(1.0, "alpha", "alpha", "beta")])
     with pytest.raises(CatalogueError, match="beta"):
         Group("weights", weights(), validators=[descending("beta", "beta")])
+
+
+def test_messages_go_through_translation(german: None) -> None:
+    from django.utils import translation
+
+    rule = sums_to(1.0, "alpha", "beta")
+    with translation.override("de"):
+        error = raised(rule, {"alpha": 0.5, "beta": 0.9})
+        assert error.message == "alpha + beta muss 1 ergeben, ist 1.4"
+    assert raised(rule, {"alpha": 0.5, "beta": 0.9}).message == "alpha + beta must sum to 1, got 1.4"

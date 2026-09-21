@@ -56,7 +56,11 @@ def mirror_drift() -> list[str]:
 
 def is_synced() -> bool:
     """True when State exists and its catalogue_version matches the code."""
-    state = State.objects.filter(pk=1).first()
+    return is_current(State.objects.filter(pk=1).first())
+
+
+def is_current(state: State | None) -> bool:
+    """The same check against a State row the caller already has."""
     return state is not None and state.catalogue_version == get_catalogue().version
 
 

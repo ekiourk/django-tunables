@@ -3,6 +3,7 @@ from typing import Any, TypeVar
 from django.core.validators import RegexValidator
 from django.db import models
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from tunables.errors import HistoryIsAppendOnly
 from tunables.identifiers import TAG
@@ -69,6 +70,8 @@ class TunableDefinition(models.Model):
 
     class Meta:
         ordering = ["group_name", "order", "name"]
+        verbose_name = _("tunable")
+        verbose_name_plural = _("tunables")
 
 
 class TunableDefinitionTag(models.Model):

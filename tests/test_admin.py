@@ -612,3 +612,9 @@ def test_a_non_ascii_default_is_shown_as_written() -> None:
     group = Group("shop", [tunable])
     form = build_group_form(group, {"greeting": "hi"}, {"greeting"}, 1)()
     assert str(form.fields["reset_greeting"].label) == 'Reset to default ("Café ☕")'
+
+
+def test_the_admin_index_calls_the_page_tunables(admin_client: Client, synced: SyncResult) -> None:
+    content = admin_client.get("/admin/").content.decode()
+    assert "Tunables</a>" in content
+    assert "Tunable definitions" not in content

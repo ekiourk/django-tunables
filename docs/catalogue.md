@@ -281,6 +281,11 @@ The built-in types are frozen dataclasses, which gives them equality and a reada
 
 ## Sections and UI hints
 
+The UI schema the package emits is a [JSON Forms](https://jsonforms.io) layout: a
+`VerticalLayout` of `Control` elements, with `Group` elements for sections. A client
+using another form library reads the JSON Schema and ignores the UI schema, or maps the
+layout itself. The package emits no other dialect.
+
 `Tunable.ui` is copied into the `options` of that tunable's control in the UI schema.
 The package interprets only `readonly`, which it sets to `true` for deprecated
 tunables unless the declaration says otherwise. Everything else passes through for

@@ -197,6 +197,13 @@ operators actually reach for.
 snapshot table `DELETE` is allowed, so retention runs on a protected deployment without
 lifting the protection first.
 
+The triggers are a command rather than a migration on purpose. Protection is an
+operational choice: it needs privileges the migration user may not have, it would
+otherwise apply to every database `migrate` touches, including the ones a test run
+creates and drops, and an operator has to be able to lift it and put it back. The cost
+is that the triggers are outside the schema history, so a new deployment that wants
+them runs `tunables_protect_history` as its own step after `migrate`.
+
 An exported document can also be imported into another deployment with the same
 catalogue, through `tunables_import` or `POST import/`. In replace mode the target ends
 up with exactly the overrides of the document, which is how a tuned state is promoted

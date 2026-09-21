@@ -21,6 +21,12 @@ Changes to existing behaviour:
 
 Additions:
 
+- The admin app index calls the page Tunables, matching the page itself, through a
+  verbose name on the definition model and migration `0004`.
+- Validator messages from `tunables.validators` go through Django's translation
+  machinery, like the messages the types raise.
+- An API response reads the state row once instead of twice.
+
 - `sums_to`, `descending` and `ascending` in the new `tunables.validators`, exported
   from the package root, cover the two group rules that catalogues repeat. They raise
   codes `sum`, `order`, `floor` and `ceiling`, name the fields and numbers in the
