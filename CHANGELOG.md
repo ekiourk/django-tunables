@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The "Reset to default" box in the admin group form names the default it restores, as
+  JSON with the unit, for example "Reset to default (30.0 s)". A default longer than 40
+  characters is cut in the label and given in full as the box's help text.
+
+## Unreleased
+
 - `sums_to`, `descending` and `ascending` in the new `tunables.validators`, exported
   from the package root, cover the two group rules catalogues repeat. They raise codes
   `sum`, `order`, `floor` and `ceiling`, name the fields and numbers in the message,
