@@ -1,10 +1,10 @@
-import inspect
 import json
 from collections.abc import Collection, Mapping, Sequence
 from importlib import resources
 from typing import Any
 
-from tunables.catalogue import Catalogue, Group, GroupValidator, Tunable
+from tunables.catalogue import Catalogue, Group, Tunable
+from tunables.catalogue import validator_description as validator_description
 
 JSON_SCHEMA_DIALECT = "https://json-schema.org/draft/2020-12/schema"
 
@@ -54,16 +54,6 @@ def _property(group: Group, tunable: Tunable, tags: Sequence[str]) -> dict[str, 
         prop["x-deprecated-reason"] = tunable.deprecated
     prop["x-tags"] = sorted(tags)
     return prop
-
-
-def validator_description(validator: GroupValidator) -> str:
-    description = getattr(validator, "description", None)
-    if description:
-        return str(description)
-    doc = inspect.getdoc(validator)
-    if doc:
-        return doc.split("\n\n", 1)[0]
-    return getattr(validator, "__name__", type(validator).__name__)
 
 
 def ui_schema(group: Group, *, names: Collection[str] | None = None) -> dict[str, Any]:

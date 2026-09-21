@@ -1,4 +1,5 @@
 import hashlib
+import inspect
 import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -71,6 +72,17 @@ class Tunable:
         object.__setattr__(self, "default", default)
 
 
+def validator_description(validator: GroupValidator | CatalogueValidator) -> str:
+    """The text shown for a validator: its description, else its first docstring line, else its name."""
+    description = getattr(validator, "description", None)
+    if description:
+        return str(description)
+    doc = inspect.getdoc(validator)
+    if doc:
+        return doc.split("\n\n", 1)[0]
+    return getattr(validator, "__name__", type(validator).__name__)
+
+
 @dataclass(frozen=True)
 class Group:
     name: str
@@ -127,7 +139,7 @@ class Catalogue:
         for validator in validators:
             if hasattr(validator, "check_group"):
                 raise CatalogueError(
-                    f"{str(validator)!r} is a group validator; pass it to a Group, not to the Catalogue"
+                    "pass this group validator to a Group, not to the Catalogue: " + validator_description(validator)
                 )
         self.validators: Sequence[CatalogueValidator] = tuple(validators)
         declared: dict[str, Category] = {}

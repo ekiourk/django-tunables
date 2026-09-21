@@ -33,10 +33,13 @@ class _NamedValidator:
     """Base for the built-in validators: knows the names it reads, so a Group can check them early."""
 
     names: tuple[str, ...]
-    description: str
+    description: str = ""
 
     def __str__(self) -> str:
         return self.description
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.description!r})"
 
     def check_group(self, group: Group) -> None:
         """Raise CatalogueError when a name is missing from the group or is not a number."""

@@ -7,7 +7,7 @@ from tunables import Actor, Catalogue, Change, Float, Group, Integer, String, Tu
 from tunables.errors import CatalogueError, ConstraintError, ValidationFailed
 from tunables.schema import validator_description
 from tunables.sync import sync
-from tunables.validators import ascending, descending, describes, sums_to
+from tunables.validators import _NamedValidator, ascending, descending, describes, sums_to
 
 
 def weights() -> list[Tunable]:
@@ -180,8 +180,28 @@ def test_a_rule_needs_at_least_two_names() -> None:
 
 def test_a_group_rule_cannot_be_a_catalogue_validator() -> None:
     group = Group("weights", weights(), validators=[sums_to(1.0, "alpha", "beta", "gamma")])
-    with pytest.raises(CatalogueError) as info:
+    with pytest.raises(CatalogueError, match="group validator") as info:
         Catalogue([group], validators=[sums_to(1.0, "alpha", "beta")])
-    assert str(info.value) == (
-        "'alpha + beta must sum to 1.' is a group validator; pass it to a Group, not to the Catalogue"
-    )
+    assert "alpha + beta must sum to 1." in str(info.value)
+
+
+class Ruled(_NamedValidator):
+    """Alpha must stay under beta."""
+
+    names = ("alpha",)
+
+    def __call__(self, values: Any) -> None:
+        pass
+
+
+def test_a_rule_without_a_description_still_reports_itself() -> None:
+    rule = Ruled()
+    assert str(rule) == ""
+    assert repr(rule) == "Ruled('')"
+    with pytest.raises(CatalogueError, match="group validator") as info:
+        Catalogue([Group("weights", weights())], validators=[rule])
+    assert "Alpha must stay under beta." in str(info.value)
+
+
+def test_a_rule_reprs_as_its_description() -> None:
+    assert repr(sums_to(1.0, "alpha", "beta")) == "_SumsTo('alpha + beta must sum to 1.')"
