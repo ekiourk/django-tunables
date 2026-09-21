@@ -29,6 +29,32 @@ Read and write endpoints share these settings. To let some clients read and only
 write, use a DRF permission class that inspects `request.method`, or restrict writes
 per group with `EDITABLE_GROUPS` below.
 
+### Using the admin's permissions
+
+The admin asks Django's permission system and the API asks DRF, so the two answer
+separately. `tunables.api.permissions.TunablesPermissions` points them at the same
+answers for a host that wants one model:
+
+```python
+TUNABLES = {
+    "CATALOGUE": "myproject.tunables_catalogue.catalogue",
+    "API_PERMISSION_CLASSES": ["tunables.api.permissions.TunablesPermissions"],
+}
+```
+
+| Request | Permission |
+|---|---|
+| any read | `tunables.view_tunabledefinition` |
+| `POST tags/` | `tunables.add_tag` |
+| `PATCH tags/{name}/`, `PUT definitions/{key}/tags/` | `tunables.change_tag` |
+| `DELETE tags/{name}/` | `tunables.delete_tag` |
+| every other write | `tunables.add_changeset` |
+
+The class needs a request with a user, so it suits session or token authentication
+backed by Django accounts. A deployment that authenticates without user accounts keeps
+its own permission class, which is the default. `EDITABLE_GROUPS` still applies on top,
+narrowing writes by group.
+
 ## Headers
 
 | Header | Direction | Meaning |
