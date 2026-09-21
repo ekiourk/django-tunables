@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from django.db import transaction
 from django.utils import timezone
 
-from tunables.errors import TagExists, TagSeeded
+from tunables.errors import TagExists, TagNotAllowed, TagSeeded
 from tunables.identifiers import TAG
 from tunables.models import Tag, TunableDefinition, TunableDefinitionTag
 
@@ -51,10 +51,18 @@ def delete_tag(name: str, *, actor: str = "") -> None:
 
 
 @transaction.atomic
-def set_manual_tags(key: str, names: Sequence[str], *, actor: str = "") -> list[str]:
-    """Replace the manual tags of one definition, creating unknown names. Returns every tag on it, sorted."""
+def set_manual_tags(key: str, names: Sequence[str], *, actor: str = "", may_create: bool = True) -> list[str]:
+    """Replace the manual tags of one definition, creating unknown names. Returns every tag on it, sorted.
+
+    With may_create false, a name that no tag carries raises TagNotAllowed instead of creating it.
+    """
     for name in names:
         _check_name(name)
+    if not may_create:
+        known = set(Tag.objects.filter(name__in=names).values_list("name", flat=True))
+        for name in names:
+            if name not in known:
+                raise TagNotAllowed(name)
     definition = TunableDefinition.objects.get(key=key)
     wanted = set(names)
     rows = TunableDefinitionTag.objects.filter(definition=definition).select_related("tag")

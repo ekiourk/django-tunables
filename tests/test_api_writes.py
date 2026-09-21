@@ -533,3 +533,20 @@ def test_tag_writes_record_the_actor(api: APIClient) -> None:
     )
     row = TunableDefinitionTag.objects.get(tag__name="review")
     assert row.assigned_by == "alice"
+
+
+def test_a_very_long_actor_header_is_truncated(api: APIClient) -> None:
+    from tunables.models import ChangeSet, TunableDefinitionTag
+
+    long_name = "a" * 400
+    body = {"changes": [{"key": "pricing.vat_rate", "value": 0.3}], "reason": "r"}
+    assert api.post(BASE + "changesets/", body, format="json", HTTP_X_TUNABLES_ACTOR=long_name).status_code == 201
+    assert len(ChangeSet.objects.get(version=1).actor) == 255
+
+    api.put(
+        BASE + "definitions/pricing.vat_rate/tags/",
+        {"tags": ["review"]},
+        format="json",
+        HTTP_X_TUNABLES_ACTOR=long_name,
+    )
+    assert len(TunableDefinitionTag.objects.get(tag__name="review").assigned_by) == 255

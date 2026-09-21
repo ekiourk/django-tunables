@@ -234,3 +234,11 @@ def test_messages_go_through_translation(german: None) -> None:
         error = raised(rule, {"alpha": 0.5, "beta": 0.9})
         assert error.message == "alpha + beta muss 1 ergeben, ist 1.4"
     assert raised(rule, {"alpha": 0.5, "beta": 0.9}).message == "alpha + beta must sum to 1, got 1.4"
+
+
+def test_a_mixed_group_with_a_huge_integer_is_a_violation() -> None:
+    huge = 10**400
+    error = raised(sums_to(1.0, "count", "share"), {"count": huge, "share": 0.5})
+    assert error.code == "sum"
+    assert error.message.endswith(f"got {huge}")
+    assert raised(sums_to(1.0, "share", "count"), {"share": 0.5, "count": huge}).code == "sum"

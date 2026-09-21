@@ -215,3 +215,11 @@ def test_tag_assignments_through_the_seeded_flag(definition: TunableDefinition) 
     manual.delete()
     assert list(definition.tags.values_list("name", flat=True)) == ["money"]
     assert TunableDefinitionTag.objects.count() == 1
+
+
+def test_migration_0005_marks_existing_seeded_rows(db: None) -> None:
+    from importlib import import_module
+
+    module = import_module("tunables.migrations.0005_tunabledefinitiontag_assigned_at_and_more")
+    names = [type(operation).__name__ for operation in module.Migration.operations]
+    assert "RunPython" in names

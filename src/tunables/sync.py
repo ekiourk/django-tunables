@@ -153,10 +153,19 @@ def _seed_tags(catalogue: Catalogue) -> None:
     tags = Tag.objects.in_bulk(seed_names, field_name="name")
     for key, tag in seeds:
         TunableDefinitionTag.objects.update_or_create(
-            definition=definitions[key], tag=tags[tag], defaults={"seeded": True, "assigned_by": SYSTEM}
+            definition=definitions[key],
+            tag=tags[tag],
+            defaults={"seeded": True},
+            create_defaults={"seeded": True, "assigned_by": SYSTEM},
         )
     for row in TunableDefinitionTag.objects.filter(seeded=True).select_related("definition", "tag"):
-        if (row.definition.key, row.tag.name) not in seeds:
+        if (row.definition.key, row.tag.name) in seeds:
+            continue
+        if row.assigned_by and row.assigned_by != SYSTEM:
+            # A person attached this before the catalogue seeded it, so the seed going away leaves it manual.
+            row.seeded = False
+            row.save(update_fields=["seeded"])
+        else:
             row.delete()
 
 

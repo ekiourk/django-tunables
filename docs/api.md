@@ -272,7 +272,13 @@ tags of 'pricing.vat_rate' set by alice: was [money], now [money, review]
 ```
 
 Rows that `tunables_sync` seeds from the catalogue say `system`. A call from a shell
-leaves `assigned_by` empty and logs "an unnamed caller".
+leaves `assigned_by` empty and logs "an unnamed caller". An actor longer than 255
+characters is truncated to fit the column.
+
+`PUT definitions/{key}/tags/` creates a tag it has never seen, which under
+`TunablesPermissions` needs `tunables.add_tag`. A caller holding only
+`tunables.change_tag` may attach tags that already exist, and naming an unknown one is
+`403 forbidden-tag`. Deployments using their own permission class are unaffected.
 
 `code` is the contract; `detail` is text for people. The package routes its messages
 through Django's translation machinery, so `detail` comes out in the request's active
@@ -290,6 +296,7 @@ branch on an error should key on `code`, and clients that show messages can loca
 | `urn:tunables:problem:forbidden-group` | 403 | `group` | `EDITABLE_GROUPS` excludes a touched group |
 | `urn:tunables:problem:tag-exists` | 409 | `name` | `POST tags/` with a name that exists |
 | `urn:tunables:problem:tag-seeded` | 409 | `name` | `DELETE tags/{name}/` on a tag the catalogue seeds |
+| `urn:tunables:problem:forbidden-tag` | 403 | `name` | `PUT definitions/{key}/tags/` names a tag that does not exist and the caller may not create one |
 | `urn:tunables:problem:catalogue-out-of-sync` | 503 | | code and database disagree; run `tunables_sync` |
 | `urn:tunables:problem:not-found` | 404 | | unknown group, version or page |
 | `urn:tunables:problem:invalid` | 400 | `errors` | malformed body, query parameter or `If-Match` header |

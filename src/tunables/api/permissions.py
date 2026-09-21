@@ -24,6 +24,14 @@ class TunablesPermissions(BasePermission):
         return "tunables.add_changeset"
 
 
+def may_create_tags(request: Request, view: Any) -> bool:
+    """True unless this deployment aligned the API with Django permissions and the caller lacks add_tag."""
+    if not any(isinstance(permission, TunablesPermissions) for permission in view.get_permissions()):
+        return True
+    user = getattr(request, "user", None)
+    return bool(user is not None and user.has_perm("tunables.add_tag"))
+
+
 def _is_tag_view(view: Any) -> bool:
     """True for the tag endpoints and the per-definition tag write."""
     from tunables.api.views import TagDetail, TagList

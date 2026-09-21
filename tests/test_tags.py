@@ -1,6 +1,7 @@
 import logging
 
 import pytest
+from django.test import override_settings
 
 from tunables import tags
 from tunables.errors import TagExists, TagSeeded
@@ -106,3 +107,36 @@ def test_an_unattributed_change_still_logs(synced: SyncResult, caplog: pytest.Lo
         create_tag("review")
     assert caplog.records[0].getMessage() == "tag 'review' created by an unnamed caller"
     assert TunableDefinitionTag.objects.filter(tag__name="review").count() == 0
+
+
+def test_sync_keeps_who_attached_a_tag_it_later_seeds(synced: SyncResult) -> None:
+    from dataclasses import replace
+
+    from tests.catalogue import limits, pricing, thermostat, weights
+    from tests.test_sync import alt
+    from tunables import Tunable
+    from tunables.sync import sync
+
+    set_manual_tags("weights.alpha", ["review"], actor="alice")
+    row = TunableDefinitionTag.objects.get(definition__key="weights.alpha", tag__name="review")
+    stamped = row.assigned_at
+
+    tunables = [replace(t, tags=["review"]) if t.name == "alpha" else t for t in weights.tunables]
+    globals()["seeding"] = alt([pricing, thermostat, replace(weights, tunables=tunables), limits])
+    with override_settings(TUNABLES={"CATALOGUE": f"{__name__}.seeding"}):
+        sync()
+    row.refresh_from_db()
+    assert (row.seeded, row.assigned_by) == (True, "alice")
+    assert row.assigned_at == stamped
+    assert isinstance(tunables[0], Tunable)
+
+
+def test_dropping_a_seed_keeps_a_human_assignment(synced: SyncResult) -> None:
+    from tunables.sync import sync
+
+    set_manual_tags("weights.alpha", ["review"], actor="alice")
+    TunableDefinitionTag.objects.filter(definition__key="weights.alpha", tag__name="review").update(seeded=True)
+    sync()
+    row = TunableDefinitionTag.objects.filter(definition__key="weights.alpha", tag__name="review").first()
+    assert row is not None
+    assert (row.seeded, row.assigned_by) == (False, "alice")

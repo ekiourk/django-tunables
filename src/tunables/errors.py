@@ -102,6 +102,12 @@ class TagExists(TunablesError):
         self.name = name
 
 
+class TagNotAllowed(TunablesError):
+    def __init__(self, name: str) -> None:
+        super().__init__(_("tag %(name)r does not exist and this caller may not create one") % {"name": name})
+        self.name = name
+
+
 class TagSeeded(TunablesError):
     def __init__(self, name: str) -> None:
         super().__init__(_("tag %(name)r is seeded by the catalogue and cannot be deleted") % {"name": name})

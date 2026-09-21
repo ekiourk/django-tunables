@@ -125,7 +125,8 @@ The admin uses Django's standard permissions with one addition:
 |---|---|
 | see the group index and the definitions page | `tunables.view_tunabledefinition` |
 | open the edit form and save | `tunables.add_changeset` |
-| edit a definition's tags | `tunables.change_tag` |
+| attach an existing tag to a definition | `tunables.change_tag` |
+| name a tag that does not exist yet | also `tunables.add_tag` |
 | see, create, edit and delete tags in the tag admin | Django's `view`, `add`, `change` and `delete` permissions on `Tag` |
 | see the change set history | `tunables.view_changeset` |
 | roll back | `tunables.view_changeset` and `tunables.add_changeset` |

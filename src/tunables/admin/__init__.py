@@ -20,6 +20,7 @@ from tunables.errors import (
     FieldError,
     GroupNotEditable,
     NothingToChange,
+    TagNotAllowed,
     UnknownVersion,
     ValidationFailed,
     VersionConflict,
@@ -138,9 +139,18 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
         if request.method == "POST":
             form = DefinitionTagsForm(request.POST)
             if form.is_valid():
-                set_manual_tags(key, form.cleaned_data["tags"], actor=request.user.get_username())
-                messages.success(request, _("Saved the tags of %(key)s.") % {"key": key})
-                return HttpResponseRedirect(definitions_url)
+                try:
+                    set_manual_tags(
+                        key,
+                        form.cleaned_data["tags"],
+                        actor=request.user.get_username(),
+                        may_create=request.user.has_perm("tunables.add_tag"),
+                    )
+                except TagNotAllowed as refused:
+                    form.add_error("tags", str(refused))
+                else:
+                    messages.success(request, _("Saved the tags of %(key)s.") % {"key": key})
+                    return HttpResponseRedirect(definitions_url)
         else:
             form = DefinitionTagsForm(initial={"tags": ", ".join(manual)})
         context = {

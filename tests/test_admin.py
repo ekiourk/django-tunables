@@ -641,7 +641,7 @@ def test_the_definitions_page_links_tags_for_a_tagger(synced: SyncResult) -> Non
 def test_admin_tagging_records_the_logged_in_user(synced: SyncResult) -> None:
     from tunables.models import TunableDefinitionTag
 
-    tagger = staff("tunables.view_tunabledefinition", "tunables.change_tag")
+    tagger = staff("tunables.view_tunabledefinition", "tunables.change_tag", "tunables.add_tag")
     tagger.post(tags_url("pricing.vat_rate"), {"tags": "review"})
     row = TunableDefinitionTag.objects.get(tag__name="review")
     assert row.assigned_by == "staff"
@@ -662,3 +662,13 @@ def test_the_tag_admin_logs_its_writes(admin_client: Client, synced: SyncResult,
         "tag 'review' described by admin",
         "tag 'review' deleted by admin",
     ]
+
+
+def test_the_admin_refuses_to_invent_a_tag_without_the_add_permission(synced: SyncResult) -> None:
+    from tunables.models import Tag
+
+    tagger = staff("tunables.view_tunabledefinition", "tunables.change_tag")
+    response = tagger.post(tags_url("pricing.vat_rate"), {"tags": "brandnew"})
+    assert response.status_code == 200
+    assert "may not create one" in response.content.decode()
+    assert not Tag.objects.filter(name="brandnew").exists()

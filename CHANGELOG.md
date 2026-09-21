@@ -25,6 +25,16 @@ Changes to existing behaviour:
 
 Additions:
 
+- Attaching a tag that does not exist yet needs `tunables.add_tag` as well as
+  `tunables.change_tag`, in the admin and under `TunablesPermissions`. Naming an unknown
+  tag without it is `403 forbidden-tag` on the API and a form error in the admin.
+  Deployments with their own permission class keep today's behaviour.
+- `tunables_sync` no longer rewrites who attached a tag when the catalogue starts
+  seeding it, and dropping a seed leaves a human assignment in place as a manual one
+  instead of deleting it.
+- An actor identity longer than 255 characters is truncated rather than failing the
+  write on PostgreSQL.
+
 - Tag changes leave a record. The assignment row gains `assigned_by` and `assigned_at`,
   migration `0005`, and every tag change writes one info line to the `tunables.tags`
   logger naming the actor and, for an assignment, the tags before and after. Rows seeded
