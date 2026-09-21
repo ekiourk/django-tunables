@@ -126,7 +126,9 @@ class Catalogue:
         self.label = label
         for validator in validators:
             if hasattr(validator, "check_group"):
-                raise CatalogueError(f"{validator} is a group validator; pass it to a Group, not to the Catalogue")
+                raise CatalogueError(
+                    f"{str(validator)!r} is a group validator; pass it to a Group, not to the Catalogue"
+                )
         self.validators: Sequence[CatalogueValidator] = tuple(validators)
         declared: dict[str, Category] = {}
         for category in categories:

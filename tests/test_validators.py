@@ -180,5 +180,8 @@ def test_a_rule_needs_at_least_two_names() -> None:
 
 def test_a_group_rule_cannot_be_a_catalogue_validator() -> None:
     group = Group("weights", weights(), validators=[sums_to(1.0, "alpha", "beta", "gamma")])
-    with pytest.raises(CatalogueError, match="group validator"):
+    with pytest.raises(CatalogueError) as info:
         Catalogue([group], validators=[sums_to(1.0, "alpha", "beta")])
+    assert str(info.value) == (
+        "'alpha + beta must sum to 1.' is a group validator; pass it to a Group, not to the Catalogue"
+    )

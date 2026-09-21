@@ -35,6 +35,9 @@ class _NamedValidator:
     names: tuple[str, ...]
     description: str
 
+    def __str__(self) -> str:
+        return self.description
+
     def check_group(self, group: Group) -> None:
         """Raise CatalogueError when a name is missing from the group or is not a number."""
         types = {tunable.name: tunable.type for tunable in group.tunables}
