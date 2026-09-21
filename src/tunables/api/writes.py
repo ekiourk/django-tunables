@@ -10,6 +10,7 @@ from tunables.access import check_editable, check_group_editable
 from tunables.api import problems
 from tunables.api.actors import request_id, resolve_actor
 from tunables.api.base import TunablesAPIView
+from tunables.api.permissions import may_create_tags
 from tunables.api.serializers import (
     ChangeSetDetailSerializer,
     ChangesRequestSerializer,
@@ -113,6 +114,8 @@ class Import(TunablesAPIView):
 
 
 class DefinitionTags(TunablesAPIView):
+    permission_scope = "tag"
+
     def put(self, request: Request, key: str) -> Response:
         serializer = DefinitionTagsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -120,5 +123,10 @@ class DefinitionTags(TunablesAPIView):
         if key not in set(catalogue.keys()):
             raise NotFound(f"unknown tunable {key!r}")
         check_group_editable(request, key.partition(".")[0])
-        tags = set_manual_tags(key, serializer.validated_data["tags"], actor=resolve_actor(request).identity)
+        tags = set_manual_tags(
+            key,
+            serializer.validated_data["tags"],
+            actor=resolve_actor(request).identity,
+            may_create=may_create_tags(request, self),
+        )
         return Response({"key": key, "tags": tags})

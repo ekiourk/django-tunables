@@ -19,14 +19,14 @@ class TunablesPermissions(BasePermission):
         """The permission this request needs, as 'tunables.<codename>'."""
         if request.method in SAFE_METHODS:
             return "tunables.view_tunabledefinition"
-        if _is_tag_view(view):
+        if getattr(view, "permission_scope", "value") == "tag":
             return f"tunables.{TAG_PERMISSIONS.get(str(request.method), 'change_tag')}"
         return "tunables.add_changeset"
 
 
-def _is_tag_view(view: Any) -> bool:
-    """True for the tag endpoints and the per-definition tag write."""
-    from tunables.api.views import TagDetail, TagList
-    from tunables.api.writes import DefinitionTags
-
-    return isinstance(view, TagList | TagDetail | DefinitionTags)
+def may_create_tags(request: Request, view: Any) -> bool:
+    """True unless this deployment aligned the API with Django permissions and the caller lacks add_tag."""
+    if not any(isinstance(permission, TunablesPermissions) for permission in view.get_permissions()):
+        return True
+    user = getattr(request, "user", None)
+    return bool(user is not None and user.has_perm("tunables.add_tag"))

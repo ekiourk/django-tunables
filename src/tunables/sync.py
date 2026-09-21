@@ -21,7 +21,7 @@ from tunables.models import (
 )
 from tunables.registry import get_catalogue
 from tunables.services import rule_violations, write_snapshot
-from tunables.tags import SYSTEM
+from tunables.tags import SYSTEM, log_seed_removed
 
 
 @dataclass(frozen=True)
@@ -153,11 +153,22 @@ def _seed_tags(catalogue: Catalogue) -> None:
     tags = Tag.objects.in_bulk(seed_names, field_name="name")
     for key, tag in seeds:
         TunableDefinitionTag.objects.update_or_create(
-            definition=definitions[key], tag=tags[tag], defaults={"seeded": True, "assigned_by": SYSTEM}
+            definition=definitions[key],
+            tag=tags[tag],
+            defaults={"seeded": True},
+            create_defaults={"seeded": True, "assigned_by": SYSTEM},
         )
     for row in TunableDefinitionTag.objects.filter(seeded=True).select_related("definition", "tag"):
-        if (row.definition.key, row.tag.name) not in seeds:
+        if (row.definition.key, row.tag.name) in seeds:
+            continue
+        # Only rows this command created carry SYSTEM, so anything else was attached by a caller.
+        kept = row.assigned_by != SYSTEM
+        if kept:
+            row.seeded = False
+            row.save(update_fields=["seeded"])
+        else:
             row.delete()
+        log_seed_removed(row.definition.key, row.tag.name, kept=kept)
 
 
 def _drop_stale_overrides(catalogue: Catalogue, changeset: ChangeSet) -> None:

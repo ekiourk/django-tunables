@@ -1,6 +1,9 @@
+import contextlib
 import logging
+from typing import Any
 
 import pytest
+from django.test import override_settings
 
 from tunables import tags
 from tunables.errors import TagExists, TagSeeded
@@ -86,8 +89,10 @@ def test_seeded_assignments_say_system(synced: SyncResult) -> None:
     assert row.assigned_by == "system"
 
 
-def test_every_tag_change_is_logged(synced: SyncResult, caplog: pytest.LogCaptureFixture) -> None:
-    with caplog.at_level(logging.INFO, logger="tunables.tags"):
+def test_every_tag_change_is_logged(
+    synced: SyncResult, caplog: pytest.LogCaptureFixture, django_capture_on_commit_callbacks: Any
+) -> None:
+    with caplog.at_level(logging.INFO, logger="tunables.tags"), django_capture_on_commit_callbacks(execute=True):
         create_tag("review", actor="alice")
         set_manual_tags("pricing.vat_rate", ["review"], actor="alice")
         update_tag("review", "Needs a look", actor="bob")
@@ -101,8 +106,90 @@ def test_every_tag_change_is_logged(synced: SyncResult, caplog: pytest.LogCaptur
     ]
 
 
-def test_an_unattributed_change_still_logs(synced: SyncResult, caplog: pytest.LogCaptureFixture) -> None:
-    with caplog.at_level(logging.INFO, logger="tunables.tags"):
+def test_an_unattributed_change_still_logs(
+    synced: SyncResult, caplog: pytest.LogCaptureFixture, django_capture_on_commit_callbacks: Any
+) -> None:
+    with caplog.at_level(logging.INFO, logger="tunables.tags"), django_capture_on_commit_callbacks(execute=True):
         create_tag("review")
     assert caplog.records[0].getMessage() == "tag 'review' created by an unnamed caller"
     assert TunableDefinitionTag.objects.filter(tag__name="review").count() == 0
+
+
+def test_sync_keeps_who_attached_a_tag_it_later_seeds(synced: SyncResult) -> None:
+    from dataclasses import replace
+
+    from tests.catalogue import limits, pricing, thermostat, weights
+    from tests.test_sync import alt
+    from tunables.sync import sync
+
+    set_manual_tags("weights.alpha", ["review"], actor="alice")
+    row = TunableDefinitionTag.objects.get(definition__key="weights.alpha", tag__name="review")
+    stamped = row.assigned_at
+
+    tunables = [replace(t, tags=["review"]) if t.name == "alpha" else t for t in weights.tunables]
+    globals()["seeding"] = alt([pricing, thermostat, replace(weights, tunables=tunables), limits])
+    with override_settings(TUNABLES={"CATALOGUE": f"{__name__}.seeding"}):
+        sync()
+    row.refresh_from_db()
+    assert (row.seeded, row.assigned_by) == (True, "alice")
+    assert row.assigned_at == stamped
+
+
+def test_dropping_a_seed_keeps_a_human_assignment(synced: SyncResult) -> None:
+    from tunables.sync import sync
+
+    set_manual_tags("weights.alpha", ["review"], actor="alice")
+    TunableDefinitionTag.objects.filter(definition__key="weights.alpha", tag__name="review").update(seeded=True)
+    sync()
+    row = TunableDefinitionTag.objects.filter(definition__key="weights.alpha", tag__name="review").first()
+    assert row is not None
+    assert (row.seeded, row.assigned_by) == (False, "alice")
+
+
+def test_a_rolled_back_change_logs_nothing(synced: SyncResult, caplog: pytest.LogCaptureFixture) -> None:
+    from django.db import transaction
+
+    logs = caplog.at_level(logging.INFO, logger="tunables.tags")
+    with logs, contextlib.suppress(RuntimeError), transaction.atomic():
+        create_tag("review", actor="alice")
+        set_manual_tags("pricing.vat_rate", ["review"], actor="alice")
+        raise RuntimeError("the caller changed its mind")
+    assert Tag.objects.filter(name="review").count() == 0
+    assert caplog.records == []
+
+
+def test_a_committed_change_still_logs(
+    synced: SyncResult, caplog: pytest.LogCaptureFixture, django_capture_on_commit_callbacks: Any
+) -> None:
+    with caplog.at_level(logging.INFO, logger="tunables.tags"), django_capture_on_commit_callbacks(execute=True):
+        create_tag("review", actor="alice")
+    assert [record.getMessage() for record in caplog.records] == ["tag 'review' created by alice"]
+
+
+def test_a_shell_assignment_survives_a_seed_coming_and_going(synced: SyncResult) -> None:
+    from tunables.sync import sync
+
+    set_manual_tags("weights.alpha", ["review"])
+    assert TunableDefinitionTag.objects.get(tag__name="review").assigned_by == ""
+    TunableDefinitionTag.objects.filter(tag__name="review").update(seeded=True)
+    sync()
+    row = TunableDefinitionTag.objects.filter(tag__name="review").first()
+    assert row is not None
+    assert (row.seeded, row.assigned_by) == (False, "")
+
+
+def test_sync_logs_the_seed_it_drops(
+    synced: SyncResult, caplog: pytest.LogCaptureFixture, django_capture_on_commit_callbacks: Any
+) -> None:
+    from tunables.sync import sync
+
+    set_manual_tags("weights.alpha", ["review"], actor="alice")
+    TunableDefinitionTag.objects.filter(tag__name="review").update(seeded=True)
+    TunableDefinitionTag.objects.filter(tag__name="comfort", definition__key="thermostat.mode").update(
+        assigned_by="system"
+    )
+    with caplog.at_level(logging.INFO, logger="tunables.tags"), django_capture_on_commit_callbacks(execute=True):
+        sync()
+    assert [record.getMessage() for record in caplog.records] == [
+        "seed tag 'review' of 'weights.alpha' dropped by the catalogue, kept as a manual assignment"
+    ]

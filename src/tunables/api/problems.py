@@ -13,6 +13,7 @@ from tunables.errors import (
     GroupNotEditable,
     NothingToChange,
     TagExists,
+    TagNotAllowed,
     TagSeeded,
     UnknownTag,
     UnknownVersion,
@@ -52,6 +53,8 @@ def exception_handler(exc: Exception, _context: dict[str, Any]) -> Response | No
         return problem(403, "forbidden-group", "Forbidden group", str(exc), group=exc.group)
     if isinstance(exc, TagExists):
         return problem(409, "tag-exists", "Tag exists", str(exc), name=exc.name)
+    if isinstance(exc, TagNotAllowed):
+        return problem(403, "forbidden-tag", "Forbidden tag", str(exc), name=exc.name)
     if isinstance(exc, TagSeeded):
         return problem(409, "tag-seeded", "Tag seeded", str(exc), name=exc.name)
     if isinstance(exc, APIException):

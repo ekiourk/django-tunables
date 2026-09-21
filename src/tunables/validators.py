@@ -59,6 +59,16 @@ class _NamedValidator:
                 raise CatalogueError(f"validator of group {group.name!r} needs a number, but {name!r} is not one")
 
 
+def _total(values: Mapping[str, Any], names: tuple[str, ...]) -> float:
+    """The sum. Integers add exactly, so one too large for a float reports rather than raising."""
+    whole: float = sum(values[name] for name in names if isinstance(values[name], int))
+    parts: float = sum(values[name] for name in names if not isinstance(values[name], int))
+    try:
+        return whole + parts
+    except OverflowError:
+        return whole
+
+
 def _within(actual: float, total: float, tolerance: float) -> bool:
     """A value too large for a float is never within tolerance, and must not raise OverflowError."""
     try:
@@ -75,7 +85,7 @@ class _SumsTo(_NamedValidator):
         self.description = f"{' + '.join(names)} must sum to {_number(total)}."
 
     def __call__(self, values: Mapping[str, Any]) -> None:
-        actual = sum(values[name] for name in self.names)
+        actual = _total(values, self.names)
         if not _within(actual, self.total, self.tolerance):
             raise ConstraintError(
                 "sum",

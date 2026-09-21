@@ -25,6 +25,22 @@ Changes to existing behaviour:
 
 Additions:
 
+- Tag log lines are written after the transaction commits, so a rolled back change
+  leaves no trace of something that never happened. The tag admin routes its wording
+  through the same helpers, and a rename now logs both names.
+
+- Attaching a tag that does not exist yet needs `tunables.add_tag` as well as
+  `tunables.change_tag`, in the admin and under `TunablesPermissions`. Naming an unknown
+  tag without it is `403 forbidden-tag` on the API and a form error in the admin.
+  Deployments with their own permission class keep today's behaviour.
+- `tunables_sync` no longer rewrites who attached a tag when the catalogue starts
+  seeding it, and dropping a seed leaves a caller's assignment in place as a manual one
+  instead of deleting it. Only rows the command created carry `system`, so an assignment
+  made from a shell with no actor survives too. Dropping a seed writes a line to the
+  `tunables.tags` logger saying whether the row was kept or removed.
+- An actor identity or request id longer than 255 characters is truncated rather than
+  failing the write on PostgreSQL.
+
 - Tag changes leave a record. The assignment row gains `assigned_by` and `assigned_at`,
   migration `0005`, and every tag change writes one info line to the `tunables.tags`
   logger naming the actor and, for an assignment, the tags before and after. Rows seeded
@@ -41,7 +57,9 @@ Additions:
   verbose name on the definition model and migration `0004`.
 - Validator messages from `tunables.validators` go through Django's translation
   machinery, like the messages the types raise.
-- An API response reads the state row once instead of twice.
+- An API response reads the state row once for its sync check and once for the version
+  header, and no more: the header is read after the handler so it can never describe an
+  older version than the body, and `GET status/` reuses the row it already loaded.
 
 - `sums_to`, `descending` and `ascending` in the new `tunables.validators`, exported
   from the package root, cover the two group rules that catalogues repeat. They raise
