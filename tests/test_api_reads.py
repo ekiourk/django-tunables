@@ -698,3 +698,64 @@ def test_tags_list_and_detail(api: APIClient) -> None:
     response = get(api, "tags/nope/")
     assert response.status_code == 404
     assert response.json()["detail"] == "unknown tag 'nope'"
+
+
+INDEX_NAMES = [
+    "categories",
+    "groups",
+    "definitions",
+    "values",
+    "tags",
+    "changesets",
+    "snapshots",
+    "schema",
+    "status",
+]
+
+
+def test_the_root_lists_the_endpoints(api: APIClient) -> None:
+    response = get(api, "")
+    assert response.status_code == 200
+    body = response.json()
+    assert list(body) == INDEX_NAMES
+    assert body["categories"] == "http://testserver/api/tunables/categories/"
+    assert body["snapshots"] == "http://testserver/api/tunables/snapshots/latest/"
+    assert body["schema"] == "http://testserver/api/tunables/schema/"
+
+
+def test_every_listed_url_is_absolute_and_answers(api: APIClient) -> None:
+    body = get(api, "").json()
+    for name, url in body.items():
+        assert url.startswith("http://testserver/api/tunables/"), name
+        assert api.get(url).status_code == 200, name
+
+
+@override_settings(ALLOWED_HOSTS=["tunables.example.org"])
+def test_the_map_follows_the_request_host_and_prefix(api: APIClient) -> None:
+    from django.urls import set_script_prefix
+
+    # A WSGI server sets the prefix from SCRIPT_NAME; the test client does not.
+    set_script_prefix("/behind/a/prefix/")
+    try:
+        response = api.get(BASE + "", SERVER_NAME="tunables.example.org")
+    finally:
+        set_script_prefix("/")
+    assert response.json()["groups"] == "http://tunables.example.org/behind/a/prefix/api/tunables/groups/"
+
+
+def test_the_root_answers_while_out_of_sync(api: APIClient) -> None:
+    State.objects.update(catalogue_version="sha256:stale")
+    assert api.get(BASE + "").status_code == 200
+    assert api.get(BASE + "groups/").status_code == 503
+
+
+def test_the_root_carries_the_version_header(api: APIClient) -> None:
+    two_changes()
+    response = api.get(BASE + "")
+    assert response["X-Tunables-Version"] == "2"
+
+
+def test_the_root_honours_the_permission_classes(api: APIClient) -> None:
+    denied = {"CATALOGUE": CATALOGUE, "API_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"]}
+    with override_settings(TUNABLES=denied):
+        assert api.get(BASE + "").status_code == 403

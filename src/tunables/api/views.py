@@ -4,6 +4,7 @@ from typing import Any
 
 from django.db.models import Count
 from django.http import HttpResponse
+from django.urls import reverse
 from django.utils.dateparse import parse_datetime
 from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.pagination import PageNumberPagination
@@ -72,6 +73,30 @@ def _category(catalogue: Catalogue, name: str) -> Category:
         return catalogue.categories[name]
     except KeyError:
         raise NotFound(f"unknown category {name!r}") from None
+
+
+INDEX = {
+    "categories": "categories",
+    "groups": "groups",
+    "definitions": "definitions",
+    "values": "values",
+    "tags": "tags",
+    "changesets": "changesets",
+    "snapshots": "snapshot-latest",
+    "schema": "schema",
+    "status": "status",
+}
+
+
+class Index(TunablesAPIView):
+    """The endpoint map, so the mount point and the browsable API have a starting point."""
+
+    reads_need_sync = False
+
+    def get(self, request: Request) -> Response:
+        return Response(
+            {name: request.build_absolute_uri(reverse(f"tunables:{route}")) for name, route in INDEX.items()}
+        )
 
 
 class CategoryList(TunablesAPIView):

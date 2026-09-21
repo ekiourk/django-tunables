@@ -5,6 +5,7 @@ from tunables.api import views, writes
 app_name = "tunables"
 
 urlpatterns = [
+    path("", views.Index.as_view(), name="index"),
     path("categories/", views.CategoryList.as_view(), name="categories"),
     path("groups/", views.GroupList.as_view(), name="groups"),
     path("groups/<str:group>/", views.GroupDetail.as_view(), name="group"),
