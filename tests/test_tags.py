@@ -1,9 +1,12 @@
+import logging
+
 import pytest
 
 from tunables import tags
 from tunables.errors import TagExists, TagSeeded
 from tunables.models import Tag, TunableDefinition, TunableDefinitionTag
 from tunables.sync import SyncResult
+from tunables.tags import create_tag, delete_tag, set_manual_tags, update_tag
 
 pytestmark = pytest.mark.django_db
 
@@ -55,3 +58,51 @@ def test_set_manual_tags_replaces_manual_and_keeps_seeded(synced: SyncResult) ->
         tags.set_manual_tags("weights.beta", ["Bad"])
     with pytest.raises(TunableDefinition.DoesNotExist):
         tags.set_manual_tags("weights.nope", ["review"])
+
+
+def test_an_assignment_records_who_and_when(synced: SyncResult) -> None:
+    from django.utils import timezone
+
+    before = timezone.now()
+    set_manual_tags("pricing.vat_rate", ["review"], actor="alice")
+    row = TunableDefinitionTag.objects.get(definition__key="pricing.vat_rate", tag__name="review")
+    assert row.assigned_by == "alice"
+    assert row.assigned_at >= before
+
+
+def test_re_attaching_a_tag_restamps_it(synced: SyncResult) -> None:
+    set_manual_tags("pricing.vat_rate", ["review"], actor="alice")
+    first = TunableDefinitionTag.objects.get(tag__name="review").assigned_at
+    set_manual_tags("pricing.vat_rate", [], actor="alice")
+    set_manual_tags("pricing.vat_rate", ["review"], actor="bob")
+    row = TunableDefinitionTag.objects.get(tag__name="review")
+    assert row.assigned_by == "bob"
+    assert row.assigned_at > first
+
+
+def test_seeded_assignments_say_system(synced: SyncResult) -> None:
+    row = TunableDefinitionTag.objects.filter(seeded=True).first()
+    assert row is not None
+    assert row.assigned_by == "system"
+
+
+def test_every_tag_change_is_logged(synced: SyncResult, caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.INFO, logger="tunables.tags"):
+        create_tag("review", actor="alice")
+        set_manual_tags("pricing.vat_rate", ["review"], actor="alice")
+        update_tag("review", "Needs a look", actor="bob")
+        delete_tag("review", actor="bob")
+    messages = [record.getMessage() for record in caplog.records]
+    assert messages == [
+        "tag 'review' created by alice",
+        "tags of 'pricing.vat_rate' set by alice: was [money], now [money, review]",
+        "tag 'review' described by bob",
+        "tag 'review' deleted by bob",
+    ]
+
+
+def test_an_unattributed_change_still_logs(synced: SyncResult, caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.INFO, logger="tunables.tags"):
+        create_tag("review")
+    assert caplog.records[0].getMessage() == "tag 'review' created by an unnamed caller"
+    assert TunableDefinitionTag.objects.filter(tag__name="review").count() == 0

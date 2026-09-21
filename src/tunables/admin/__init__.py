@@ -37,6 +37,7 @@ from tunables.services import (
     rule_violations,
 )
 from tunables.sync import is_synced
+from tunables.tags import logger as tag_logger
 from tunables.tags import set_manual_tags
 
 if TYPE_CHECKING:
@@ -137,7 +138,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
         if request.method == "POST":
             form = DefinitionTagsForm(request.POST)
             if form.is_valid():
-                set_manual_tags(key, form.cleaned_data["tags"])
+                set_manual_tags(key, form.cleaned_data["tags"], actor=request.user.get_username())
                 messages.success(request, _("Saved the tags of %(key)s.") % {"key": key})
                 return HttpResponseRedirect(definitions_url)
         else:
@@ -384,6 +385,16 @@ class TagAdmin(ModelAdmin):
     def get_queryset(self, request: HttpRequest) -> QuerySet[Tag]:
         queryset: QuerySet[Tag] = super().get_queryset(request)
         return queryset.annotate(definition_count=Count("definitions"))
+
+    def save_model(self, request: HttpRequest, obj: Tag, form: Any, change: bool) -> None:
+        super().save_model(request, obj, form, change)
+        verb = "described" if change else "created"
+        tag_logger.info("tag %r %s by %s", obj.name, verb, request.user.get_username())
+
+    def delete_model(self, request: HttpRequest, obj: Tag) -> None:
+        name = obj.name
+        super().delete_model(request, obj)
+        tag_logger.info("tag %r deleted by %s", name, request.user.get_username())
 
     @admin.display(description=gettext_lazy("Definitions"), ordering="definition_count")
     def definition_count(self, tag: Tag) -> int:

@@ -80,6 +80,8 @@ class TunableDefinitionTag(models.Model):
     definition = models.ForeignKey(TunableDefinition, on_delete=models.CASCADE)
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE)
     seeded = models.BooleanField(default=False)
+    assigned_at = models.DateTimeField(default=timezone.now)
+    assigned_by = models.CharField(max_length=255, blank=True)
 
     class Meta:
         constraints = [
