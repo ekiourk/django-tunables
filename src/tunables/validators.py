@@ -1,4 +1,4 @@
-"""Ready-made group validators, and the supported way to describe any validator."""
+"""Ready-made group validators, and the decorator that sets a validator's description."""
 
 from collections.abc import Callable, Mapping
 from typing import Any, TypeVar
@@ -21,7 +21,7 @@ def describes(text: str) -> Callable[[F], F]:
 
 
 def _number(value: float) -> str:
-    """1.0 as '1', 0.25 as '0.25', so messages read the way a person writes them."""
+    """1.0 as '1', 0.25 as '0.25', for the numbers in messages."""
     return str(int(value)) if float(value).is_integer() else str(value)
 
 
@@ -109,20 +109,36 @@ class _Ordered(_NamedValidator):
             raise ConstraintError(code, f"{name} must be {_number(pinned)}, got {_number(values[name])}")
 
 
-def sums_to(total: float, *names: str, tolerance: float = 1e-9) -> GroupValidator:
-    """The named values must add up to total, within tolerance. Code 'sum'."""
-    return _SumsTo(total, names, tolerance)
+def sums_to(total: float, first: str, second: str, *rest: str, tolerance: float = 1e-9) -> GroupValidator:
+    """The named values must add up to total, within an absolute tolerance. Code 'sum'."""
+    return _SumsTo(total, (first, second, *rest), tolerance)
 
 
 def descending(
-    *names: str, strict: bool = True, floor: float | None = None, ceiling: float | None = None
+    first: str,
+    second: str,
+    *rest: str,
+    strict: bool = True,
+    floor: float | None = None,
+    ceiling: float | None = None,
 ) -> GroupValidator:
-    """The named values must decrease in the order given. Codes 'order', 'floor', 'ceiling'."""
-    return _Ordered(names, down=True, strict=strict, floor=floor, ceiling=ceiling)
+    """The named values must decrease in the order given. Codes 'order', 'floor', 'ceiling'.
+
+    floor and ceiling pin the last and first values to exactly that number.
+    """
+    return _Ordered((first, second, *rest), down=True, strict=strict, floor=floor, ceiling=ceiling)
 
 
 def ascending(
-    *names: str, strict: bool = True, floor: float | None = None, ceiling: float | None = None
+    first: str,
+    second: str,
+    *rest: str,
+    strict: bool = True,
+    floor: float | None = None,
+    ceiling: float | None = None,
 ) -> GroupValidator:
-    """The named values must increase in the order given. Codes 'order', 'floor', 'ceiling'."""
-    return _Ordered(names, down=False, strict=strict, floor=floor, ceiling=ceiling)
+    """The named values must increase in the order given. Codes 'order', 'floor', 'ceiling'.
+
+    floor and ceiling pin the first and last values to exactly that number.
+    """
+    return _Ordered((first, second, *rest), down=False, strict=strict, floor=floor, ceiling=ceiling)

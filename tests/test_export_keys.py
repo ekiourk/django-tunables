@@ -78,10 +78,6 @@ def test_the_text_is_exactly_this() -> None:
     assert keys_module(catalogue) == EXPECTED
 
 
-def test_two_runs_are_byte_identical() -> None:
-    assert keys_module(catalogue) == keys_module(catalogue)
-
-
 def test_the_formatter_leaves_it_alone(tmp_path: Path) -> None:
     text = keys_module(catalogue)
     assert formatted(text, tmp_path) == text
@@ -118,6 +114,19 @@ def test_colliding_constant_names_are_rejected() -> None:
         keys_module(clashing)
 
 
+def test_a_one_key_module_survives_the_formatter(tmp_path: Path) -> None:
+    small = Catalogue([Group("limits", [Tunable("max_currencies", Float(), 3.0)])])
+    text = keys_module(small)
+    assert text.endswith("ALL_KEYS: tuple[str, ...] = (LIMITS_MAX_CURRENCIES,)\n")
+    assert formatted(text, tmp_path) == text
+
+
+def test_a_key_cannot_shadow_all_keys() -> None:
+    reserved = Catalogue([Group("all", [Tunable("keys", Float(), 1.0)])])
+    with pytest.raises(CatalogueError, match="ALL_KEYS"):
+        keys_module(reserved)
+
+
 def test_the_command_writes_the_module(db: None, tmp_path: Path) -> None:
     target = tmp_path / "keys.py"
     assert run("--keys", "--output", str(target)) == f"wrote {target}\n"
@@ -139,4 +148,4 @@ def test_the_generator_runs_with_no_django_settings() -> None:
     result = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, env=env)
     assert result.returncode == 0, result.stderr
     assert 'PRICING_VAT_RATE = "pricing.vat_rate"' in result.stdout
-    assert result.stdout.endswith("ALL_KEYS: tuple[str, ...] = (\n    PRICING_VAT_RATE,\n)\n")
+    assert result.stdout.endswith("ALL_KEYS: tuple[str, ...] = (PRICING_VAT_RATE,)\n")

@@ -173,13 +173,13 @@ def test_the_setting_no_longer_reaches_the_document() -> None:
     assert defaults_document(catalogue, created_at=CREATED_AT)["environment"] == ""
 
 
-def test_the_timestamp_fallback_is_utc_aware() -> None:
+def test_the_timestamp_fallback_is_utc() -> None:
     from datetime import UTC, datetime, timedelta
 
     from tunables.document import defaults_document
 
     stamped = datetime.fromisoformat(defaults_document(catalogue)["created_at"])
-    assert stamped.tzinfo is not None
+    assert stamped.utcoffset() == timedelta(0)
     assert abs(stamped - datetime.now(UTC)) < timedelta(seconds=5)
 
 
@@ -194,8 +194,9 @@ def test_the_document_and_the_schema_build_with_no_django_settings() -> None:
     env = {k: v for k, v in os.environ.items() if k != "DJANGO_SETTINGS_MODULE"}
     result = subprocess.run([sys.executable, str(script)], capture_output=True, text=True, env=env)
     assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout) == {
-        "environment": "offline",
-        "version": 0,
-        "id": json.loads(result.stdout)["id"],
-    }
+    reported = json.loads(result.stdout)
+    assert reported["environment"] == "offline"
+    # No argument and no settings: the environment is empty rather than an ImproperlyConfigured.
+    assert reported["default_environment"] == ""
+    assert reported["version"] == 0
+    assert reported["id"] == f"urn:tunables:snapshot:v1:{reported['catalogue_version']}"
