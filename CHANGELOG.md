@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `GET` at the API mount point returns the endpoint map instead of `404`, with absolute
+  URLs built from the request so they survive an ingress or a path prefix. It answers
+  while the catalogue is out of sync, and its route is named `index` for a host that
+  prefers to leave it out.
+
+## Unreleased
+
 - The "Reset to default" box in the admin group form names the default it restores, as
   JSON with the unit, for example "Reset to default (30.0 s)". A default longer than 40
   characters is cut in the label and given in full as the box's help text.

@@ -230,6 +230,7 @@ shipped with the package, and the table contract are in
 
 | Method and path | Purpose |
 |---|---|
+| `GET ` at the mount point | the endpoint map, absolute URLs built from the request |
 | `GET categories/`, `GET groups/`, `GET groups/{group}/` | categories, groups and their definitions |
 | `GET definitions/`, `GET tags/`, `GET tags/{name}/` | every tunable with its type, default, texts and tags; filters by category, group, tag and text |
 | `GET groups/{group}/schema/`, `GET schema/` | JSON Schema and UI schema per group, optionally narrowed to the tunables carrying given tags |
