@@ -1,65 +1,32 @@
 # Changelog
 
-## Unreleased
+## 0.5.0, 2026-09-22
 
-Catalogues get ready-made validators and a single import point, artifacts can be
-generated with no Django project, and the admin and the API say more for themselves.
+Catalogues get ready-made validators and a single import point, artifacts can be built
+with no Django project, tag changes are attributable, and the admin and the API can
+share one permission model.
 
 Changes to existing behaviour:
 
-- Editing a definition's tags in the admin now needs `tunables.change_tag` rather than
-  `tunables.add_changeset`. Staff who tag tunables need that permission granted. Values
-  still need `add_changeset`, so labelling and changing values come apart.
-
-- `validator_description` moved from `tunables.schema` to `tunables.catalogue`, where
-  the `Catalogue` itself needs it. A host importing it from `tunables.schema` must
-  change the import.
 - `defaults_document(catalogue)` no longer reads `TUNABLES["ENVIRONMENT"]`. It takes
   `environment=""` as an argument, and `tunables_export --defaults` passes the setting,
   so the command is unchanged. A caller in Python that relied on the setting must pass
   it. The default timestamp is now `datetime.now(UTC)`, so a host with `USE_TZ = False`
   gets a UTC timestamp where that path used to raise `ValueError`.
+- `validator_description` moved from `tunables.schema` to `tunables.catalogue`, where
+  the `Catalogue` itself needs it. A host importing it from `tunables.schema` must
+  change the import.
+- Editing a definition's tags in the admin needs `tunables.change_tag` rather than
+  `tunables.add_changeset`, and naming a tag that does not exist yet also needs
+  `tunables.add_tag`. Staff who tag tunables need those permissions granted. Values
+  still need `add_changeset`, so labelling and changing values come apart. On the API
+  the same split applies only where `TunablesPermissions` is configured; deployments
+  with their own permission class keep today's behaviour.
 - The "Reset to default" box in the admin group form names the default it restores, so
   its message id changed from `Reset to default` to `Reset to default ({value})`. A host
   translating that string needs the new id.
 
 Additions:
-
-- Tag log lines are written after the transaction commits, so a rolled back change
-  leaves no trace of something that never happened. The tag admin routes its wording
-  through the same helpers, and a rename now logs both names.
-
-- Attaching a tag that does not exist yet needs `tunables.add_tag` as well as
-  `tunables.change_tag`, in the admin and under `TunablesPermissions`. Naming an unknown
-  tag without it is `403 forbidden-tag` on the API and a form error in the admin.
-  Deployments with their own permission class keep today's behaviour.
-- `tunables_sync` no longer rewrites who attached a tag when the catalogue starts
-  seeding it, and dropping a seed leaves a caller's assignment in place as a manual one
-  instead of deleting it. Only rows the command created carry `system`, so an assignment
-  made from a shell with no actor survives too. Dropping a seed writes a line to the
-  `tunables.tags` logger saying whether the row was kept or removed.
-- An actor identity or request id longer than 255 characters is truncated rather than
-  failing the write on PostgreSQL.
-
-- Tag changes leave a record. The assignment row gains `assigned_by` and `assigned_at`,
-  migration `0005`, and every tag change writes one info line to the `tunables.tags`
-  logger naming the actor and, for an assignment, the tags before and after. Rows seeded
-  by `tunables_sync` say `system`. Tags still create no change set and do not move the
-  version.
-
-- `tunables.api.permissions.TunablesPermissions`, a DRF permission class that answers
-  with the same Django permissions the admin checks: the view permission for reads, the
-  `Tag` permissions for tag writes, `add_changeset` for everything else. Name it in
-  `API_PERMISSION_CLASSES` to give both surfaces one permission model. Hosts that
-  authenticate without Django accounts keep their own class, which stays the default.
-
-- The admin app index calls the page Tunables, matching the page itself, through a
-  verbose name on the definition model and migration `0004`.
-- Validator messages from `tunables.validators` go through Django's translation
-  machinery, like the messages the types raise.
-- An API response reads the state row once for its sync check and once for the version
-  header, and no more: the header is read after the handler so it can never describe an
-  older version than the body, and `GET status/` reuses the row it already loaded.
 
 - `sums_to`, `descending` and `ascending` in the new `tunables.validators`, exported
   from the package root, cover the two group rules that catalogues repeat. They raise
@@ -73,12 +40,26 @@ Additions:
 - `ConstraintError` and `CatalogueError` are exported from the package root, so a
   catalogue module imports everything it needs from `tunables`. The service-level errors
   stay in `tunables.errors`.
+- `defaults_document` and `document_schema` both work with no Django settings
+  configured, so a contracts package can write its artifacts from the catalogue alone.
 - `tunables.export.keys_module(catalogue)` returns a Python module of key constants, one
   per key plus `ALL_KEYS`, and `tunables_export --keys` writes it. The text is
   deterministic and formatted, so a committed copy survives a host's formatter
   untouched. Two keys producing the same constant name raise `CatalogueError`.
-- `defaults_document` and `document_schema` both work with no Django settings
-  configured, so a contracts package can write its artifacts from the catalogue alone.
+- Tag changes leave a record. The assignment row gains `assigned_by` and `assigned_at`,
+  migration `0005`, and every tag change writes one info line to the `tunables.tags`
+  logger naming the actor and, for an assignment, the tags before and after. The lines
+  are written after the transaction commits, so a rolled back change leaves none, and a
+  rename logs both names. Tags still create no change set and do not move the version.
+- `tunables_sync` no longer rewrites who attached a tag when the catalogue starts
+  seeding it. Only rows the command created carry `system`, so dropping a seed leaves a
+  caller's assignment in place as a manual one, including an assignment made from a
+  shell with no actor, and writes a line saying whether the row was kept or removed.
+- `tunables.api.permissions.TunablesPermissions`, a DRF permission class that answers
+  with the same Django permissions the admin checks: the view permission for reads, the
+  `Tag` permissions for tag writes, `add_changeset` for everything else. Name it in
+  `API_PERMISSION_CLASSES` to give both surfaces one permission model. Hosts that
+  authenticate without Django accounts keep their own class, which stays the default.
 - The reset box in the admin names the default as JSON with the unit, for example
   "Reset to default (30.0 s)". A default longer than 40 characters is cut in the label
   and shown in full under the field.
@@ -86,8 +67,18 @@ Additions:
   URLs built from the request so they survive an ingress or a path prefix. It answers
   while the catalogue is out of sync, and its route is named `index` for a host that
   prefers to leave it out.
+- The admin app index calls the page Tunables, matching the page itself, through a
+  verbose name on the definition model and migration `0004`.
+- Validator messages from `tunables.validators` go through Django's translation
+  machinery, like the messages the types raise.
 - The reader contract states the column types per backend, and that a driver may hand
   back the snapshot document parsed or as a string.
+- An actor identity or request id longer than 255 characters is truncated rather than
+  failing the write on PostgreSQL.
+- Signal receivers connect in `AppConfig.ready` rather than at import.
+- An API response reads the state row once for its sync check and once for the version
+  header, and no more: the header is read after the handler so it can never describe an
+  older version than the body, and `GET status/` reuses the row it already loaded.
 
 ## 0.4.0, 2026-09-20
 
