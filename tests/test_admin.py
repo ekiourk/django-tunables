@@ -618,3 +618,21 @@ def test_the_admin_index_calls_the_page_tunables(admin_client: Client, synced: S
     content = admin_client.get("/admin/").content.decode()
     assert "Tunables</a>" in content
     assert "Tunable definitions" not in content
+
+
+def test_tagging_needs_the_tag_permission_not_the_change_set_one(synced: SyncResult) -> None:
+    writer = staff("tunables.view_tunabledefinition", "tunables.add_changeset")
+    assert writer.get(tags_url("pricing.vat_rate")).status_code == 403
+    assert writer.get(edit_url("pricing")).status_code == 200
+
+    tagger = staff("tunables.view_tunabledefinition", "tunables.change_tag")
+    assert tagger.get(tags_url("pricing.vat_rate")).status_code == 200
+    assert tagger.get(edit_url("pricing")).status_code == 403
+
+
+def test_the_definitions_page_links_tags_for_a_tagger(synced: SyncResult) -> None:
+    tagger = staff("tunables.view_tunabledefinition", "tunables.change_tag")
+    content = tagger.get(f"{INDEX}definitions/").content.decode()
+    assert "/tags/" in content
+    plain = staff("tunables.view_tunabledefinition")
+    assert "/tags/" not in plain.get(f"{INDEX}definitions/").content.decode()
