@@ -89,12 +89,17 @@ the partial response below.
 A POST that carries the `HX-Request` header, or a `partial=1` field, gets the panel's
 HTML back instead of a redirect or the standalone page: the form with its errors, the
 form with a conflict notice, or a fresh form with a `Saved version N.` line. With HTMX
-the override is two attributes on the form, which you add in your own copy of the
-template:
+the override is three attributes on the form. The panel template has a `form_attrs` block
+inside its `<form>` tag for them, so a template that extends it is enough:
 
 ```django
-<form method="post" action="{{ panel.action_url }}" hx-post="{{ panel.action_url }}" hx-target="#{{ panel.config.id }}" hx-swap="outerHTML">
+{% extends "tunables/panel.html" %}
+{% block form_attrs %} hx-post="{{ panel.action_url }}" hx-target="#{{ panel.config.id }}" hx-swap="outerHTML"{% endblock %}
 ```
+
+Save it under your templates, for example as `shop/panel.html`, and pass it as
+`template="shop/panel.html"`. The page itself loads HTMX; the package ships no JavaScript
+and the panel works without any.
 
 ### Styling and overriding the template
 

@@ -69,6 +69,11 @@ CUSTOM_MARKUP = (
     "{% if panel.saved_version %}saved {{ panel.saved_version }}{% endif %}"
     "{{ panel.form.errors }}</section>"
 )
+EXTENDING_TEMPLATE = "shop/panel_extends.html"
+EXTENDING_MARKUP = (
+    '{% extends "tunables/panel.html" %}'
+    '{% block form_attrs %} hx-post="{{ panel.action_url }}" hx-swap="outerHTML"{% endblock %}'
+)
 custom_template_installed = override_settings(
     TEMPLATES=[
         {
@@ -76,7 +81,10 @@ custom_template_installed = override_settings(
             "OPTIONS": {
                 "context_processors": ["django.template.context_processors.request"],
                 "loaders": [
-                    ("django.template.loaders.locmem.Loader", {CUSTOM_TEMPLATE: CUSTOM_MARKUP}),
+                    (
+                        "django.template.loaders.locmem.Loader",
+                        {CUSTOM_TEMPLATE: CUSTOM_MARKUP, EXTENDING_TEMPLATE: EXTENDING_MARKUP},
+                    ),
                     "django.template.loaders.app_directories.Loader",
                 ],
             },
@@ -234,6 +242,12 @@ def test_the_template_option_selects_the_template(synced: SyncResult) -> None:
 def test_the_template_option_travels_in_the_token(synced: SyncResult) -> None:
     html = render_tag(writer(), '{% tunables_panel "pricing.vat_rate" template="shop/panel.html" %}')
     assert token_in(html) == PanelConfig(("pricing.vat_rate",), template=CUSTOM_TEMPLATE)
+
+
+@custom_template_installed
+def test_a_template_extending_the_panel_adds_form_attributes_through_the_block(synced: SyncResult) -> None:
+    html = render_tag(writer(), '{% tunables_panel "pricing.vat_rate" template="shop/panel_extends.html" %}')
+    assert 'class="tunables-panel__form" hx-post="/tunables/panel/save/" hx-swap="outerHTML">' in html
 
 
 def test_an_unknown_key_is_refused_even_for_a_user_who_would_see_nothing(synced: SyncResult) -> None:

@@ -28,5 +28,6 @@ class Command(BaseCommand):
                 user = User.objects.create_superuser(username, password=PASSWORD)
             else:
                 user = User.objects.create_user(username, password=PASSWORD)
-                user.user_permissions.set(Permission.objects.filter(codename__in=codenames))
+                granted = Permission.objects.filter(content_type__app_label="tunables", codename__in=codenames)
+                user.user_permissions.set(granted)
             self.stdout.write(f"{username}: created")

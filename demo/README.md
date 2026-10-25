@@ -25,7 +25,8 @@ delete it to start over.
 
 `/shop/settings/` has three panels. The first is a plain `{% tunables_panel %}` with a required
 reason and a full page round trip. The second is rendered with the demo's copy of the panel
-template, `demo/templates/demo/panel_htmx.html`, which adds the HTMX attributes, and its
+template, `demo/templates/demo/panel_htmx.html`, two lines that extend the package template
+and fill its `form_attrs` block with the HTMX attributes, and its
 reason field is hidden, so the change set records the page instead. The third mixes a pricing
 key with the weights group, which `demo/access.py` keeps out of `EDITABLE_GROUPS` for everyone
 but superusers, so it turns read-only as a whole for the writer. Log in as each user and

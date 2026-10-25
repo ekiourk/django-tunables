@@ -27,8 +27,11 @@ class Browser:
         self.opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self.jar))
 
     def get(self, path: str) -> tuple[int, str, str]:
-        with self.opener.open(urllib.request.Request(self.base + path)) as response:
-            return response.status, response.url, response.read().decode()
+        try:
+            with self.opener.open(urllib.request.Request(self.base + path)) as response:
+                return response.status, response.url, response.read().decode()
+        except urllib.error.HTTPError as error:
+            return error.code, error.url or "", error.read().decode()
 
     def post(self, path: str, data: dict[str, str], headers: dict[str, str] | None = None) -> tuple[int, str, str]:
         body = urllib.parse.urlencode(data).encode()
@@ -42,7 +45,10 @@ class Browser:
             return error.code, error.url or "", error.read().decode()
 
     def csrf(self) -> str:
-        return next(cookie.value or "" for cookie in self.jar if cookie.name == "csrftoken")
+        for cookie in self.jar:
+            if cookie.name == "csrftoken" and cookie.value:
+                return cookie.value
+        raise SystemExit("no csrftoken cookie: the server did not set one on the last page")
 
     def login(self, username: str) -> "Browser":
         self.get("/login/")
@@ -126,7 +132,8 @@ def main(base: str) -> int:
     save(admin, panel(admin.get(PAGE)[2], "prices")[1], {"pricing.free_shipping_over": "60", "reason": "shipping"})
     status, _, body = save(writer, section, {"pricing.vat_rate": "0.19", "reason": "mine"})
     check(
-        "a stale save names the key that moved", "version 1 is now version 2" in body and "free_shipping_over" in body
+        "a stale save names the key that moved",
+        "version 1 is now version 2, and these changed: pricing.free_shipping_over" in body,
     )
     section = panel(body, "prices")[1]
     check(
@@ -146,13 +153,14 @@ def main(base: str) -> int:
         "the fragment shows the saved version and value",
         "Saved version 4." in fragment and 'value="heat" selected' in fragment,
     )
-    _, _, api = writer.get("/api/tunables/changesets/4/")
-    changeset = json.loads(api)
+    status, _, api = writer.get("/api/tunables/changesets/4/")
+    check("the writer can read the change set back", status == 200, str(status))
+    changeset = json.loads(api) if status == 200 else {}
     check(
         "a hidden reason is stored as the page",
-        (changeset["reason"], changeset["metadata"]) == ("Changed from /shop/settings/", {"page": PAGE}),
+        (changeset.get("reason"), changeset.get("metadata")) == ("Changed from /shop/settings/", {"page": PAGE}),
     )
-    check("the change set's source is panel", changeset["source"] == "panel")
+    check("the change set's source is panel", changeset.get("source") == "panel")
 
     section = panel(writer.get(PAGE)[2], "thermostat")[1]
     _, _, fragment = save(writer, section, {"thermostat.target_c": "99"}, partial=True)

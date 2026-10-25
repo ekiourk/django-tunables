@@ -52,6 +52,8 @@ Additions:
   unknown key is `422 unknown-key`; the catalogue endpoints check it against the code,
   `values/` against the stored document since it serves during catalogue skew. With the
   schema and values reads a client can render its own widget over a few tunables.
+- The panel template has a `form_attrs` block inside its `<form>` tag, so a template that
+  extends it can add HTMX attributes in one line instead of copying the markup.
 - A demo project in `demo/`: a shop settings page with three embedded panels, the admin
   and the API, with four users to compare. `scripts/demo.sh` serves it from the checkout.
   `scripts/demo_check.sh` installs the built wheel next to it and drives the panels through
