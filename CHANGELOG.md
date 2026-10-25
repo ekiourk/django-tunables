@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.6.0, unreleased
+## 0.6.0, 2026-10-25
 
 Tunables can be shown and edited from any page of the host, and the API can serve the
 schema and values of a handful of keys at once.
