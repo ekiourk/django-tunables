@@ -37,3 +37,4 @@ AGENTS.md
 # Operating System files
 .DS_Store
 Thumbs.db
+demo/db.sqlite3

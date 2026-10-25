@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>django-tunables demo</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/2.0.4/htmx.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 42em; margin: 2em auto; padding: 0 1em; line-height: 1.4; }
+    nav { display: flex; gap: 1em; align-items: center; margin-bottom: 1em; }
+    nav form { display: inline; }
+    .messages { padding: 0; }
+    .messages li { list-style: none; background: #d4edda; padding: .5em; margin: .25em 0; }
+    .tunables-panel { border: 1px solid #ccc; border-radius: 6px; padding: 1em; margin: 1em 0; }
+    .tunables-panel__title { margin-top: 0; }
+    .tunables-panel__row { margin: .6em 0; }
+    .tunables-panel__row--error input, .tunables-panel__row--error select { outline: 2px solid #b00020; }
+    .tunables-panel__reset, .tunables-panel__help { display: block; font-size: .9em; color: #555; }
+    .tunables-panel__errors { color: #b00020; margin: .2em 0; padding-left: 1.2em; }
+    .tunables-panel__notice { background: #fff3cd; padding: .5em; }
+    .tunables-panel__saved { color: #155724; }
+    .tunables-panel__values dt { font-weight: bold; margin-top: .5em; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/shop/settings/">Shop settings</a>
+    <a href="/admin/tunables/">Admin</a>
+    {% if user.is_authenticated %}
+      <span>signed in as <b>{{ user.get_username }}</b></span>
+      <form method="post" action="/logout/">{% csrf_token %}<button>Log out</button></form>
+    {% else %}
+      <a href="/login/">Log in</a>
+    {% endif %}
+  </nav>
+  {% if messages %}<ul class="messages">{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>{% endif %}
+  {% block content %}{% endblock %}
+</body>
+</html>

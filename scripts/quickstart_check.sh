@@ -1,30 +1,11 @@
 #!/usr/bin/env bash
 # Install the built wheel into a fresh Django project and run the README quickstart literally.
 # Exits non-zero with a message on the first step that does not behave as the README says.
-set -euo pipefail
+source "$(dirname "$0")/_wheel_env.sh"
 
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
-PYTHON_VERSION=${QUICKSTART_PYTHON:-3.12}
-WORK=$(mktemp -d)
-SERVER=""
-cleanup() {
-    if [ -n "$SERVER" ]; then kill "$SERVER" 2>/dev/null || true; wait "$SERVER" 2>/dev/null || true; fi
-    rm -rf "$WORK"
-}
-trap cleanup EXIT
-
-fail() { echo "quickstart check FAILED: $*" >&2; exit 1; }
 blocks() { python3 "$ROOT/scripts/readme_blocks.py" "$@"; }
 
-echo "building wheel"
-uv build -q --out-dir "$WORK/dist" "$ROOT"
-WHEEL=$(ls "$WORK"/dist/*.whl)
-
-echo "installing $(basename "$WHEEL") into a fresh venv (python $PYTHON_VERSION)"
-cd "$WORK"
-uv venv -q --python "$PYTHON_VERSION" .venv
-uv pip install -q --python .venv/bin/python "$WHEEL"
-PY=$WORK/.venv/bin/python
+install_wheel
 
 "$WORK/.venv/bin/django-admin" startproject myproject .
 blocks catalogue > myproject/tunables_catalogue.py
@@ -39,14 +20,7 @@ blocks urls > myproject/urls.py
 echo "running the setup commands"
 blocks setup | sed "s|^python |$PY |" | bash
 
-PORT=$($PY -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')
-"$PY" manage.py runserver "$PORT" --noreload > server.log 2>&1 &
-SERVER=$!
-for _ in $(seq 1 50); do
-    curl -s -o /dev/null "http://localhost:$PORT/api/tunables/values/" && break
-    sleep 0.2
-done
-curl -s -o /dev/null "http://localhost:$PORT/api/tunables/values/" || fail "server did not answer on port $PORT"
+serve /api/tunables/values/ "$PY" manage.py runserver
 
 echo "running the README requests"
 run_block() { blocks "$1" | sed "s|localhost:8000|localhost:$PORT|g" | bash; }
@@ -73,6 +47,6 @@ SHOW=$("$PY" manage.py tunables_show)
 grep -qx 'pricing.vat_rate = 0.2  (override)' <<<"$SHOW" || fail "tunables_show did not mark the override:"$'\n'"$SHOW"
 ADMIN=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "http://localhost:$PORT/admin/tunables/tunabledefinition/")
 [[ "$ADMIN" == 302\ *"/admin/login/"* ]] || fail "admin index did not redirect to login: $ADMIN"
-if grep -qi traceback server.log; then fail "server log has a traceback:"$'\n'"$(cat server.log)"; fi
+check_server_log
 
 echo "quickstart check passed: wheel installs, README steps work, version 1 written by alice, admin reachable"

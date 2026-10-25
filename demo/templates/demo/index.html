@@ -1,0 +1,15 @@
+{% extends "demo/base.html" %}
+{% block content %}
+<h1>django-tunables demo</h1>
+<p>A small shop with three tunable groups. The <a href="/shop/settings/">shop settings</a> page embeds
+three panels; the <a href="/admin/tunables/">admin</a> edits whole groups; the API answers at
+<a href="/api/tunables/values/">/api/tunables/values/</a>.</p>
+<p>Log in as one of these users. The password is always <code>demo</code>.</p>
+<table>
+  <tr><th>User</th><th>May</th></tr>
+  <tr><td>admin</td><td>everything, including the ranking weights</td></tr>
+  <tr><td>writer</td><td>change pricing and thermostat, view the rest</td></tr>
+  <tr><td>viewer</td><td>view values, change nothing</td></tr>
+  <tr><td>nobody</td><td>see the page without any panel</td></tr>
+</table>
+{% endblock %}

@@ -4,7 +4,7 @@
   {% if panel.notice %}<p class="tunables-panel__notice">{{ panel.notice }}</p>{% endif %}
   {% if panel.saved_version %}<p class="tunables-panel__saved">{% blocktranslate with version=panel.saved_version %}Saved version {{ version }}.{% endblocktranslate %}</p>{% endif %}
   {% if panel.mode == "edit" %}
-  <form method="post" action="{{ panel.action_url }}" class="tunables-panel__form">
+  <form method="post" action="{{ panel.action_url }}" class="tunables-panel__form"{% block form_attrs %}{% endblock %}>
     {% csrf_token %}
     <input type="hidden" name="panel" value="{{ panel.token }}">
     <input type="hidden" name="next" value="{{ panel.next_url }}">

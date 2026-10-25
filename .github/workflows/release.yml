@@ -61,9 +61,13 @@ jobs:
       - run: uv sync --all-extras --frozen
       - run: uv run pytest --postgres
 
-  quickstart:
+  # Each check installs the built wheel into a fresh project and drives it over HTTP.
+  wheel-check:
     needs: lint
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        check: [quickstart, demo]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -72,10 +76,10 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
-      - run: QUICKSTART_PYTHON=3.13 scripts/quickstart_check.sh
+      - run: CHECK_PYTHON=3.13 scripts/${{ matrix.check }}_check.sh
 
   publish:
-    needs: [test, test-postgres, quickstart]
+    needs: [test, test-postgres, wheel-check]
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     steps:
