@@ -1,9 +1,11 @@
 # Sourced by quickstart_check.sh and demo_check.sh. Builds the wheel, installs it into a fresh venv in a
 # temporary directory, serves a Django project from there and cleans up on exit.
 #
-#   install_wheel 3.12          # sets WORK (the cwd afterwards), WHEEL and PY
-#   serve /path/to/probe "$PY" manage.py runserver   # sets PORT and SERVER; writes server.log in WORK
+#   install_wheel               # python from CHECK_PYTHON (default 3.12); sets WORK (the cwd afterwards) and PY
+#   serve /path/to/probe "$PY" manage.py runserver   # sets PORT; the server logs to server.log in WORK
+#   check_server_log            # fails when the server answered 500
 #   fail "message"              # prints "<script> FAILED: message" and exits 1
+#   fail_with_log "message"     # the same, with server.log appended
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -17,28 +19,33 @@ cleanup() {
 trap cleanup EXIT
 
 fail() { echo "$CHECK FAILED: $*" >&2; exit 1; }
+fail_with_log() { fail "$1"$'\n'"$(cat server.log)"; }
 
 install_wheel() {
-    local python_version=$1
+    local python_version=${CHECK_PYTHON:-3.12} wheel
     echo "building wheel"
     uv build -q --out-dir "$WORK/dist" "$ROOT"
-    WHEEL=$(ls "$WORK"/dist/*.whl)
-    echo "installing $(basename "$WHEEL") into a fresh venv (python $python_version)"
+    wheel=$(ls "$WORK"/dist/*.whl)
+    echo "installing $(basename "$wheel") into a fresh venv (python $python_version)"
     cd "$WORK"
     uv venv -q --python "$python_version" .venv
-    uv pip install -q --python .venv/bin/python "$WHEEL"
+    uv pip install -q --python .venv/bin/python "$wheel"
     PY=$WORK/.venv/bin/python
 }
 
 serve() {
-    local probe=$1
+    local probe=$1 tries=0 url
     shift
     PORT=$("$PY" -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')
     "$@" "$PORT" --noreload > server.log 2>&1 &
     SERVER=$!
-    for _ in $(seq 1 50); do
-        curl -s -o /dev/null "http://localhost:$PORT$probe" && break
+    url="http://localhost:$PORT$probe"
+    until curl -s -o /dev/null "$url"; do
+        (( tries++ < 50 )) || fail_with_log "server did not answer at $url:"
         sleep 0.2
     done
-    curl -s -o /dev/null "http://localhost:$PORT$probe" || fail "server did not answer on port $PORT:"$'\n'"$(cat server.log)"
+}
+
+check_server_log() {
+    if grep -q ' 500 ' server.log; then fail_with_log "the server answered 500:"; fi
 }

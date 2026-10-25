@@ -12,4 +12,4 @@ RESTRICTED = {"weights"}
 def editable_groups(request: HttpRequest) -> Collection[str] | None:
     if request.user.is_superuser:
         return None
-    return {name for name in get_catalogue().groups if name not in RESTRICTED}
+    return get_catalogue().groups.keys() - RESTRICTED

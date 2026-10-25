@@ -10,8 +10,8 @@ CI, against the built wheel, so a template or tag left out of the package fails 
 scripts/demo.sh
 ```
 
-This migrates, syncs the catalogue in `demo/catalogue.py`, creates the users below and serves
-on port 8000 (`DEMO_PORT` picks another). The database is `demo/db.sqlite3`, ignored by git;
+This runs the `demo_setup` command, which migrates, syncs the catalogue in `demo/catalogue.py`
+and creates the users below, then serves on port 8000 (`DEMO_PORT` picks another). The database is `demo/db.sqlite3`, ignored by git;
 delete it to start over.
 
 | User | Password | May |
@@ -24,10 +24,10 @@ delete it to start over.
 ## What to look at
 
 `/shop/settings/` has three panels. The first is a plain `{% tunables_panel %}` with a required
-reason and a full page round trip. The second is rendered with the demo's copy of the panel
-template, `demo/templates/demo/panel_htmx.html`, two lines that extend the package template
-and fill its `form_attrs` block with the HTMX attributes, and its
-reason field is hidden, so the change set records the page instead. The third mixes a pricing
+reason and a full page round trip. The second is rendered with
+`demo/templates/demo/panel_htmx.html`, two lines that extend the package template and fill its
+`form_attrs` block with the HTMX attributes, and its reason field is hidden, so the change set
+records the page instead. The third mixes a pricing
 key with the weights group, which `demo/access.py` keeps out of `EDITABLE_GROUPS` for everyone
 but superusers, so it turns read-only as a whole for the writer. Log in as each user and
 compare. The admin at `/admin/tunables/` edits whole groups, and `/api/tunables/values/`
@@ -36,6 +36,8 @@ answers the API.
 ## The check
 
 `scripts/demo_check.sh` builds the wheel, installs it into a fresh venv next to a copy of this
-folder, starts the server and runs `scripts/demo_drive.py` against it. The driver logs in as
-each user and walks the panels with real sessions, CSRF tokens and redirects: a save, an empty
-reason, a stale version, an HTMX swap, an invalid value, a refused group and an altered token.
+folder, starts the server and runs `scripts/demo_drive.py` against it. The driver covers what
+only a real install can prove: the templates and tags are in the wheel, the extending template
+resolves, a save works through real sessions, CSRF tokens and redirects, the error page renders,
+an HTMX request gets the demo's fragment back, and the demo's `EDITABLE_GROUPS` hook refuses a
+save. The panel's own behaviour, messages and refusals are covered by `tests/test_panel.py`.

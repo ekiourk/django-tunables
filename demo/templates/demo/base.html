@@ -31,7 +31,7 @@
       <span>signed in as <b>{{ user.get_username }}</b></span>
       <form method="post" action="/logout/">{% csrf_token %}<button>Log out</button></form>
     {% else %}
-      <a href="/login/?next=/shop/settings/">Log in</a>
+      <a href="/login/">Log in</a>
     {% endif %}
   </nav>
   {% if messages %}<ul class="messages">{% for message in messages %}<li>{{ message }}</li>{% endfor %}</ul>{% endif %}

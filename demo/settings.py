@@ -47,7 +47,6 @@ DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": HERE / 
 ROOT_URLCONF = "demo.urls"
 STATIC_URL = "static/"
 USE_TZ = True
-LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/shop/settings/"
 
 TUNABLES = {

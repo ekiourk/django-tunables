@@ -5,7 +5,7 @@ source "$(dirname "$0")/_wheel_env.sh"
 
 blocks() { python3 "$ROOT/scripts/readme_blocks.py" "$@"; }
 
-install_wheel "${QUICKSTART_PYTHON:-3.12}"
+install_wheel
 
 "$WORK/.venv/bin/django-admin" startproject myproject .
 blocks catalogue > myproject/tunables_catalogue.py
@@ -47,6 +47,6 @@ SHOW=$("$PY" manage.py tunables_show)
 grep -qx 'pricing.vat_rate = 0.2  (override)' <<<"$SHOW" || fail "tunables_show did not mark the override:"$'\n'"$SHOW"
 ADMIN=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "http://localhost:$PORT/admin/tunables/tunabledefinition/")
 [[ "$ADMIN" == 302\ *"/admin/login/"* ]] || fail "admin index did not redirect to login: $ADMIN"
-if grep -qi traceback server.log; then fail "server log has a traceback:"$'\n'"$(cat server.log)"; fi
+check_server_log
 
 echo "quickstart check passed: wheel installs, README steps work, version 1 written by alice, admin reachable"
