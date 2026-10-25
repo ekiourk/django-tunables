@@ -111,20 +111,20 @@ def main(base: str) -> int:
 
     status, _, body = save(writer, section, {"pricing.vat_rate": "0.2", "reason": ""})
     check(
-        "an empty reason renders the standalone error page",
-        status == 200 and "<!doctype" in body.lower() and f'href="{PAGE}"' in body,
+        "an empty required reason answers 200 with the standalone page", status == 200 and "<!doctype" in body.lower()
     )
+    check("the standalone page links back to the host page", f'href="{PAGE}"' in body)
 
     _, url, body = save(writer, section, {"pricing.vat_rate": "0.2", "reason": "autumn rate"})
-    check("a save redirects to the page with a message", url.endswith(PAGE) and "Saved version 1." in body, url)
+    check("a save redirects back to the host page", url.endswith(PAGE), url)
+    check("the host page shows the saved message", "Saved version 1." in body)
     check("the page shows the new value", "VAT is 0.2." in body)
 
     _, _, fragment = save(writer, panel(body, "thermostat")[1], {"thermostat.mode": "heat"}, partial=True)
-    check("an HTMX save returns the demo's fragment", "<!doctype" not in fragment.lower() and "hx-post=" in fragment)
-    check(
-        "the fragment shows the saved version and value",
-        "Saved version 2." in fragment and 'value="heat" selected' in fragment,
-    )
+    check("an HTMX save returns a fragment, not a page", "<!doctype" not in fragment.lower())
+    check("the fragment is rendered from the demo's template", "hx-post=" in fragment)
+    check("the fragment shows the saved version", "Saved version 2." in fragment)
+    check("the fragment shows the new value selected", 'value="heat" selected' in fragment)
 
     admin_ranking = Browser(base).login("admin").section("ranking")[1]
     status, _, _ = save(writer, admin_ranking, {"weights.price": "0.6", "reason": "sneaky"})
