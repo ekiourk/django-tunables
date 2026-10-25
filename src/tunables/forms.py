@@ -68,15 +68,16 @@ class TunablesForm(forms.Form):
     ) -> ChangeResult | None:
         """Apply the changes of a valid form as one change set.
 
-        Returns the result, or None when nothing was written: validation errors and "nothing changed" land on
-        the form, and a version conflict is kept in ``conflict`` for ``rebound()`` to resolve.
+        The reason is the one entered in the form; ``reason`` is the fallback when the field is empty or
+        hidden. Returns the result, or None when nothing was written: validation errors and "nothing changed"
+        land on the form, and a version conflict is kept in ``conflict`` for ``rebound()`` to resolve.
         """
         try:
             return apply_changeset(
                 self.changes(),
                 actor=actor,
                 source=source,
-                reason=reason,
+                reason=self.cleaned_data.get("reason") or reason,
                 expected_version=self.cleaned_data["expected_version"],
                 metadata=metadata,
             )
@@ -91,11 +92,12 @@ class TunablesForm(forms.Form):
         return None
 
     def rebound(self, document: Mapping[str, Any] | None = None) -> "TunablesForm":
-        """After a conflict: the same input bound against the current document, validated, with the conflict kept."""
+        """After a conflict: the same input bound against the conflicting version, validated, with the conflict kept."""
         assert self.conflict is not None
         data: Any = self.data.copy() if isinstance(self.data, QueryDict) else dict(self.data)
         data["expected_version"] = str(self.conflict.actual)
-        form = build_form(self.keys, document or latest_snapshot().document, reason=self.reason_mode)(data)
+        document = document or latest_snapshot(self.conflict.actual).document
+        form = build_form(self.keys, document, reason=self.reason_mode)(data)
         form.is_valid()
         form.conflict = self.conflict
         return form

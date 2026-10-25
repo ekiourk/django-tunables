@@ -227,9 +227,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
         form_class = build_form(keys, latest_snapshot().document, catalogue=catalogue)
         form = form_class(request.POST) if request.method == "POST" else form_class()
         if request.method == "POST" and form.is_valid():
-            result = form.save(
-                actor=Actor(request.user.get_username(), "verified"), source="admin", reason=form.cleaned_data["reason"]
-            )
+            result = form.save(actor=Actor(request.user.get_username(), "verified"), source="admin")
             if result is not None:
                 messages.success(
                     request,

@@ -20,6 +20,8 @@ from tunables.access import check_keys_editable
 from tunables.errors import GroupNotEditable
 from tunables.forms import REASON_MODES, ReasonMode, Row, TunablesForm, build_form
 from tunables.models import State
+from tunables.registry import get_catalogue
+from tunables.search import require_keys
 from tunables.services import latest_snapshot, live_document
 from tunables.sync import OUT_OF_SYNC_MESSAGE, is_current
 
@@ -38,6 +40,7 @@ class PanelConfig:
     reason: ReasonMode = "required"
     title: str = ""
     id: str = "tunables-panel"
+    template: str = PANEL_TEMPLATE
 
     def __post_init__(self) -> None:
         if self.reason not in REASON_MODES:
@@ -45,14 +48,15 @@ class PanelConfig:
         object.__setattr__(self, "keys", tuple(dict.fromkeys(self.keys)))
 
     def token(self) -> str:
-        return signing.dumps([list(self.keys), self.reason, self.title, self.id], salt=TOKEN_SALT, compress=True)
+        fields = [list(self.keys), self.reason, self.title, self.id, self.template]
+        return signing.dumps(fields, salt=TOKEN_SALT, compress=True)
 
     @classmethod
     def from_token(cls, token: str) -> "PanelConfig":
         """Raises signing.BadSignature for a missing, altered or foreign token."""
         try:
-            keys, reason, title, element_id = signing.loads(token, salt=TOKEN_SALT)
-            return cls(tuple(keys), cast(ReasonMode, reason), title, element_id)
+            keys, reason, title, element_id, template = signing.loads(token, salt=TOKEN_SALT)
+            return cls(tuple(keys), cast(ReasonMode, reason), title, element_id, template)
         except (TypeError, ValueError) as bad:
             raise signing.BadSignature(str(bad)) from bad
 
@@ -96,8 +100,9 @@ def build_panel(
     Left to decide, the panel is in edit mode for a writer whose groups are all editable on a synced
     catalogue, read mode for a viewer or when out of sync, and hidden otherwise, without touching the
     database for a hidden panel. A caller that already decided passes ``mode`` and ``synced``, and
-    ``document`` when it already holds the one to show. Unknown keys raise UnknownKey from the form.
+    ``document`` when it already holds the one to show. Unknown keys raise UnknownKey, for every user.
     """
+    require_keys(get_catalogue(), config.keys)
     next_url = next_url or request.get_full_path()
     if mode is None:
         user = request.user

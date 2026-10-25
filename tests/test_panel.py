@@ -14,8 +14,9 @@ from tests.conftest import user_with
 from tests.test_admin import messages_of
 from tests.test_services import apply
 from tunables import Change
+from tunables.errors import UnknownKey
 from tunables.models import ChangeSet, Snapshot, State, TunableValue
-from tunables.panel import PanelConfig
+from tunables.panel import PANEL_TEMPLATE, PanelConfig
 from tunables.services import current_version
 from tunables.sync import SyncResult
 
@@ -56,8 +57,32 @@ def token_in(html: str) -> PanelConfig:
     return PanelConfig.from_token(match.group(1))
 
 
-def token(keys: tuple[str, ...] = KEYS, reason: str = "required") -> str:
-    return PanelConfig(keys, reason).token()  # type: ignore[arg-type]
+def token(keys: tuple[str, ...] = KEYS, reason: str = "required", template: str = PANEL_TEMPLATE) -> str:
+    return PanelConfig(keys, reason, template=template).token()  # type: ignore[arg-type]
+
+
+# A host's own copy of the panel template, served from memory ahead of the package's templates.
+CUSTOM_TEMPLATE = "shop/panel.html"
+CUSTOM_MARKUP = (
+    '<section id="{{ panel.config.id }}" data-host="shop">'
+    '<input type="hidden" name="panel" value="{{ panel.token }}">'
+    "{% if panel.saved_version %}saved {{ panel.saved_version }}{% endif %}"
+    "{{ panel.form.errors }}</section>"
+)
+custom_template_installed = override_settings(
+    TEMPLATES=[
+        {
+            "BACKEND": "django.template.backends.django.DjangoTemplates",
+            "OPTIONS": {
+                "context_processors": ["django.template.context_processors.request"],
+                "loaders": [
+                    ("django.template.loaders.locmem.Loader", {CUSTOM_TEMPLATE: CUSTOM_MARKUP}),
+                    "django.template.loaders.app_directories.Loader",
+                ],
+            },
+        }
+    ]
+)
 
 
 def post_data(keys: tuple[str, ...] = KEYS, reason_mode: str = "required", **overrides: Any) -> dict[str, Any]:
@@ -205,6 +230,17 @@ def test_the_template_option_selects_the_template(synced: SyncResult) -> None:
         render_tag(writer(), '{% tunables_panel "pricing.vat_rate" template="missing.html" %}')
 
 
+@custom_template_installed
+def test_the_template_option_travels_in_the_token(synced: SyncResult) -> None:
+    html = render_tag(writer(), '{% tunables_panel "pricing.vat_rate" template="shop/panel.html" %}')
+    assert token_in(html) == PanelConfig(("pricing.vat_rate",), template=CUSTOM_TEMPLATE)
+
+
+def test_an_unknown_key_is_refused_even_for_a_user_who_would_see_nothing(synced: SyncResult) -> None:
+    with pytest.raises(UnknownKey):
+        render_tag(AnonymousUser(), '{% tunables_panel "pricing.nope" %}')
+
+
 def test_an_unknown_reason_mode_is_refused(synced: SyncResult) -> None:
     with pytest.raises(ValueError, match="reason must be one of"):
         render_tag(writer(), '{% tunables_panel "pricing.vat_rate" reason="maybe" %}')
@@ -347,6 +383,20 @@ def test_a_partial_failure_returns_the_panel_with_its_errors(synced: SyncResult)
     response = client_for(writer()).post(SAVE, post_data(partial="1", **{"pricing.vat_rate": "5"}))
     assert "<!doctype" not in response.content.decode()
     assert "pricing.vat_rate" in response.context["panel"].form.errors
+
+
+@custom_template_installed
+def test_a_partial_save_renders_the_template_the_tag_was_given(synced: SyncResult) -> None:
+    data = post_data(panel=token(template=CUSTOM_TEMPLATE), **{"thermostat.mode": "heat"})
+    html = client_for(writer()).post(SAVE, data, HTTP_HX_REQUEST="true").content.decode()
+    assert 'data-host="shop"' in html and "saved 1" in html
+
+
+@custom_template_installed
+def test_the_error_page_renders_the_template_the_tag_was_given(synced: SyncResult) -> None:
+    data = post_data(panel=token(template=CUSTOM_TEMPLATE), **{"pricing.vat_rate": "5"})
+    html = client_for(writer()).post(SAVE, data).content.decode()
+    assert "<!doctype" in html and 'data-host="shop"' in html
 
 
 # Saving: refusals

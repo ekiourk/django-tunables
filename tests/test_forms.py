@@ -118,9 +118,22 @@ def valid_form(**data: str) -> TunablesForm:
 
 
 def test_save_returns_the_result_of_a_written_change_set(synced: SyncResult) -> None:
-    result = valid_form(**{"thermostat.mode": "heat"}).save(actor=ALICE, source="api", reason="warm up")
+    result = valid_form(**{"thermostat.mode": "heat"}).save(actor=ALICE, source="api")
     assert result is not None and result.version == 1
-    assert result.changeset.reason == "warm up" and result.changeset.actor == "alice"
+    assert result.changeset.actor == "alice" and result.changeset.source == "api"
+
+
+def test_save_stores_the_reason_entered_in_the_form(synced: SyncResult) -> None:
+    result = valid_form(**{"thermostat.mode": "heat", "reason": "typed by the user"}).save(actor=ALICE, source="api")
+    assert result is not None and result.changeset.reason == "typed by the user"
+
+
+def test_the_reason_argument_fills_an_empty_reason_field(synced: SyncResult) -> None:
+    data = {**UNCHANGED, "thermostat.mode": "heat", "reason": ""}
+    form = build_form(KEYS, latest_snapshot().document, reason="optional")(data)
+    assert form.is_valid(), form.errors
+    result = form.save(actor=ALICE, source="api", reason="Changed from /shop/")
+    assert result is not None and result.changeset.reason == "Changed from /shop/"
 
 
 def test_save_reports_nothing_changed_on_the_form(synced: SyncResult) -> None:
@@ -162,3 +175,13 @@ def test_rebound_keeps_the_input_against_the_current_version(synced: SyncResult)
     assert rebound["thermostat.mode"].value() == "heat"
     assert rebound.conflict is form.conflict
     assert rebound.is_valid() and rebound.save(actor=ALICE, source="api") is not None
+
+
+def test_rebound_shows_the_conflicting_version_not_a_later_one(synced: SyncResult) -> None:
+    form = valid_form(**{"thermostat.mode": "heat"})
+    apply(Change("pricing.vat_rate", 0.2))
+    form.save(actor=ALICE, source="api")
+    apply(Change("pricing.vat_rate", 0.3))
+    rebound = form.rebound()
+    assert rebound["expected_version"].value() == "1"
+    assert rebound.values["pricing.vat_rate"] == 0.2

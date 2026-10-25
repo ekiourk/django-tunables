@@ -92,7 +92,7 @@ the override is two attributes on the form, which you add in your own copy of th
 template:
 
 ```django
-<form method="post" action="{{ panel.action_url }}" hx-post="{{ panel.action_url }}" hx-target="#{{ panel.id }}" hx-swap="outerHTML">
+<form method="post" action="{{ panel.action_url }}" hx-post="{{ panel.action_url }}" hx-target="#{{ panel.config.id }}" hx-swap="outerHTML">
 ```
 
 ### Styling and overriding the template
@@ -108,7 +108,7 @@ as `template=`. The template receives one variable, `panel`, with:
 | Attribute | Content |
 |---|---|
 | `mode` | `edit`, `read` or `hidden` |
-| `config` | the options as given to the tag: `keys`, `reason`, `title`, `id` |
+| `config` | the options as given to the tag: `keys`, `reason`, `title`, `id`, `template` |
 | `rows` | one per key: `tunable`, `field` (the bound form field), `reset` (the bound reset box, or `None` when the value is at its default), `shown` (the value as text with its unit) |
 | `form` | the Django form, for `expected_version`, `reason` and non-field errors |
 | `token` | the signed panel configuration the form must post back as `panel` |
@@ -118,10 +118,11 @@ as `template=`. The template receives one variable, `panel`, with:
 
 The form posts `panel`, `next` and `expected_version` as hidden fields, plus one field
 per key named by the full key and a `reset_<key>` box per override. `panel` holds the
-keys, reason mode, title and id the tag was given, signed with the project's
+keys, reason mode, title, id and template the tag was given, signed with the project's
 `SECRET_KEY`. A browser therefore cannot add keys to a panel or drop a reason the page
-author required, and an altered token is a `400`. A custom template must keep the three
-hidden fields.
+author required, and an altered token is a `400`. The save view renders the same
+template, so a custom template keeps its markup across partial responses and the error
+page. A custom template must keep the three hidden fields.
 
 ## Building a form in your own view
 
@@ -152,7 +153,8 @@ def shop_settings(request):
 
 `build_form` returns a form class with fields named by full key, a hidden
 `expected_version` and a `reason` field in the requested mode. `save()` applies the
-changes as one change set and returns the result, or `None` when nothing was written.
+changes as one change set with the reason entered in the form, or the `reason` argument
+when the field is empty, and returns the result, or `None` when nothing was written.
 Validation errors and "nothing changed" land on the form. A version conflict is kept in
 `form.conflict`; `conflict_text()` describes it and `rebound()` returns the same input
 bound against the current version. `changes()` returns the change objects and `rows()`

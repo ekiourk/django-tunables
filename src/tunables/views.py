@@ -13,7 +13,7 @@ from tunables.access import check_keys_editable
 from tunables.changes import Actor
 from tunables.errors import GroupNotEditable, UnknownKey
 from tunables.models import ChangeSource, State
-from tunables.panel import ERRORS_TEMPLATE, PANEL_TEMPLATE, PanelConfig, build_panel, default_reason, page_path
+from tunables.panel import ERRORS_TEMPLATE, PanelConfig, build_panel, default_reason, page_path
 from tunables.services import latest_snapshot
 from tunables.sync import OUT_OF_SYNC_MESSAGE, is_current
 
@@ -58,7 +58,7 @@ class PanelSave(View):
             if not is_current(state):
                 if partial:
                     panel = build_panel(request, config, next_url=next_url, mode="read", synced=False)
-                    return render(request, PANEL_TEMPLATE, {"panel": panel})
+                    return render(request, config.template, {"panel": panel})
                 messages.error(request, str(OUT_OF_SYNC_MESSAGE), fail_silently=True)
                 return HttpResponseRedirect(next_url)
             assert state is not None
@@ -81,7 +81,7 @@ class PanelSave(View):
                         request, config, next_url=next_url, mode="edit", document=result.snapshot.document
                     )
                     panel.saved_version = result.version
-                    return render(request, PANEL_TEMPLATE, {"panel": panel})
+                    return render(request, config.template, {"panel": panel})
                 messages.success(
                     request, _("Saved version %(version)s.") % {"version": result.version}, fail_silently=True
                 )
@@ -89,4 +89,4 @@ class PanelSave(View):
             if form.conflict is not None:
                 panel.form = form.rebound()
                 panel.notice = panel.form.conflict_text()
-        return render(request, PANEL_TEMPLATE if partial else ERRORS_TEMPLATE, {"panel": panel})
+        return render(request, config.template if partial else ERRORS_TEMPLATE, {"panel": panel})

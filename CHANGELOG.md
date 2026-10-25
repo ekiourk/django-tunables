@@ -33,8 +33,9 @@ Additions:
   redirects back to the page on success, renders a standalone page with the errors
   otherwise, and answers an HTMX request or a `partial=1` field with the panel's HTML so
   the host can swap it in place. Version conflicts keep the input and bump the version,
-  as the admin does. The panel's keys and reason mode travel as a token signed with
-  `SECRET_KEY`, so a browser cannot widen a panel or drop a required reason. Unpermitted
+  as the admin does. The panel's keys, reason mode and template travel as a token signed
+  with `SECRET_KEY`, so a browser cannot widen a panel or drop a required reason, and a
+  host's own template is kept across partial responses and the error page. Unpermitted
   users get `403`, an altered token `400`, unknown keys `404`.
 - `tunables.forms.build_form(keys, document, reason=...)` builds the same form for a
   host's own view, over any keys from any groups. `form.save(actor=, source=)` applies

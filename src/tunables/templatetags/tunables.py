@@ -42,5 +42,5 @@ def tunables_panel(
             "tunables_panel needs the request in the template context; "
             "add django.template.context_processors.request to your template settings"
         )
-    panel = build_panel(request, PanelConfig(keys, reason, title, id), next_url=next)
+    panel = build_panel(request, PanelConfig(keys, reason, title, id, template), next_url=next)
     return render_to_string(template, {"panel": panel}, request=request)
