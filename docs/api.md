@@ -60,8 +60,8 @@ narrowing writes by group.
 | Header | Direction | Meaning |
 |---|---|---|
 | `X-Tunables-Version` | response | The current version, read after the handler, so it is never older than the body. On every response including errors. After a write it is the new version. |
-| `ETag` | response | `"<version>"` on `values/`, `groups/{group}/values/`, `snapshots/latest/` and `snapshots/{version}/`. |
-| `If-None-Match` | request | On the endpoints above, a matching tag answers `304 Not Modified` with no body. |
+| `ETag` | response | `"<version>"` on `values/`, `groups/{group}/values/`, `snapshots/latest/` and `snapshots/{version}/`. The tag is the version, not a hash of the body, so the same tag can come with different bodies from different URLs, for example `values/?key=a` and `values/?key=b`. It is the write endpoint's `If-Match` value. |
+| `If-None-Match` | request | On the endpoints above, a matching tag answers `304 Not Modified` with no body. Send a tag only to the URL it came from. |
 | `If-Match` | request | On writes, `"<version>"` sets the expected version. A mismatch is `412`. `*` or no header means the write is applied regardless. |
 | `X-Tunables-Actor` | request | Who is acting, when the request is not authenticated. Recorded with `actor_source: asserted`. Name configurable with `ACTOR_HEADER`. |
 | `X-Tunables-Client` | request | Which program is acting. Recorded as `client`. Name configurable with `CLIENT_HEADER`. |
