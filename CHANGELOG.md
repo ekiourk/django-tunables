@@ -52,6 +52,10 @@ Additions:
   unknown key is `422 unknown-key`; the catalogue endpoints check it against the code,
   `values/` against the stored document since it serves during catalogue skew. With the
   schema and values reads a client can render its own widget over a few tunables.
+- A demo project in `demo/`: a shop settings page with three embedded panels, the admin
+  and the API, with four users to compare. `scripts/demo.sh` serves it from the checkout.
+  `scripts/demo_check.sh` installs the built wheel next to it and drives the panels through
+  real sessions, CSRF and redirects, and CI runs it.
 - `docs/embedding.md` documents the tags, the permissions, the options, HTMX, template
   overrides, the form builder and the JavaScript recipe.
 

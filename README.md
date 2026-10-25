@@ -273,6 +273,7 @@ admin. `{% tunable_value "pricing.vat_rate" %}` prints a value, and
 users who may change them and a read-only list for users who may only view, following
 the admin's permissions and `EDITABLE_GROUPS`. Saves create a change set with source
 `panel` and record the page they came from. See [docs/embedding.md](docs/embedding.md).
+The [demo project](demo/README.md) has a page with three panels to click through.
 
 ## Documentation
 
@@ -292,6 +293,8 @@ uv run pytest
 uv run pytest --postgres    # the whole suite on a PostgreSQL testcontainer, needs Docker
 uv run ruff check . && uv run mypy src
 scripts/quickstart_check.sh    # installs the built wheel into a fresh project and runs the quickstart
+scripts/demo_check.sh          # installs the built wheel next to the demo project and drives its panels
+scripts/demo.sh                # serves the demo project on port 8000, see demo/README.md
 ```
 
 ## License

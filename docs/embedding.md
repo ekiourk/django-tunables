@@ -18,7 +18,8 @@ urlpatterns = [
 ]
 ```
 
-The URL namespace is `tunables_ui`. The panel needs the request in the template context,
+The repository's [demo project](../demo/README.md) mounts this and shows three panels on
+one page. The URL namespace is `tunables_ui`. The panel needs the request in the template context,
 which `django.template.context_processors.request` provides. Projects created with
 `startproject` have it already. The panel signs its configuration with `SECRET_KEY`.
 After a key rotation, a panel already open in a browser stops saving until the page is

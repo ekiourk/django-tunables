@@ -1,0 +1,20 @@
+{% extends "demo/base.html" %}
+{% load tunables %}
+{% block content %}
+<h1>Shop settings</h1>
+<p>Orders over {% tunable_value "pricing.free_shipping_over" %} EUR ship free. VAT is {% tunable_value "pricing.vat_rate" %}.</p>
+
+<h2>Prices</h2>
+<p>A plain panel. The reason is required and a save makes a full page round trip.</p>
+{% tunables_panel "pricing.vat_rate" "pricing.free_shipping_over" title="Prices" id="prices" %}
+
+<h2>Thermostat</h2>
+<p>An HTMX panel rendered with the demo's own copy of the template. The reason field is hidden, so
+the change set records the page instead.</p>
+{% tunables_panel "thermostat.mode" "thermostat.target_c" reason="hidden" title="Thermostat" id="thermostat" template="demo/panel_htmx.html" %}
+
+<h2>Ranking</h2>
+<p>Mixes a pricing key with the weights group, which only superusers may change. For anyone else
+the whole panel is read-only.</p>
+{% tunables_panel "weights.price" "pricing.allow_backorders" title="Ranking" id="ranking" %}
+{% endblock %}
