@@ -1,4 +1,4 @@
-"""The demo project: its catalogue tracks the README, its access hook and its setup command keep their promises."""
+"""The demo project: its catalogue matches the README, and its access hook and setup command do what its README says."""
 
 import io
 import re

@@ -55,9 +55,9 @@ Additions:
 - The panel template has a `form_attrs` block inside its `<form>` tag, so a template that
   extends it can add HTMX attributes in one line instead of copying the markup.
 - A demo project in `demo/`: a shop settings page with three embedded panels, the admin
-  and the API, with four users to compare. `scripts/demo.sh` serves it from the checkout.
+  and the API, and four users to compare. `scripts/demo.sh` serves it from the checkout.
   `scripts/demo_check.sh` installs the built wheel next to it and drives the panels through
-  real sessions, CSRF and redirects, and CI runs it.
+  real sessions, CSRF and redirects. CI runs that check.
 - `docs/embedding.md` documents the tags, the permissions, the options, HTMX, template
   overrides, the form builder and the JavaScript recipe.
 
