@@ -21,6 +21,7 @@ class ChangeSource(models.TextChoices):
     IMPORT = "import"
     ROLLBACK = "rollback"
     SYSTEM = "system"
+    PANEL = "panel"
 
 
 class State(models.Model):

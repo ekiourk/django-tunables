@@ -1,9 +1,20 @@
 import pytest
+from django.contrib.auth.models import Permission, User
 from django.utils import timezone
 from rest_framework.test import APIClient
 
 from tunables.models import ActorSource, ChangeSet, ChangeSource, TunableDefinition
 from tunables.sync import SyncResult, sync
+
+
+def user_with(*perms: str, username: str = "user", is_staff: bool = False) -> User:
+    """A user holding exactly these ``app.codename`` permissions, created or reset."""
+    user, _ = User.objects.get_or_create(username=username, defaults={"is_staff": is_staff})
+    user.user_permissions.clear()
+    for perm in perms:
+        app, codename = perm.split(".")
+        user.user_permissions.add(Permission.objects.get(content_type__app_label=app, codename=codename))
+    return User.objects.get(pk=user.pk)
 
 
 @pytest.fixture

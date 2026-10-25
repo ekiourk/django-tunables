@@ -15,6 +15,12 @@ def require_tags(names: Collection[str]) -> None:
             raise UnknownTag(name)
 
 
+def require_keys(catalogue: Catalogue, keys: Collection[str]) -> None:
+    """Raise UnknownKey for the first key, in request order, that the catalogue does not declare."""
+    for key in keys:
+        catalogue.get(key)
+
+
 def tags_by_key() -> dict[str, list[str]]:
     """Every tag name per definition key, seeded and manual, from the mirror."""
     by_key: dict[str, list[str]] = {}
@@ -30,11 +36,12 @@ def match_definitions(
     category: str | None = None,
     group: str | None = None,
     wanted_tags: Collection[str] = (),
+    wanted_keys: Collection[str] = (),
     query: str = "",
 ) -> list[tuple[Group, Tunable, list[str]]]:
-    """Definitions in catalogue order narrowed by category, group, tags (all must be present) and text.
+    """Definitions in catalogue order narrowed by category, group, tags (all must be present), keys and text.
 
-    Category and group must already be known to exist; the caller decides how to report unknown names.
+    Category, group and keys must already be known to exist; the caller decides how to report unknown names.
     """
     groups: Sequence[Group] = list(catalogue.groups.values())
     if category is not None:
@@ -42,11 +49,14 @@ def match_definitions(
     if group is not None:
         groups = [g for g in groups if g.name == group]
     wanted = set(wanted_tags)
+    keys = set(wanted_keys)
     needle = query.casefold()
     matches = []
     for g in groups:
         for tunable in g.tunables:
             key = f"{g.name}.{tunable.name}"
+            if keys and key not in keys:
+                continue
             own_tags = tags.get(key, [])
             if wanted and not wanted <= set(own_tags):
                 continue

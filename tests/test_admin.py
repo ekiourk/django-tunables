@@ -2,11 +2,11 @@ import json
 from typing import Any
 
 import pytest
-from django.contrib.auth.models import Permission, User
 from django.contrib.messages import get_messages
 from django.test import Client, override_settings
 
 from tests.catalogue import catalogue
+from tests.conftest import user_with
 from tests.test_services import apply
 from tunables import Change
 from tunables.models import ChangeSet, State, TunableValue
@@ -28,14 +28,21 @@ def form_data(group: str, **overrides: Any) -> dict[str, Any]:
     data: dict[str, Any] = {"reason": "because", "expected_version": document["version"]}
     for tunable in catalogue.groups[group].tunables:
         value = document["groups"][group][tunable.name]
+        key = f"{group}.{tunable.name}"
         if isinstance(value, bool):
             if value:
-                data[tunable.name] = "on"
+                data[key] = "on"
         elif isinstance(value, list | dict):
-            data[tunable.name] = json.dumps(value)
+            data[key] = json.dumps(value)
         else:
-            data[tunable.name] = str(value)
-    data.update(overrides)
+            data[key] = str(value)
+    for name, value in overrides.items():
+        if name in ("reason", "expected_version"):
+            data[name] = value
+        elif name.startswith("reset_"):
+            data[f"reset_{group}.{name.removeprefix('reset_')}"] = value
+        else:
+            data[f"{group}.{name}"] = value
     return data
 
 
@@ -44,13 +51,8 @@ def messages_of(response: Any) -> list[str]:
 
 
 def staff(*perms: str) -> Client:
-    user, _ = User.objects.get_or_create(username="staff", defaults={"is_staff": True})
-    user.user_permissions.clear()
-    for perm in perms:
-        app, codename = perm.split(".")
-        user.user_permissions.add(Permission.objects.get(content_type__app_label=app, codename=codename))
     client = Client()
-    client.force_login(user)
+    client.force_login(user_with(*perms, username="staff", is_staff=True))
     return client
 
 
@@ -73,18 +75,18 @@ def test_edit_form_shows_current_values_and_reset_boxes(admin_client: Client, sy
     response = admin_client.get(edit_url("pricing"))
     assert response.status_code == 200
     form = response.context["form"]
-    assert form.fields["vat_rate"].initial == 0.2
-    assert form.fields["free_shipping_over"].initial == 50.0
-    assert form.fields["currencies"].initial == ["EUR"]
-    assert form.fields["vat_rate"].label == "VAT rate"
-    assert "EUR" in form.fields["free_shipping_over"].help_text
-    assert "reset_vat_rate" in form.fields
-    assert "reset_free_shipping_over" not in form.fields
+    assert form.fields["pricing.vat_rate"].initial == 0.2
+    assert form.fields["pricing.free_shipping_over"].initial == 50.0
+    assert form.fields["pricing.currencies"].initial == ["EUR"]
+    assert form.fields["pricing.vat_rate"].label == "VAT rate"
+    assert "EUR" in form.fields["pricing.free_shipping_over"].help_text
+    assert "reset_pricing.vat_rate" in form.fields
+    assert "reset_pricing.free_shipping_over" not in form.fields
     assert form.fields["reason"].required is True
     assert form.fields["expected_version"].initial == 1
     content = response.content.decode()
-    assert 'name="vat_rate"' in content
-    assert 'name="reset_vat_rate"' in content
+    assert 'name="pricing.vat_rate"' in content
+    assert 'name="reset_pricing.vat_rate"' in content
     assert 'name="expected_version" value="1"' in content
 
 
@@ -116,7 +118,7 @@ def test_reset_box_resets(admin_client: Client, synced: SyncResult) -> None:
 def test_invalid_submit_maps_errors(admin_client: Client, synced: SyncResult) -> None:
     response = admin_client.post(edit_url("pricing"), form_data("pricing", vat_rate="5"))
     assert response.status_code == 200
-    assert "vat_rate" in response.context["form"].errors
+    assert "pricing.vat_rate" in response.context["form"].errors
     response = admin_client.post(edit_url("weights"), form_data("weights", alpha="0.9"))
     assert response.status_code == 200
     assert response.context["form"].non_field_errors() == ["weights must sum to 1"]
@@ -129,7 +131,7 @@ def test_missing_reason_and_emptied_value(admin_client: Client, synced: SyncResu
     assert "reason" in response.context["form"].errors
     response = admin_client.post(edit_url("pricing"), form_data("pricing", vat_rate=""))
     assert response.status_code == 200
-    assert "vat_rate" in response.context["form"].errors
+    assert "pricing.vat_rate" in response.context["form"].errors
     assert ChangeSet.objects.count() == 0
 
 
@@ -147,7 +149,7 @@ def test_stale_version_rerenders_with_the_submitted_values(admin_client: Client,
     assert response.status_code == 200
     form = response.context["form"]
     assert form.is_bound is True
-    assert form["vat_rate"].value() == "0.1"
+    assert form["pricing.vat_rate"].value() == "0.1"
     assert form["expected_version"].value() == "1"
     assert any("version 0" in m and "version 1" in m for m in messages_of(response))
     assert ChangeSet.objects.count() == 1
@@ -353,9 +355,11 @@ def test_admin_form_labels_are_translated(admin_client: Client, synced: SyncResu
         response = admin_client.get(edit_url("pricing"))
         assert response.status_code == 200
         # The label is a lazy string; it resolves in the language active when it is read.
-        assert str(response.context["form"].fields["reset_vat_rate"].label) == "Auf Standard zurücksetzen (0.24)"
+        assert (
+            str(response.context["form"].fields["reset_pricing.vat_rate"].label) == "Auf Standard zurücksetzen (0.24)"
+        )
     assert "Auf Standard zurücksetzen (0.24)" in response.content.decode()
-    assert str(response.context["form"].fields["reset_vat_rate"].label) == "Reset to default (0.24)"
+    assert str(response.context["form"].fields["reset_pricing.vat_rate"].label) == "Reset to default (0.24)"
 
 
 def test_group_index_shows_rule_violations(admin_client: Client, synced: SyncResult) -> None:
@@ -537,17 +541,17 @@ def test_reset_labels_name_the_default(admin_client: Client, synced: SyncResult)
         Change("pricing.allow_backorders", True),
     )
     fields = admin_client.get(edit_url("pricing")).context["form"].fields
-    assert str(fields["reset_vat_rate"].label) == "Reset to default (0.24)"
-    assert str(fields["reset_free_shipping_over"].label) == "Reset to default (50.0 EUR)"
-    assert str(fields["reset_currencies"].label) == 'Reset to default (["EUR"])'
-    assert str(fields["reset_allow_backorders"].label) == "Reset to default (false)"
-    assert fields["reset_vat_rate"].help_text == ""
+    assert str(fields["reset_pricing.vat_rate"].label) == "Reset to default (0.24)"
+    assert str(fields["reset_pricing.free_shipping_over"].label) == "Reset to default (50.0 EUR)"
+    assert str(fields["reset_pricing.currencies"].label) == 'Reset to default (["EUR"])'
+    assert str(fields["reset_pricing.allow_backorders"].label) == "Reset to default (false)"
+    assert fields["reset_pricing.vat_rate"].help_text == ""
 
 
 def test_a_long_default_is_truncated_into_the_help_text() -> None:
     from tunables import Enum, Float, Group, Tunable
     from tunables import Mapping as MappingType
-    from tunables.admin.forms import SHOWN_WIDTH, build_group_form
+    from tunables.forms import SHOWN_WIDTH, form_class
 
     rates = {"EUR": 4.9, "USD": 5.4, "GBP": 4.2, "CHF": 5.1, "SEK": 6.0}
     tunable = Tunable(
@@ -556,9 +560,10 @@ def test_a_long_default_is_truncated_into_the_help_text() -> None:
         rates,
         unit="per currency",
     )
-    group = Group("pricing", [tunable])
-    form = build_group_form(group, {"shipping_rates": rates}, {"shipping_rates"}, 1)()
-    field = form.fields["reset_shipping_rates"]
+    Group("pricing", [tunable])
+    key = "pricing.shipping_rates"
+    form = form_class({key: tunable}, {key: rates}, [key], 1)()
+    field = form.fields["reset_pricing.shipping_rates"]
     label, help_text = str(field.label), str(field.help_text)
     assert label.startswith('Reset to default ({"EUR": 4.9')
     assert label.endswith("…)")
@@ -606,12 +611,12 @@ def test_a_truncated_default_is_shown_in_full_on_the_page(admin_client: Client, 
 
 def test_a_non_ascii_default_is_shown_as_written() -> None:
     from tunables import Group, String, Tunable
-    from tunables.admin.forms import build_group_form
+    from tunables.forms import form_class
 
     tunable = Tunable("greeting", String(), "Café ☕", title="Greeting")
-    group = Group("shop", [tunable])
-    form = build_group_form(group, {"greeting": "hi"}, {"greeting"}, 1)()
-    assert str(form.fields["reset_greeting"].label) == 'Reset to default ("Café ☕")'
+    Group("shop", [tunable])
+    form = form_class({"shop.greeting": tunable}, {"shop.greeting": "hi"}, ["shop.greeting"], 1)()
+    assert str(form.fields["reset_shop.greeting"].label) == 'Reset to default ("Café ☕")'
 
 
 def test_the_admin_index_calls_the_page_tunables(admin_client: Client, synced: SyncResult) -> None:

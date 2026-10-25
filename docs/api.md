@@ -60,8 +60,8 @@ narrowing writes by group.
 | Header | Direction | Meaning |
 |---|---|---|
 | `X-Tunables-Version` | response | The current version, read after the handler, so it is never older than the body. On every response including errors. After a write it is the new version. |
-| `ETag` | response | `"<version>"` on `values/`, `groups/{group}/values/`, `snapshots/latest/` and `snapshots/{version}/`. |
-| `If-None-Match` | request | On the endpoints above, a matching tag answers `304 Not Modified` with no body. |
+| `ETag` | response | `"<version>"` on `values/`, `groups/{group}/values/`, `snapshots/latest/` and `snapshots/{version}/`. The tag is the version, not a hash of the body, so the same tag can come with different bodies from different URLs, for example `values/?key=a` and `values/?key=b`. It is the write endpoint's `If-Match` value. |
+| `If-None-Match` | request | On the endpoints above, a matching tag answers `304 Not Modified` with no body. Send a tag only to the URL it came from. |
 | `If-Match` | request | On writes, `"<version>"` sets the expected version. A mismatch is `412`. `*` or no header means the write is applied regardless. |
 | `X-Tunables-Actor` | request | Who is acting, when the request is not authenticated. Recorded with `actor_source: asserted`. Name configurable with `ACTOR_HEADER`. |
 | `X-Tunables-Client` | request | Which program is acting. Recorded as `client`. Name configurable with `CLIENT_HEADER`. |
@@ -117,12 +117,12 @@ someone diagnosing the sync state. Every write requires sync.
 | `GET categories/` | `[{name, title, description, order, groups: [names]}]` in catalogue order; `general` is always present |
 | `GET groups/[?category=]` | `[group summary]` in catalogue order, optionally one category's groups; unknown category is `404` |
 | `GET groups/{group}/` | group summary without `tunable_count`, plus `ui`, `metadata` and `definitions: [definition]` |
-| `GET groups/{group}/schema/[?tag=&tag=]` | `{"json_schema": ..., "ui_schema": ...}`; with `tag` only the tunables carrying every named tag are described, and `404` when none does |
-| `GET schema/[?tag=&tag=]` | `{"<group>": {"json_schema": ..., "ui_schema": ...}}` for every group; with `tag` each group is filtered the same way and groups left with no tunable are omitted |
-| `GET definitions/[?category=&group=&tag=&tag=&q=]` | `[definition]` in catalogue order; filters combine; `tag` repeats and every named tag must be present; `q` is a case-insensitive substring of the key, title or description; unknown category or group is `404` |
+| `GET groups/{group}/schema/[?tag=&tag=&key=&key=]` | `{"json_schema": ..., "ui_schema": ...}`; with `tag` only the tunables carrying every named tag are described, with `key` only the listed keys, and `404` when none is left |
+| `GET schema/[?tag=&tag=&key=&key=]` | `{"<group>": {"json_schema": ..., "ui_schema": ...}}` for every group; with `tag` or `key` each group is filtered the same way and groups left with no tunable are omitted |
+| `GET definitions/[?category=&group=&tag=&tag=&key=&key=&q=]` | `[definition]` in catalogue order; filters combine; `tag` repeats and every named tag must be present; `key` repeats and keeps only the named keys; `q` is a case-insensitive substring of the key, title or description; unknown category or group is `404` |
 | `GET tags/` | `[{name, description, from_catalogue, definition_count}]` by name |
 | `GET tags/{name}/` | the same plus `definitions: [keys]` in catalogue order; unknown is `404` |
-| `GET values/` | `{"version", "groups": {group: {name: value}}, "overridden": [key]}` with `ETag` |
+| `GET values/[?key=&key=]` | `{"version", "groups": {group: {name: value}}, "overridden": [key]}` with `ETag`; with `key` only the listed keys and their groups appear |
 | `GET groups/{group}/values/` | `{"version", "values": {name: value}, "overridden": [name]}` with `ETag` |
 | `GET changesets/` | paginated `[change set]`, newest first |
 | `GET changesets/{version}/` | change set with `items` |
@@ -147,9 +147,10 @@ item          = {key, old_value, new_value, reset}
 `created_at` is ISO 8601 in UTC with a `Z` suffix. `old_value` is `null` when the
 key was at its default before the change. `new_value` is `null` for a reset.
 `actor_source` is one of `verified`, `asserted`, `system`. `source` is one of `admin`,
-`api`, `import`, `rollback`, `system`.
+`api`, `import`, `rollback`, `system`, `panel`. A `panel` change set comes from the
+embedded panel, see `embedding.md`, and its `metadata` holds the `page` it was saved from.
 
-### Schemas by tag
+### Schemas by tag or key
 
 Every property of a group schema carries `x-tags`, the sorted tag names of that tunable
 as the database holds them, seeded and manual alike, or `[]` when it has none. The same
@@ -170,6 +171,21 @@ result: `404` on `groups/{group}/schema/`, the group omitted from `schema/`, and
 empty list from `definitions/`. Because matching reads the mirror, a tag assigned in
 the admin or through `PUT definitions/{key}/tags/` changes the filtered schema at once,
 with no `tunables_sync` in between.
+
+The `key` parameter repeats too and names full keys. On `groups/{group}/schema/`,
+`schema/` and `definitions/` it keeps only the listed tunables, and on `values/` it keeps
+only the listed keys, grouped as usual, with `overridden` filtered to match. `key` and
+`tag` combine with AND. An unknown key is `422 unknown-key` everywhere, so a typo does not
+pass for an empty result. The catalogue endpoints check the key against the code.
+`values/` serves during catalogue skew and checks it against the stored document instead:
+a key the running code dropped but the database still holds is served, and a key the code
+added but `tunables_sync` has not stored yet is unknown until the sync runs. A key that
+exists but lies in another group is a legitimate empty result, `404` on the single-group
+schema and the group omitted from `schema/`. The two filtered reads are what a client
+needs to render its own widget over a handful of tunables: fetch `schema/?key=...` and
+`values/?key=...`, render with a JSON Schema form library, and `POST changesets/` with
+`If-Match` set to the version the values came with. The server-rendered counterpart is
+in `embedding.md`.
 
 ### Listing change sets
 
@@ -298,6 +314,7 @@ branch on an error should key on `code`, and clients that show messages can loca
 | `urn:tunables:problem:nothing-to-change` | 400 | | no change would alter a value |
 | `urn:tunables:problem:unknown-version` | 422 | `version` | `rollback` to a version with no snapshot |
 | `urn:tunables:problem:unknown-tag` | 422 | `tag` | a `tag` query value on `definitions/` or the schema endpoints that names no stored tag; `tag` is the first unknown name |
+| `urn:tunables:problem:unknown-key` | 422 | `key` | a `key` query value on `definitions/` or the schema endpoints that the catalogue does not declare, or on `values/` that the stored document does not hold; `key` is the first unknown one |
 | `urn:tunables:problem:forbidden-group` | 403 | `group` | `EDITABLE_GROUPS` excludes a touched group |
 | `urn:tunables:problem:tag-exists` | 409 | `name` | `POST tags/` with a name that exists |
 | `urn:tunables:problem:tag-seeded` | 409 | `name` | `DELETE tags/{name}/` on a tag the catalogue seeds |

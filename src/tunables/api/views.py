@@ -24,12 +24,12 @@ from tunables.api.writes import parsed_changes, write
 from tunables.catalogue import Catalogue, Category, Group, Tunable, validator_description
 from tunables.changes import Change
 from tunables.conf import settings
-from tunables.errors import UnknownVersion
+from tunables.errors import UnknownKey, UnknownVersion
 from tunables.models import ChangeSet, PublisherState, Snapshot, Tag
 from tunables.registry import get_catalogue
 from tunables.schema import describe_group, document_schema
-from tunables.search import match_definitions, require_tags, tags_by_key
-from tunables.services import diff_versions, latest_snapshot, rule_violations
+from tunables.search import match_definitions, require_keys, require_tags, tags_by_key
+from tunables.services import diff_versions, flat_values, latest_snapshot, rule_violations
 from tunables.sync import is_current
 from tunables.tags import create_tag, delete_tag, update_tag
 
@@ -210,11 +210,22 @@ class GroupDetail(TunablesAPIView):
         )
 
 
-def _tagged_names(catalogue: Catalogue, tags: dict[str, list[str]], wanted: list[str], group: Group) -> set[str] | None:
-    """Names of the group's tunables carrying every wanted tag, or None when nothing is wanted."""
-    if not wanted:
+def _no_match(group: str, wanted_tags: list[str], wanted_keys: list[str]) -> str:
+    text = (
+        f"no tunable in group {group!r} carries tags {sorted(wanted_tags)!r}"
+        if wanted_tags
+        else f"no tunable in group {group!r} is"
+    )
+    return f"{text} among keys {sorted(wanted_keys)!r}" if wanted_keys else text
+
+
+def _selected_names(
+    catalogue: Catalogue, tags: dict[str, list[str]], wanted_tags: list[str], wanted_keys: list[str], group: Group
+) -> set[str] | None:
+    """Names of the group's tunables carrying every wanted tag and listed in the wanted keys, or None when unfiltered."""
+    if not wanted_tags and not wanted_keys:
         return None
-    matches = match_definitions(catalogue, tags, group=group.name, wanted_tags=wanted)
+    matches = match_definitions(catalogue, tags, group=group.name, wanted_tags=wanted_tags, wanted_keys=wanted_keys)
     return {tunable.name for _, tunable, _ in matches}
 
 
@@ -224,10 +235,12 @@ class GroupSchema(TunablesAPIView):
         found = _group(catalogue, group)
         wanted = request.query_params.getlist("tag")
         require_tags(wanted)
+        keys = request.query_params.getlist("key")
+        require_keys(catalogue, keys)
         tags = tags_by_key()
-        names = _tagged_names(catalogue, tags, wanted, found)
+        names = _selected_names(catalogue, tags, wanted, keys, found)
         if names is not None and not names:
-            raise NotFound(f"no tunable in group {group!r} carries tags {sorted(wanted)!r}")
+            raise NotFound(_no_match(group, wanted, keys))
         return Response(describe_group(catalogue, found, tags=tags, names=names))
 
 
@@ -236,10 +249,12 @@ class SchemaList(TunablesAPIView):
         catalogue = get_catalogue()
         wanted = request.query_params.getlist("tag")
         require_tags(wanted)
+        keys = request.query_params.getlist("key")
+        require_keys(catalogue, keys)
         tags = tags_by_key()
         body = {}
         for name, group in catalogue.groups.items():
-            names = _tagged_names(catalogue, tags, wanted, group)
+            names = _selected_names(catalogue, tags, wanted, keys, group)
             if names is None or names:
                 body[name] = describe_group(catalogue, group, tags=tags, names=names)
         return Response(body)
@@ -256,12 +271,14 @@ class DefinitionList(TunablesAPIView):
         if group is not None:
             _group(catalogue, group)
         require_tags(params.getlist("tag"))
+        require_keys(catalogue, params.getlist("key"))
         matches = match_definitions(
             catalogue,
             tags_by_key(),
             category=category,
             group=group,
             wanted_tags=params.getlist("tag"),
+            wanted_keys=params.getlist("key"),
             query=params.get("q", ""),
         )
         return Response([_definition(g, tunable, own_tags) for g, tunable, own_tags in matches])
@@ -281,6 +298,19 @@ class Values(TunablesAPIView):
     def get(self, request: Request) -> Response:
         document = latest_snapshot().document
         body = {key: document[key] for key in ("version", "groups", "overridden")}
+        keys = request.query_params.getlist("key")
+        if keys:
+            # This endpoint serves during catalogue skew, so keys are checked against the stored document.
+            flat = flat_values(document)
+            groups: dict[str, dict[str, Any]] = {}
+            for key in keys:
+                if key not in flat:
+                    raise UnknownKey(key)
+                group, _, name = key.partition(".")
+                groups.setdefault(group, {})[name] = flat[key]
+            wanted = set(keys)
+            body["groups"] = groups
+            body["overridden"] = [key for key in document["overridden"] if key in wanted]
         return _with_etag(request, document["version"], body)
 
 

@@ -1,5 +1,60 @@
 # Changelog
 
+## 0.6.0, unreleased
+
+Tunables can be shown and edited from any page of the host, and the API can serve the
+schema and values of a handful of keys at once.
+
+Changes to existing behaviour:
+
+- The admin's group edit form names its fields by full key, `pricing.vat_rate` and
+  `reset_pricing.vat_rate`, where it used the short tunable name. The form is built by
+  the new shared builder, which must tell keys from different groups apart. Nothing
+  changes for someone using the form in a browser; a script posting to the admin form
+  must use the new names. `GroupForm` and `build_group_form` leave `tunables.admin.forms`,
+  which keeps only the tag form; the admin calls `tunables.forms.build_form` with the
+  group's keys like any other page. The `rows` context variable of the edit template
+  holds row objects with `tunable`, `field`, `reset` and `shown` attributes instead of
+  tuples, so a host that overrides `tunables/admin/group_edit.html` must read
+  `row.field` where it read the tuple.
+- `ChangeSet.source` gains the value `panel`; migration `0006` records the new choice.
+
+Additions:
+
+- Template tags in `{% load tunables %}`. `{% tunable_value "pricing.vat_rate" %}` prints
+  an effective value. `{% tunables_panel "pricing.vat_rate" "thermostat.mode" %}` renders
+  a form over the named keys for users with `add_changeset` whose groups are all
+  editable, a read-only list for users with `view_tunabledefinition` or when the catalogue
+  is out of sync, and nothing otherwise. The panel takes `reason` (`required`, `optional`
+  or `hidden`), `next`, `title`, `id` and `template`. An empty reason is stored as
+  `Changed from /the/page/` and the page path goes into the change set's `metadata`.
+  The history says where a change came from even when the page shows no reason field.
+- `tunables.urls`, namespace `tunables_ui`, with the endpoint the panel posts to. It
+  redirects back to the page on success, renders a standalone page with the errors
+  otherwise, and answers an HTMX request or a `partial=1` field with the panel's HTML so
+  the host can swap it in place. Version conflicts keep the input and bump the version,
+  as the admin does. The panel's keys, reason mode and template travel as a token signed
+  with `SECRET_KEY`, so a browser cannot widen a panel or drop a required reason, and a
+  host's own template is kept across partial responses and the error page. Unpermitted
+  users get `403`, an altered token `400`, unknown keys `404`.
+- `tunables.forms.build_form(keys, document, reason=...)` builds the same form for a
+  host's own view, over any keys from any groups. `form.save(actor=, source=)` applies
+  the changes as one change set and maps validation errors, "nothing changed" and a
+  version conflict onto the form, with `conflict_text()` and `rebound()` to resolve the
+  latter. A host view handles a save the way the admin does. `changes()` returns the
+  change objects and `rows()` the row objects for a template.
+- `tunables.access.check_keys_editable(request, keys)` applies `EDITABLE_GROUPS` to a
+  list of keys with one call of the hook, and `tunables.services.live_document()` builds
+  a snapshot-shaped document from what the running code serves, for a database that was
+  never synced or is out of sync.
+- `key` on `GET values/`, `GET schema/`, `GET groups/{group}/schema/` and
+  `GET definitions/` repeats and keeps only the named keys; it combines with `tag`. An
+  unknown key is `422 unknown-key`; the catalogue endpoints check it against the code,
+  `values/` against the stored document since it serves during catalogue skew. With the
+  schema and values reads a client can render its own widget over a few tunables.
+- `docs/embedding.md` documents the tags, the permissions, the options, HTMX, template
+  overrides, the form builder and the JavaScript recipe.
+
 ## 0.5.0, 2026-09-22
 
 Catalogues get ready-made validators and a single import point, artifacts can be built

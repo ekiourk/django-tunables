@@ -196,8 +196,8 @@ class DiffEntry:
 
 def diff_versions(from_version: int, to_version: int) -> list[DiffEntry]:
     """Per-key differences between two stored documents. A key in only one document has None on the other side."""
-    before = _flat_values(_snapshot(from_version).document)
-    after = _flat_values(_snapshot(to_version).document)
+    before = flat_values(_snapshot(from_version).document)
+    after = flat_values(_snapshot(to_version).document)
     return [
         DiffEntry(key, before.get(key), after.get(key))
         for key in sorted(before.keys() | after.keys())
@@ -212,13 +212,25 @@ def _snapshot(version: int) -> Snapshot:
     return snapshot
 
 
-def _flat_values(document: Mapping[str, Any]) -> dict[str, Any]:
+def flat_values(document: Mapping[str, Any]) -> dict[str, Any]:
     return {f"{group}.{name}": value for group, values in document["groups"].items() for name, value in values.items()}
 
 
-def latest_snapshot() -> Snapshot:
-    """The snapshot at the current version. Raises CatalogueOutOfSync when the database was never synced."""
-    return Snapshot.objects.get(version=current_version())
+def latest_snapshot(version: int | None = None) -> Snapshot:
+    """The snapshot at the current version, or at ``version`` when the caller already read the State row.
+
+    Raises CatalogueOutOfSync when the database was never synced.
+    """
+    return Snapshot.objects.get(version=current_version() if version is None else version)
+
+
+def live_document() -> dict[str, Any]:
+    """What the running code serves, as a snapshot-shaped document: its defaults overlaid with the stored
+    overrides it knows, at the stored version or 0 before the first sync. Safe to call during catalogue skew."""
+    catalogue = get_catalogue()
+    stored = State.objects.filter(pk=1).values_list("current_version", flat=True).first()
+    version = 0 if stored is None else int(stored)
+    return build_document(catalogue, stored_overrides(catalogue), version=version, created_at=timezone.now())
 
 
 def _locked_state(catalogue: Catalogue) -> State:

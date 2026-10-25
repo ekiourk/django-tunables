@@ -1,0 +1,46 @@
+{% load i18n %}{% if panel.mode != "hidden" %}
+<section class="tunables-panel tunables-panel--{{ panel.mode }}" id="{{ panel.config.id }}">
+  {% if panel.config.title %}<h3 class="tunables-panel__title">{{ panel.config.title }}</h3>{% endif %}
+  {% if panel.notice %}<p class="tunables-panel__notice">{{ panel.notice }}</p>{% endif %}
+  {% if panel.saved_version %}<p class="tunables-panel__saved">{% blocktranslate with version=panel.saved_version %}Saved version {{ version }}.{% endblocktranslate %}</p>{% endif %}
+  {% if panel.mode == "edit" %}
+  <form method="post" action="{{ panel.action_url }}" class="tunables-panel__form">
+    {% csrf_token %}
+    <input type="hidden" name="panel" value="{{ panel.token }}">
+    <input type="hidden" name="next" value="{{ panel.next_url }}">
+    {{ panel.form.expected_version }}
+    {% if panel.form.non_field_errors %}
+    <ul class="tunables-panel__errors">{% for error in panel.form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% for row in panel.rows %}
+    <div class="tunables-panel__row{% if row.field.errors %} tunables-panel__row--error{% endif %}">
+      {{ row.field.label_tag }}
+      {{ row.field }}
+      {% if row.reset %}<label class="tunables-panel__reset">{{ row.reset }} {{ row.reset.label }}</label>{% endif %}
+      {% if row.field.errors %}<ul class="tunables-panel__errors">{% for error in row.field.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+      {% if row.field.help_text %}<p class="tunables-panel__help">{{ row.field.help_text }}</p>{% endif %}
+      {% if row.reset.help_text %}<p class="tunables-panel__help">{% translate "Default:" %} {{ row.reset.help_text }}</p>{% endif %}
+      {% if row.tunable.deprecated %}<p class="tunables-panel__help">{% translate "Deprecated:" %} {{ row.tunable.deprecated }}</p>{% endif %}
+    </div>
+    {% endfor %}
+    {% if panel.config.reason == "hidden" %}
+    {{ panel.form.reason }}
+    {% else %}
+    <div class="tunables-panel__row tunables-panel__row--reason{% if panel.form.reason.errors %} tunables-panel__row--error{% endif %}">
+      {{ panel.form.reason.label_tag }}
+      {{ panel.form.reason }}
+      {% if panel.form.reason.errors %}<ul class="tunables-panel__errors">{% for error in panel.form.reason.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+    </div>
+    {% endif %}
+    <button type="submit" class="tunables-panel__save">{% translate "Save" %}</button>
+  </form>
+  {% else %}
+  <dl class="tunables-panel__values">
+    {% for row in panel.rows %}
+    <dt class="tunables-panel__key">{{ row.field.label }}</dt>
+    <dd class="tunables-panel__value">{{ row.shown }}{% if row.reset %} <span class="tunables-panel__overridden">{% translate "overridden" %}</span>{% endif %}</dd>
+    {% endfor %}
+  </dl>
+  {% endif %}
+</section>
+{% endif %}

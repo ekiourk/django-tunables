@@ -15,6 +15,7 @@ from tunables.errors import (
     TagExists,
     TagNotAllowed,
     TagSeeded,
+    UnknownKey,
     UnknownTag,
     UnknownVersion,
     ValidationFailed,
@@ -49,6 +50,8 @@ def exception_handler(exc: Exception, _context: dict[str, Any]) -> Response | No
         return problem(422, "unknown-version", "Unknown version", str(exc), version=exc.version)
     if isinstance(exc, UnknownTag):
         return problem(422, "unknown-tag", "Unknown tag", str(exc), tag=exc.name)
+    if isinstance(exc, UnknownKey):
+        return problem(422, "unknown-key", "Unknown key", str(exc), key=exc.key)
     if isinstance(exc, GroupNotEditable):
         return problem(403, "forbidden-group", "Forbidden group", str(exc), group=exc.group)
     if isinstance(exc, TagExists):

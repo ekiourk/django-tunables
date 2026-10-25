@@ -1,44 +1,7 @@
-import json
-from collections.abc import Collection, Mapping
-from typing import Any
-
 from django import forms
-from django.utils.text import format_lazy
 from django.utils.translation import gettext_lazy as _
 
-from tunables.catalogue import Group, Tunable
-from tunables.changes import Change
 from tunables.identifiers import TAG
-
-
-class GroupForm(forms.Form):
-    """Base for the per-group form built by build_group_form. Tunable fields are added dynamically."""
-
-    reason = forms.CharField(label=_("Reason"), max_length=1000, widget=forms.Textarea(attrs={"rows": 2}))
-    expected_version = forms.IntegerField(widget=forms.HiddenInput)
-
-    group: Group
-    overridden: Collection[str]
-
-    def clean(self) -> dict[str, Any]:
-        cleaned = super().clean() or {}
-        for tunable in self.group.tunables:
-            if tunable.name in self.errors or cleaned.get(f"reset_{tunable.name}"):
-                continue
-            if cleaned.get(tunable.name) is None:
-                self.add_error(tunable.name, _("Enter a value or tick reset to default."))
-        return cleaned
-
-    def changes(self) -> list[Change]:
-        """One change per tunable: a reset when its box is ticked, else the cleaned value."""
-        changes = []
-        for tunable in self.group.tunables:
-            key = f"{self.group.name}.{tunable.name}"
-            if self.cleaned_data.get(f"reset_{tunable.name}"):
-                changes.append(Change(key, reset=True))
-            else:
-                changes.append(Change(key, tunable.type.to_json(self.cleaned_data[tunable.name])))
-        return changes
 
 
 class DefinitionTagsForm(forms.Form):
@@ -56,37 +19,3 @@ class DefinitionTagsForm(forms.Form):
         if bad:
             raise forms.ValidationError(_("Invalid tag names: %(names)s") % {"names": ", ".join(bad)})
         return names
-
-
-SHOWN_WIDTH = 40
-
-
-def _default_text(tunable: Tunable) -> str:
-    """The default as JSON with its unit, the way the API shows it."""
-    rendered = json.dumps(tunable.type.to_json(tunable.default), ensure_ascii=False)
-    return f"{rendered} {tunable.unit}" if tunable.unit else rendered
-
-
-def build_group_form(
-    group: Group, values: Mapping[str, Any], overridden: Collection[str], version: int
-) -> type[GroupForm]:
-    """A GroupForm subclass with one field per tunable, initial values, and reset boxes for overrides."""
-    attrs: dict[str, Any] = {"group": group, "overridden": frozenset(overridden)}
-    for tunable in group.tunables:
-        parts = [str(tunable.description), f"({tunable.unit})" if tunable.unit else ""]
-        attrs[tunable.name] = tunable.type.form_field(
-            label=str(tunable.title) or tunable.name,
-            help_text=" ".join(part for part in parts if part),
-            initial=values[tunable.name],
-            required=False,
-        )
-        if tunable.name in overridden:
-            full = _default_text(tunable)
-            shown = full if len(full) <= SHOWN_WIDTH else full[: SHOWN_WIDTH - 1] + "\u2026"
-            attrs[f"reset_{tunable.name}"] = forms.BooleanField(
-                label=format_lazy(_("Reset to default ({value})"), value=shown),
-                help_text="" if shown == full else full,
-                required=False,
-            )
-    attrs["expected_version"] = forms.IntegerField(widget=forms.HiddenInput, initial=version)
-    return type(f"{group.name.title()}GroupForm", (GroupForm,), attrs)

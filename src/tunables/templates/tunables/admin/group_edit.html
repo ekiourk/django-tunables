@@ -18,17 +18,17 @@
     <p class="errornote">{% for error in form.non_field_errors %}{{ error }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>
     {% endif %}
     <fieldset class="module aligned">
-      {% for tunable, field, reset in rows %}
-      <div class="form-row{% if field.errors %} errors{% endif %}">
-        {{ field.errors }}
+      {% for row in rows %}
+      <div class="form-row{% if row.field.errors %} errors{% endif %}">
+        {{ row.field.errors }}
         <div class="flex-container">
-          {{ field.label_tag }}
-          {{ field }}
-          {% if reset %}<label class="vCheckboxLabel" style="margin-left: 1em">{{ reset }} {{ reset.label }}</label>{% endif %}
+          {{ row.field.label_tag }}
+          {{ row.field }}
+          {% if row.reset %}<label class="vCheckboxLabel" style="margin-left: 1em">{{ row.reset }} {{ row.reset.label }}</label>{% endif %}
         </div>
-        {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
-        {% if reset.help_text %}<div class="help">{% translate "Default:" %} {{ reset.help_text }}</div>{% endif %}
-        {% if tunable.deprecated %}<div class="help">{% translate "Deprecated:" %} {{ tunable.deprecated }}</div>{% endif %}
+        {% if row.field.help_text %}<div class="help">{{ row.field.help_text }}</div>{% endif %}
+        {% if row.reset.help_text %}<div class="help">{% translate "Default:" %} {{ row.reset.help_text }}</div>{% endif %}
+        {% if row.tunable.deprecated %}<div class="help">{% translate "Deprecated:" %} {{ row.tunable.deprecated }}</div>{% endif %}
       </div>
       {% endfor %}
     </fieldset>

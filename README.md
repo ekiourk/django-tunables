@@ -2,7 +2,8 @@
 
 Runtime-tunable parameters for Django with a full audit trail. The host project declares
 a catalogue of parameters in Python: keys, types, defaults, constraints, grouping.
-Operators change values through the Django admin or a REST API. Every change is an
+Operators change values through the Django admin, a panel embedded in any page of the
+host, or a REST API. Every change is an
 atomic, versioned change set, and every version produces a snapshot: one JSON document
 holding the complete effective parameter set, ready for other processes to read from
 the database or a file. Each group can also be described as JSON Schema plus a UI
@@ -264,12 +265,22 @@ change set history is read only and has a rollback action. See [docs/admin.md](d
 
 A screenshot of the group edit form will be added here.
 
+## Embedding tunables in other pages
+
+A host page can show or edit a chosen set of tunables without sending the user to the
+admin. `{% tunable_value "pricing.vat_rate" %}` prints a value, and
+`{% tunables_panel "pricing.vat_rate" "thermostat.mode" %}` renders a small form for
+users who may change them and a read-only list for users who may only view, following
+the admin's permissions and `EDITABLE_GROUPS`. Saves create a change set with source
+`panel` and record the page they came from. See [docs/embedding.md](docs/embedding.md).
+
 ## Documentation
 
 - [Declaring the catalogue](docs/catalogue.md)
 - [Reading values in Django code](docs/reading.md)
 - [REST API](docs/api.md)
 - [Django admin](docs/admin.md)
+- [Embedding tunables in other pages](docs/embedding.md)
 - [Snapshot format and reader contract](docs/snapshot-format.md)
 - [Deploying a new catalogue](docs/deployment.md)
 
