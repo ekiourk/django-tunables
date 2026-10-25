@@ -1,4 +1,4 @@
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from typing import Any
 
 from django.utils.module_loading import import_string
@@ -26,7 +26,16 @@ def check_group_editable(request: Any, group: str) -> None:
         raise GroupNotEditable(group)
 
 
+def check_keys_editable(request: Any, keys: Iterable[str]) -> None:
+    """Raise GroupNotEditable for the first key whose group the request may not write. One hook call."""
+    editable = editable_groups(request)
+    if editable is None:
+        return
+    for group in dict.fromkeys(key.partition(".")[0] for key in keys):
+        if group not in editable:
+            raise GroupNotEditable(group)
+
+
 def check_editable(request: Any, changes: Sequence[Change]) -> None:
     """Raise GroupNotEditable for the first change whose group the request may not write."""
-    for change in changes:
-        check_group_editable(request, change.key.partition(".")[0])
+    check_keys_editable(request, (change.key for change in changes))

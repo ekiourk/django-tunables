@@ -5,6 +5,7 @@ from typing import Any
 
 from django.db import transaction
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from tunables.catalogue import Catalogue, Group, Tunable
 from tunables.errors import CatalogueValidationError, ConstraintError, GroupError
@@ -53,6 +54,9 @@ def mirror_drift() -> list[str]:
     for name in Tag.objects.filter(from_catalogue=True).exclude(name__in=seed_names).values_list("name", flat=True):
         drift.append(f"{name}: tag is marked as coming from the catalogue but no tunable seeds it")
     return drift
+
+
+OUT_OF_SYNC_MESSAGE = _("The catalogue in code differs from the database. Run tunables_sync first.")
 
 
 def is_synced() -> bool:

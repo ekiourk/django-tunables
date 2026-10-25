@@ -12,32 +12,28 @@ from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
 from tunables.access import check_editable, check_group_editable, editable_groups
-from tunables.admin.forms import DefinitionTagsForm, GroupForm, build_group_form
+from tunables.admin.forms import DefinitionTagsForm
 from tunables.catalogue import validator_description
 from tunables.changes import Actor
 from tunables.errors import (
     CatalogueOutOfSync,
-    FieldError,
     GroupNotEditable,
     NothingToChange,
     TagNotAllowed,
-    UnknownVersion,
     ValidationFailed,
-    VersionConflict,
     format_error,
 )
+from tunables.forms import build_form
 from tunables.models import ChangeItem, ChangeSet, Snapshot, Tag, TunableDefinition, TunableDefinitionTag
 from tunables.registry import get_catalogue
 from tunables.search import match_definitions, tags_by_key
 from tunables.services import (
-    apply_changeset,
-    diff_versions,
     latest_snapshot,
     rollback,
     rollback_changes,
     rule_violations,
 )
-from tunables.sync import is_synced
+from tunables.sync import OUT_OF_SYNC_MESSAGE, is_synced
 from tunables.tags import log_admin_delete, log_admin_save, set_manual_tags
 
 if TYPE_CHECKING:
@@ -218,91 +214,42 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
         catalogue = get_catalogue()
         if group not in catalogue.groups:
             raise Http404(f"unknown group {group!r}")
-        editable = editable_groups(request)
-        if editable is not None and group not in editable:
-            raise PermissionDenied
+        try:
+            check_group_editable(request, group)
+        except GroupNotEditable as refused:
+            raise PermissionDenied(str(refused)) from refused
         index = reverse("admin:tunables_tunabledefinition_changelist")
         if not is_synced():
-            messages.error(request, _("The catalogue in code differs from the database. Run tunables_sync first."))
+            messages.error(request, str(OUT_OF_SYNC_MESSAGE))
             return HttpResponseRedirect(index)
         found = catalogue.groups[group]
-        form_class = self._form_class(found)
+        keys = [f"{found.name}.{tunable.name}" for tunable in found.tunables]
+        form_class = build_form(keys, latest_snapshot().document, catalogue=catalogue)
         form = form_class(request.POST) if request.method == "POST" else form_class()
         if request.method == "POST" and form.is_valid():
-            try:
-                result = apply_changeset(
-                    form.changes(),
-                    actor=Actor(request.user.get_username(), "verified"),
-                    source="admin",
-                    reason=form.cleaned_data["reason"],
-                    expected_version=form.cleaned_data["expected_version"],
-                )
-            except ValidationFailed as error:
-                for item in error.errors:
-                    field = item.key.partition(".")[2] if isinstance(item, FieldError) else None
-                    form.add_error(field if field in form.fields else None, item.message)
-            except NothingToChange:
-                form.add_error(None, _("Nothing changed."))
-            except VersionConflict as conflict:
-                moved = self._moved_names(found, conflict.expected, conflict.actual)
-                context = {"expected": conflict.expected, "actual": conflict.actual, "names": ", ".join(moved)}
-                if moved:
-                    text = _(
-                        "The values changed while you were editing: version %(expected)s is now version "
-                        "%(actual)s, and these changed: %(names)s. Your input is kept; review and submit again."
-                    )
-                else:
-                    text = _(
-                        "The values changed while you were editing: version %(expected)s is now version "
-                        "%(actual)s. Your input is kept; review and submit again."
-                    )
-                messages.warning(request, text % context)
-                data = request.POST.copy()
-                data["expected_version"] = str(conflict.actual)
-                form = self._form_class(found)(data)
-                form.is_valid()
-            else:
+            result = form.save(
+                actor=Actor(request.user.get_username(), "verified"), source="admin", reason=form.cleaned_data["reason"]
+            )
+            if result is not None:
                 messages.success(
                     request,
                     _("Saved version %(version)s of %(group)s.")
                     % {"version": result.version, "group": str(found.title) or found.name},
                 )
                 return HttpResponseRedirect(index)
-        rows = [
-            (
-                tunable,
-                form[tunable.name],
-                form[f"reset_{tunable.name}"] if f"reset_{tunable.name}" in form.fields else None,
-            )
-            for tunable in found.tunables
-        ]
+            if form.conflict is not None:
+                messages.warning(request, form.conflict_text())
+                form = form.rebound()
         context = {
             **self.admin_site.each_context(request),
             "title": _("Edit %(group)s") % {"group": str(found.title) or found.name},
             "opts": self.model._meta,
             "group": found,
             "form": form,
-            "rows": rows,
+            "rows": form.rows(),
             "index_url": index,
         }
         return TemplateResponse(request, "tunables/admin/group_edit.html", context)
-
-    @staticmethod
-    def _moved_names(group: Any, expected: int, actual: int) -> list[str]:
-        """Tunable names of this group that changed between two versions, for the conflict message."""
-        prefix = f"{group.name}."
-        try:
-            entries = diff_versions(expected, actual)
-        except UnknownVersion:
-            return []
-        return [entry.key.removeprefix(prefix) for entry in entries if entry.key.startswith(prefix)]
-
-    @staticmethod
-    def _form_class(group: Any) -> type[GroupForm]:
-        document = latest_snapshot().document
-        prefix = f"{group.name}."
-        overridden = {key.removeprefix(prefix) for key in document["overridden"] if key.startswith(prefix)}
-        return build_group_form(group, document["groups"][group.name], overridden, document["version"])
 
 
 class ChangeItemInline(ItemInline):

@@ -821,3 +821,75 @@ def test_the_header_never_lags_the_body(api: APIClient) -> None:
     assert written == [1]
     assert response.json()["version"] == 1
     assert response["X-Tunables-Version"] == "1"
+
+
+def test_values_filtered_by_key(api: APIClient) -> None:
+    two_changes()
+    response = api.get(BASE + "values/?key=pricing.vat_rate&key=thermostat.mode&key=weights.beta")
+    assert response.status_code == 200
+    assert response["ETag"] == '"2"'
+    assert response.json() == {
+        "version": 2,
+        "groups": {"pricing": {"vat_rate": 0.2}, "thermostat": {"mode": "heat"}, "weights": {"beta": 0.3}},
+        "overridden": ["pricing.vat_rate", "thermostat.mode"],
+    }
+    assert api.get(BASE + "values/?key=pricing.vat_rate", HTTP_IF_NONE_MATCH='"2"').status_code == 304
+
+
+def test_group_schema_filtered_by_key(api: APIClient) -> None:
+    body = get(api, "groups/pricing/schema/?key=pricing.vat_rate&key=pricing.currencies").json()
+    assert list(body["json_schema"]["properties"]) == ["vat_rate", "currencies"]
+    assert [c["scope"] for c in body["ui_schema"]["elements"]] == ["#/properties/vat_rate", "#/properties/currencies"]
+
+
+def test_group_schema_ignores_keys_of_other_groups(api: APIClient) -> None:
+    body = get(api, "groups/pricing/schema/?key=pricing.vat_rate&key=thermostat.mode").json()
+    assert list(body["json_schema"]["properties"]) == ["vat_rate"]
+    assert get(api, "groups/weights/schema/?key=pricing.vat_rate").status_code == 404
+
+
+def test_group_schema_key_and_tag_filters_intersect(api: APIClient) -> None:
+    both = get(api, "groups/pricing/schema/?tag=money&key=pricing.vat_rate&key=pricing.currencies").json()
+    assert list(both["json_schema"]["properties"]) == ["vat_rate"]
+    assert get(api, "groups/pricing/schema/?tag=money&key=pricing.currencies").status_code == 404
+
+
+def test_schema_list_filtered_by_key_keeps_only_groups_with_a_match(api: APIClient) -> None:
+    body = get(api, "schema/?key=pricing.vat_rate&key=thermostat.mode").json()
+    assert list(body) == ["pricing", "thermostat"]
+    assert list(body["pricing"]["json_schema"]["properties"]) == ["vat_rate"]
+    assert body["thermostat"] == get(api, "groups/thermostat/schema/?key=thermostat.mode").json()
+
+
+def test_schema_list_is_empty_when_key_and_tag_filters_exclude_everything(api: APIClient) -> None:
+    assert get(api, "schema/?tag=comfort&key=pricing.vat_rate").json() == {}
+
+
+def test_definitions_filtered_by_key_come_in_catalogue_order(api: APIClient) -> None:
+    body = get(api, "definitions/?key=thermostat.mode&key=pricing.vat_rate").json()
+    assert [d["key"] for d in body] == ["pricing.vat_rate", "thermostat.mode"]
+
+
+def test_definitions_key_and_tag_filters_intersect(api: APIClient) -> None:
+    assert get(api, "definitions/?key=thermostat.mode&tag=money").json() == []
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "values/?key=pricing.nope",
+        "groups/pricing/schema/?key=pricing.nope",
+        "schema/?key=nope.x&key=pricing.vat_rate",
+        "definitions/?key=pricing.nope",
+    ],
+    ids=["values", "group-schema", "schema", "definitions"],
+)
+def test_unknown_key_is_a_problem(api: APIClient, path: str) -> None:
+    response = get(api, path)
+    assert response.status_code == 422
+    assert response["Content-Type"] == "application/problem+json"
+    body = response.json()
+    assert body["type"] == "urn:tunables:problem:unknown-key"
+    assert body["title"] == "Unknown key"
+    assert body["key"] in ("pricing.nope", "nope.x")
+    assert body["detail"] == f"unknown tunable {body['key']!r}"
