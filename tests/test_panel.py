@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.models import AnonymousUser, User
+from django.core import signing
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connection
 from django.template import Context, Template, TemplateDoesNotExist
@@ -16,7 +17,7 @@ from tests.test_services import apply
 from tunables import Change
 from tunables.errors import UnknownKey
 from tunables.models import ChangeSet, Snapshot, State, TunableValue
-from tunables.panel import PANEL_TEMPLATE, PanelConfig
+from tunables.panel import PANEL_TEMPLATE, TOKEN_SALT, PanelConfig
 from tunables.services import current_version
 from tunables.sync import SyncResult
 
@@ -467,8 +468,15 @@ def forged_signature() -> str:
     return hidden[: hidden.rindex(":")] + required[required.rindex(":") :]
 
 
+def wrong_shape() -> str:
+    """A token signed with the panel's salt whose payload is not the five panel fields."""
+    return signing.dumps(["thermostat.mode"], salt=TOKEN_SALT)
+
+
 @pytest.mark.parametrize(
-    "make_token", [lambda: "", lambda: "garbage", forged_signature], ids=["missing", "garbage", "forged"]
+    "make_token",
+    [lambda: "", lambda: "garbage", forged_signature, wrong_shape],
+    ids=["missing", "garbage", "forged", "wrong-shape"],
 )
 def test_a_missing_or_altered_token_is_a_bad_request(synced: SyncResult, make_token: Callable[[], str]) -> None:
     data = post_data(reason="", **{"thermostat.mode": "heat"})

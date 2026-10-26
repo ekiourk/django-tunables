@@ -101,6 +101,18 @@ def test_equal_neighbours_need_strict_false() -> None:
     assert ascending("low_min", "medium_min", "high_min", strict=False)(rising) is None
 
 
+def test_non_strict_descending_names_the_offending_pair() -> None:
+    rule = descending("critical_min", "high_min", strict=False)
+    error = raised(rule, {"critical_min": 0.3, "high_min": 0.6})
+    assert error.message == "critical_min must be greater than or equal to high_min, got 0.3 and 0.6"
+
+
+def test_non_strict_ascending_names_the_offending_pair() -> None:
+    rule = ascending("low_min", "high_min", strict=False)
+    error = raised(rule, {"low_min": 0.6, "high_min": 0.3})
+    assert error.message == "low_min must be less than or equal to high_min, got 0.6 and 0.3"
+
+
 def test_floor_and_ceiling_pin_the_ends() -> None:
     rule = descending("critical_min", "high_min", "low_min", floor=0.0, ceiling=1.0)
     assert rule({"critical_min": 1.0, "high_min": 0.5, "low_min": 0.0}) is None

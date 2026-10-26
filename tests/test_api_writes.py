@@ -200,6 +200,14 @@ def test_actor_resolution(api: APIClient) -> None:
         assert actor_of(post(api, "changesets/", body)) == ("resolved", "system", "custom")
 
 
+def test_actor_resolver_may_be_the_callable_itself(api: APIClient) -> None:
+    api.force_authenticate(None)
+    with settings_with(ACTOR_RESOLVER=resolver):
+        response = post(api, "changesets/", changes({"key": "pricing.vat_rate", "value": 0.2}))
+    changeset = response.json()["changeset"]
+    assert (changeset["actor"], changeset["actor_source"], changeset["client"]) == ("resolved", "system", "custom")
+
+
 def test_request_id(api: APIClient) -> None:
     body = changes({"key": "pricing.vat_rate", "value": 0.2})
     assert post(api, "changesets/", body, HTTP_X_REQUEST_ID="req-1").json()["changeset"]["request_id"] == "req-1"

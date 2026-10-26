@@ -59,7 +59,12 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --all-extras --frozen
-      - run: uv run pytest --postgres
+      - run: uv run pytest --postgres --cov=tunables --cov-branch --cov-report=term --cov-report=xml
+      - uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          fail_ci_if_error: false
 
   # Each check installs the built wheel into a fresh project and drives it over HTTP.
   wheel-check:
