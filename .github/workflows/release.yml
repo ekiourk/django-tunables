@@ -9,7 +9,7 @@ on:
 
 jobs:
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -24,7 +24,7 @@ jobs:
 
   test:
     needs: lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -49,7 +49,7 @@ jobs:
 
   test-postgres:
     needs: lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -64,7 +64,7 @@ jobs:
   # Each check installs the built wheel into a fresh project and drives it over HTTP.
   wheel-check:
     needs: lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       matrix:
         check: [quickstart, demo]
@@ -81,7 +81,7 @@ jobs:
   publish:
     needs: [test, test-postgres, wheel-check]
     if: github.event_name == 'release'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.2
