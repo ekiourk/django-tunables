@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 from tests.catalogue import catalogue, pricing, thermostat
 from tests.test_services import apply
 from tunables import Actor, Change, services
+from tunables.api import problems
 from tunables.models import ChangeSet, Snapshot, State
 from tunables.schema import describe_group
 from tunables.search import tags_by_key
@@ -338,6 +339,11 @@ def test_authentication_classes_from_settings(api: APIClient) -> None:
         response = get(api, "groups/")
     assert response.status_code == 403
     assert "WWW-Authenticate" not in response
+
+
+def test_an_exception_the_api_does_not_know_is_left_to_drf() -> None:
+    # DRF re-raises when the handler returns None, so the error reaches Django's 500 handling.
+    assert problems.exception_handler(RuntimeError("boom"), {}) is None
 
 
 def two_changes() -> None:

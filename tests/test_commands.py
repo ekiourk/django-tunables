@@ -81,6 +81,20 @@ def test_show_group_filter(synced: SyncResult) -> None:
         run("tunables_show", "--group", "shop")
 
 
+def test_show_leaves_out_a_tunable_the_snapshot_does_not_hold_yet(synced: SyncResult) -> None:
+    # The extended catalogue adds pricing.discount, which the snapshot from the plain sync lacks.
+    with EXTENDED:
+        lines = run("tunables_show", "--group", "pricing").splitlines()
+    assert lines == [
+        "version 0",
+        "pricing.vat_rate = 0.24",
+        "pricing.free_shipping_over = 50.0",
+        'pricing.currencies = ["EUR"]',
+        'pricing.shipping_rates = {"EUR": 4.9}',
+        "pricing.allow_backorders = false",
+    ]
+
+
 def test_show_json(synced: SyncResult) -> None:
     apply(Change("pricing.vat_rate", 0.2))
     assert json.loads(run("tunables_show", "--json")) == latest_document()
