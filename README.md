@@ -1,5 +1,9 @@
 # django-tunables
 
+[![CI](https://github.com/ekiourk/django-tunables/actions/workflows/release.yml/badge.svg?branch=master)](https://github.com/ekiourk/django-tunables/actions/workflows/release.yml)
+[![PyPI](https://img.shields.io/pypi/v/django-tunables)](https://pypi.org/project/django-tunables/)
+[![Coverage](https://codecov.io/gh/ekiourk/django-tunables/branch/master/graph/badge.svg)](https://codecov.io/gh/ekiourk/django-tunables)
+
 Runtime-tunable parameters for Django with a full audit trail. The host project declares
 a catalogue of parameters in Python: keys, types, defaults, constraints, grouping.
 Operators change values through the Django admin, a panel embedded in any page of the
