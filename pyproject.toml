@@ -41,7 +41,7 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 [tool.setuptools.package-data]
-tunables = ["py.typed", "schemas/*.json", "templates/**/*.html"]
+tunables = ["py.typed", "schemas/*.json", "templates/**/*.html", "static/**/*.css"]
 
 [tool.ruff]
 src = ["src", "."]

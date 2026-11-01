@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Any
 
 import pytest
@@ -12,6 +13,7 @@ from tunables import Change
 from tunables.models import ChangeSet, State, TunableValue
 from tunables.services import latest_snapshot
 from tunables.sync import SyncResult
+from tunables.templatetags.tunables_admin import DJANGO_6_1
 
 pytestmark = pytest.mark.django_db
 
@@ -681,3 +683,103 @@ def test_the_admin_refuses_to_invent_a_tag_without_the_add_permission(synced: Sy
     assert response.status_code == 200
     assert "may not create one" in response.content.decode()
     assert not Tag.objects.filter(name="brandnew").exists()
+
+
+def breadcrumbs_html(response: Any) -> str:
+    match = re.search(r'<(ol|div) class="breadcrumbs">.*?</\1>', response.content.decode(), re.S)
+    assert match
+    return match[0]
+
+
+def breadcrumbs(response: Any) -> list[tuple[str, str]]:
+    """The (label, href) steps of the page's breadcrumbs in either markup; the current page has an empty href."""
+    html = breadcrumbs_html(response)
+    steps = [(label, href) for href, label in re.findall(r'<a href="([^"]*)">([^<]*)</a>', html)]
+    current = re.sub(r"<[^>]+>|&rsaquo;", "", html.rsplit("</a>", 1)[1]).strip()
+    return [*steps, (current, "")]
+
+
+def stylesheet(content: str, path: str) -> str:
+    """The page's <link> tag for a stylesheet path, or "" when there is none."""
+    match = re.search(rf'<link [^>]*href="[^"]*{re.escape(path)}"[^>]*>', content)
+    return match[0] if match else ""
+
+
+def rollback_page(client: Client) -> Any:
+    first = apply(Change("pricing.vat_rate", 0.2))
+    return client.post(CHANGESETS, {"action": "rollback", "_selected_action": [first.changeset.pk], "index": "0"})
+
+
+PAGES: dict[str, Any] = {
+    "edit": lambda client: client.get(edit_url("pricing")),
+    "definition_tags": lambda client: client.get(tags_url("pricing.vat_rate")),
+    "rollback": rollback_page,
+    "definitions": lambda client: client.get(DEFINITIONS),
+    "index": lambda client: client.get(INDEX),
+}
+
+HOME = [("Home", "/admin/"), ("Tunables", "/admin/tunables/")]
+TRAILS = {
+    "edit": [*HOME, ("Tunables", INDEX), ("Pricing", "")],
+    "definition_tags": [*HOME, ("Definitions", DEFINITIONS), ("pricing.vat_rate", "")],
+    "rollback": [*HOME, ("Change sets", CHANGESETS), ("Roll back", "")],
+    "definitions": [*HOME, ("Tunables", INDEX), ("Definitions", "")],
+    "index": [*HOME, ("Tunables", "")],
+}
+
+
+@pytest.mark.parametrize("page", ["edit", "definition_tags", "rollback"])
+def test_form_pages_load_the_admin_form_styles(admin_client: Client, synced: SyncResult, page: str) -> None:
+    content = PAGES[page](admin_client).content.decode()
+    assert stylesheet(content, "admin/css/forms.css")
+    assert stylesheet(content, "tunables/admin/tunables.css")
+
+
+def test_definitions_filter_stays_out_of_the_form_styles(admin_client: Client, synced: SyncResult) -> None:
+    content = admin_client.get(DEFINITIONS).content.decode()
+    assert "forms.css" not in content
+    assert "tunables.css" not in content
+    assert 'class="aligned"' not in content
+
+
+@pytest.mark.parametrize("page", list(PAGES))
+def test_admin_pages_render_their_breadcrumb_trail(admin_client: Client, synced: SyncResult, page: str) -> None:
+    assert breadcrumbs(PAGES[page](admin_client)) == TRAILS[page]
+
+
+@override_settings(ROOT_URLCONF="tests.urls_two_admins")
+def test_breadcrumbs_link_to_the_admin_that_served_the_page(admin_client: Client, synced: SyncResult) -> None:
+    steps = breadcrumbs(admin_client.get("/ops/tunables/tunabledefinition/edit/pricing/"))
+    assert steps[:2] == [("Home", "/ops/"), ("Tunables", "/ops/tunables/")]
+
+
+def test_breadcrumbs_follow_the_running_django_markup(admin_client: Client, synced: SyncResult) -> None:
+    html = breadcrumbs_html(admin_client.get(edit_url("pricing")))
+    if DJANGO_6_1:
+        assert html.startswith('<ol class="breadcrumbs">')
+        assert html.count("aria-current") == 1
+        assert '<li aria-current="page">Pricing</li>' in html
+    else:
+        assert html.startswith('<div class="breadcrumbs">')
+        assert "aria-current" not in html
+
+
+@pytest.mark.skipif(not DJANGO_6_1, reason="CSP support arrived in Django 6.1")
+def test_admin_stylesheets_carry_the_csp_nonce(admin_client: Client, synced: SyncResult, settings: Any) -> None:
+    settings.MIDDLEWARE = [*settings.MIDDLEWARE, "django.middleware.csp.ContentSecurityPolicyMiddleware"]
+    from django.utils.csp import CSP
+
+    settings.SECURE_CSP = {"style-src": [CSP.SELF, CSP.NONCE]}
+    options = settings.TEMPLATES[0]["OPTIONS"]
+    processors = [*options["context_processors"], "django.template.context_processors.csp"]
+    settings.TEMPLATES = [{**settings.TEMPLATES[0], "OPTIONS": {**options, "context_processors": processors}}]
+    content = admin_client.get(edit_url("pricing")).content.decode()
+    for path in ("admin/css/base.css", "admin/css/forms.css", "tunables/admin/tunables.css"):
+        assert re.search(r'nonce="[^"]+"', stylesheet(content, path)), path
+
+
+def test_reset_label_uses_a_class(admin_client: Client, synced: SyncResult) -> None:
+    apply(Change("pricing.vat_rate", 0.2))
+    content = admin_client.get(edit_url("pricing")).content.decode()
+    assert '<label class="vCheckboxLabel tunables-reset">' in content
+    assert "style=" not in content.split('id="content-main"')[1]

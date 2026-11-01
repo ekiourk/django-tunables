@@ -1,0 +1,5 @@
+{% load i18n %}<ol class="breadcrumbs">
+<li><a href="{% url 'admin:index' %}">{% translate "Home" %}</a></li>
+<li><a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a></li>
+{% for label, url in steps %}<li{% if forloop.last %} aria-current="page"{% endif %}>{% if url %}<a href="{{ url }}">{{ label }}</a>{% else %}{{ label }}{% endif %}</li>
+{% endfor %}</ol>

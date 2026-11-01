@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+The admin pages load the admin's form stylesheet and render breadcrumbs in the markup of
+the running Django version.
+
+Changes to existing behaviour:
+
+- The edit page, the rollback confirmation and the definition tags page load
+  `admin/css/forms.css` and the package's `tunables/admin/tunables.css`, so their labels,
+  help text and Save bar line up as on a stock change form. On Django 6.1 the links carry
+  the CSP nonce. The filter form on the definitions page drops its `aligned` class, which
+  stacked the filters on one line each wherever `forms.css` was loaded.
+- On Django 6.1 the breadcrumbs render as `<ol class="breadcrumbs">` with
+  `aria-current="page"` on the last step, the markup the admin styles. Django 5.2 and 6.0
+  keep the `<div class="breadcrumbs">` markup.
+- Each admin view passes its trail as a `breadcrumbs` context variable, a list of
+  `(label, url)` pairs rendered by `{% tunables_breadcrumbs breadcrumbs %}` from the new
+  `{% load tunables_admin %}` library. The definitions view no longer passes `index_url`;
+  a host that overrides `tunables/admin/definitions.html` and reads it must take the URL
+  from `breadcrumbs`.
+- The reset checkbox label on the edit page has the class `tunables-reset` in place of an
+  inline margin, so a host theme can restyle it.
+
 ## 0.6.0, 2026-10-25
 
 Tunables can be shown and edited from any page of the host, and the API can serve the

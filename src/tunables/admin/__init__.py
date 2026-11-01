@@ -8,6 +8,7 @@ from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path, reverse
 from django.utils.html import format_html
+from django.utils.text import capfirst
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
@@ -112,7 +113,10 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             "groups": list(catalogue.groups.values()),
             "tag_names": sorted(Tag.objects.values_list("name", flat=True)),
             "filters": {k: request.GET.get(k, "") for k in ("category", "group", "tag", "q")},
-            "index_url": reverse("admin:tunables_tunabledefinition_changelist"),
+            "breadcrumbs": [
+                (_("Tunables"), reverse("admin:tunables_tunabledefinition_changelist")),
+                (_("Definitions"), ""),
+            ],
         }
         return TemplateResponse(request, "tunables/admin/definitions.html", context)
 
@@ -157,6 +161,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             "seeded": seeded,
             "form": form,
             "definitions_url": definitions_url,
+            "breadcrumbs": [(_("Definitions"), definitions_url), (key, "")],
         }
         return TemplateResponse(request, "tunables/admin/definition_tags.html", context)
 
@@ -205,6 +210,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             "validators": [validator_description(v) for v in catalogue.validators],
             "violations": [format_error(v) for v in rule_violations()] if is_synced() else [],
             "synced": is_synced(),
+            "breadcrumbs": [(_("Tunables"), "")],
         }
         return TemplateResponse(request, "tunables/admin/group_index.html", context)
 
@@ -223,6 +229,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             messages.error(request, str(OUT_OF_SYNC_MESSAGE))
             return HttpResponseRedirect(index)
         found = catalogue.groups[group]
+        label = str(found.title) or found.name
         keys = [f"{found.name}.{tunable.name}" for tunable in found.tunables]
         form_class = build_form(keys, latest_snapshot().document, catalogue=catalogue)
         form = form_class(request.POST) if request.method == "POST" else form_class()
@@ -231,8 +238,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             if result is not None:
                 messages.success(
                     request,
-                    _("Saved version %(version)s of %(group)s.")
-                    % {"version": result.version, "group": str(found.title) or found.name},
+                    _("Saved version %(version)s of %(group)s.") % {"version": result.version, "group": label},
                 )
                 return HttpResponseRedirect(index)
             if form.conflict is not None:
@@ -240,12 +246,13 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
                 form = form.rebound()
         context = {
             **self.admin_site.each_context(request),
-            "title": _("Edit %(group)s") % {"group": str(found.title) or found.name},
+            "title": _("Edit %(group)s") % {"group": label},
             "opts": self.model._meta,
             "group": found,
             "form": form,
             "rows": form.rows(),
             "index_url": index,
+            "breadcrumbs": [(_("Tunables"), index), (label, "")],
         }
         return TemplateResponse(request, "tunables/admin/group_edit.html", context)
 
@@ -304,6 +311,10 @@ class ChangeSetAdmin(ReadOnlyAdmin):
             "opts": self.model._meta,
             "changeset": changeset,
             "error": error,
+            "breadcrumbs": [
+                (capfirst(self.model._meta.verbose_name_plural), reverse("admin:tunables_changeset_changelist")),
+                (_("Roll back"), ""),
+            ],
         }
         return TemplateResponse(request, "tunables/admin/rollback_confirm.html", context)
 
