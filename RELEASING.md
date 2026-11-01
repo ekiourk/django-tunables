@@ -20,7 +20,7 @@ The release gets its own branch and pull request, with one commit and no code ch
 2. Rename `## Unreleased` to `## X.Y.Z, YYYY-MM-DD`, dated the day you tag.
 3. Set `version` in `pyproject.toml`, then run `uv lock` so `uv.lock` records it.
 4. Run the checks from the README's Development section. `pytest --postgres` needs Docker,
-   and the two check scripts build the wheel, so they test what will be uploaded.
+   and the two check scripts build the wheel, so they test the files you upload.
 5. Commit as `Release X.Y.Z`, open the pull request, and merge it once CI is green.
 
 If the merge slips to a later day, update the date in the heading first.
