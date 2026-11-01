@@ -1,13 +1,7 @@
 {% extends "admin/base_site.html" %}
-{% load i18n %}
-{% block breadcrumbs %}
-<div class="breadcrumbs">
-  <a href="{% url 'admin:index' %}">{% translate "Home" %}</a> &rsaquo;
-  <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a> &rsaquo;
-  <a href="{{ index_url }}">{% translate "Tunables" %}</a> &rsaquo;
-  {{ group.title|default:group.name }}
-</div>
-{% endblock %}
+{% load i18n tunables_admin %}
+{% block breadcrumbs %}{% tunables_breadcrumbs breadcrumbs %}{% endblock %}
+{% block extrastyle %}{{ block.super }}{% tunables_admin_css %}{% endblock %}
 {% block content %}
 <div id="content-main">
   {% if group.description %}<p>{{ group.description }}</p>{% endif %}
@@ -24,7 +18,7 @@
         <div class="flex-container">
           {{ row.field.label_tag }}
           {{ row.field }}
-          {% if row.reset %}<label class="vCheckboxLabel" style="margin-left: 1em">{{ row.reset }} {{ row.reset.label }}</label>{% endif %}
+          {% if row.reset %}<label class="vCheckboxLabel tunables-reset">{{ row.reset }} {{ row.reset.label }}</label>{% endif %}
         </div>
         {% if row.field.help_text %}<div class="help">{{ row.field.help_text }}</div>{% endif %}
         {% if row.reset.help_text %}<div class="help">{% translate "Default:" %} {{ row.reset.help_text }}</div>{% endif %}

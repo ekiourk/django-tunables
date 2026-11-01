@@ -8,6 +8,7 @@ from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path, reverse
 from django.utils.html import format_html
+from django.utils.text import capfirst
 from django.utils.translation import gettext as _
 from django.utils.translation import gettext_lazy
 
@@ -112,7 +113,10 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             "groups": list(catalogue.groups.values()),
             "tag_names": sorted(Tag.objects.values_list("name", flat=True)),
             "filters": {k: request.GET.get(k, "") for k in ("category", "group", "tag", "q")},
-            "index_url": reverse("admin:tunables_tunabledefinition_changelist"),
+            "breadcrumbs": [
+                (_("Tunables"), reverse("admin:tunables_tunabledefinition_changelist")),
+                (_("Definitions"), ""),
+            ],
         }
         return TemplateResponse(request, "tunables/admin/definitions.html", context)
 
@@ -157,6 +161,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             "seeded": seeded,
             "form": form,
             "definitions_url": definitions_url,
+            "breadcrumbs": [(_("Definitions"), definitions_url), (key, "")],
         }
         return TemplateResponse(request, "tunables/admin/definition_tags.html", context)
 
@@ -205,6 +210,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             "validators": [validator_description(v) for v in catalogue.validators],
             "violations": [format_error(v) for v in rule_violations()] if is_synced() else [],
             "synced": is_synced(),
+            "breadcrumbs": [(_("Tunables"), "")],
         }
         return TemplateResponse(request, "tunables/admin/group_index.html", context)
 
@@ -246,6 +252,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             "form": form,
             "rows": form.rows(),
             "index_url": index,
+            "breadcrumbs": [(_("Tunables"), index), (str(found.title) or found.name, "")],
         }
         return TemplateResponse(request, "tunables/admin/group_edit.html", context)
 
@@ -304,6 +311,10 @@ class ChangeSetAdmin(ReadOnlyAdmin):
             "opts": self.model._meta,
             "changeset": changeset,
             "error": error,
+            "breadcrumbs": [
+                (capfirst(self.model._meta.verbose_name_plural), reverse("admin:tunables_changeset_changelist")),
+                (_("Roll back"), ""),
+            ],
         }
         return TemplateResponse(request, "tunables/admin/rollback_confirm.html", context)
 

@@ -1,6 +1,9 @@
 import json
+import re
+from html.parser import HTMLParser
 from typing import Any
 
+import django
 import pytest
 from django.contrib.messages import get_messages
 from django.test import Client, override_settings
@@ -681,3 +684,132 @@ def test_the_admin_refuses_to_invent_a_tag_without_the_add_permission(synced: Sy
     assert response.status_code == 200
     assert "may not create one" in response.content.decode()
     assert not Tag.objects.filter(name="brandnew").exists()
+
+
+class Breadcrumbs(HTMLParser):
+    """Collects (label, href) per breadcrumb step and which steps carry aria-current, from either markup."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.markup = ""
+        self.steps: list[tuple[str, str]] = []
+        self.current: list[int] = []
+        self._depth = 0
+        self._href = ""
+        self._text = ""
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        if not self._depth and attributes.get("class") == "breadcrumbs":
+            self.markup, self._depth = tag, 1
+            return
+        if not self._depth:
+            return
+        if tag == self.markup:
+            self._depth += 1
+        elif tag == "a":
+            self._flush()
+            self._href = attributes.get("href") or ""
+        elif tag == "li":
+            self._flush()
+            if attributes.get("aria-current") == "page":
+                self.current.append(len(self.steps))
+
+    def handle_endtag(self, tag: str) -> None:
+        if not self._depth:
+            return
+        if tag == self.markup:
+            self._depth -= 1
+            if not self._depth:
+                self._flush()
+        elif tag in ("a", "li"):
+            self._flush()
+
+    def handle_data(self, data: str) -> None:
+        if self._depth:
+            self._text += data
+
+    def _flush(self) -> None:
+        label = " ".join(self._text.replace("›", " ").split())
+        if label:
+            self.steps.append((label, self._href))
+        self._href, self._text = "", ""
+
+
+def breadcrumbs(response: Any) -> Breadcrumbs:
+    parser = Breadcrumbs()
+    parser.feed(response.content.decode())
+    return parser
+
+
+def rollback_page(client: Client) -> Any:
+    first = apply(Change("pricing.vat_rate", 0.2))
+    return client.post(CHANGESETS, {"action": "rollback", "_selected_action": [first.changeset.pk], "index": "0"})
+
+
+PAGES: dict[str, Any] = {
+    "edit": lambda client: client.get(edit_url("pricing")),
+    "definition_tags": lambda client: client.get(tags_url("pricing.vat_rate")),
+    "rollback": rollback_page,
+    "definitions": lambda client: client.get(DEFINITIONS),
+    "index": lambda client: client.get(INDEX),
+}
+
+HOME = [("Home", "/admin/"), ("Tunables", "/admin/tunables/")]
+TRAILS = {
+    "edit": [*HOME, ("Tunables", INDEX), ("Pricing", "")],
+    "definition_tags": [*HOME, ("Definitions", DEFINITIONS), ("pricing.vat_rate", "")],
+    "rollback": [*HOME, ("Change sets", CHANGESETS), ("Roll back", "")],
+    "definitions": [*HOME, ("Tunables", INDEX), ("Definitions", "")],
+    "index": [*HOME, ("Tunables", "")],
+}
+
+
+@pytest.mark.parametrize("page", ["edit", "definition_tags", "rollback", "definitions"])
+def test_form_pages_load_the_admin_form_styles(admin_client: Client, synced: SyncResult, page: str) -> None:
+    content = PAGES[page](admin_client).content.decode()
+    assert re.search(r'<link rel="stylesheet" href="[^"]*admin/css/forms\.css">', content)
+    assert re.search(r'<link rel="stylesheet" href="[^"]*tunables/admin/tunables\.css">', content)
+
+
+@pytest.mark.parametrize("page", list(PAGES))
+def test_admin_pages_render_their_breadcrumb_trail(admin_client: Client, synced: SyncResult, page: str) -> None:
+    assert breadcrumbs(PAGES[page](admin_client)).steps == TRAILS[page]
+
+
+def test_breadcrumbs_follow_the_running_django_markup(admin_client: Client, synced: SyncResult) -> None:
+    trail = breadcrumbs(admin_client.get(edit_url("pricing")))
+    if django.VERSION >= (6, 1):
+        assert trail.markup == "ol"
+        assert trail.current == [3]
+    else:
+        assert trail.markup == "div"
+        assert trail.current == []
+
+
+@pytest.mark.skipif(django.VERSION < (6, 1), reason="CSP support arrived in Django 6.1")
+def test_admin_stylesheets_carry_the_csp_nonce(admin_client: Client, synced: SyncResult, settings: Any) -> None:
+    settings.MIDDLEWARE = [*settings.MIDDLEWARE, "django.middleware.csp.ContentSecurityPolicyMiddleware"]
+    settings.SECURE_CSP = {"style-src": ["'self'", "<CSP_NONCE_SENTINEL>"]}
+    settings.TEMPLATES = [
+        {
+            **settings.TEMPLATES[0],
+            "OPTIONS": {
+                "context_processors": [
+                    *settings.TEMPLATES[0]["OPTIONS"]["context_processors"],
+                    "django.template.context_processors.csp",
+                ]
+            },
+        }
+    ]
+    content = admin_client.get(edit_url("pricing")).content.decode()
+    assert re.search(r'<link rel="stylesheet" href="[^"]*admin/css/base\.css" nonce="[^"]+">', content)
+    assert re.search(r'<link rel="stylesheet" href="[^"]*admin/css/forms\.css" nonce="[^"]+">', content)
+    assert re.search(r'<link rel="stylesheet" href="[^"]*tunables/admin/tunables\.css" nonce="[^"]+">', content)
+
+
+def test_reset_label_uses_a_class(admin_client: Client, synced: SyncResult) -> None:
+    apply(Change("pricing.vat_rate", 0.2))
+    content = admin_client.get(edit_url("pricing")).content.decode()
+    assert '<label class="vCheckboxLabel tunables-reset">' in content
+    assert "style=" not in content.split('id="content-main"')[1]
