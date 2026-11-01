@@ -301,6 +301,8 @@ scripts/demo_check.sh          # installs the built wheel next to the demo proje
 scripts/demo.sh                # serves the demo project on port 8000, see demo/README.md
 ```
 
+Releases follow [RELEASING.md](RELEASING.md).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
