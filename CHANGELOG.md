@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.1, 2026-11-01
 
 The admin pages load the admin's form stylesheet and render breadcrumbs in the markup of
 the running Django version.
