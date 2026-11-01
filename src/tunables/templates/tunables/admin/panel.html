@@ -1,0 +1,4 @@
+{% extends "tunables/panel.html" %}
+{% load i18n %}
+{% block fields %}{% include "tunables/admin/form_rows.html" with form=panel.form rows=panel.rows %}{% endblock %}
+{% block submit %}<div class="submit-row"><input type="submit" class="default" value="{% translate 'Save' %}"></div>{% endblock %}

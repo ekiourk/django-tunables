@@ -251,6 +251,38 @@ def test_a_template_extending_the_panel_adds_form_attributes_through_the_block(s
     assert 'class="tunables-panel__form" hx-post="/tunables/panel/save/" hx-swap="outerHTML">' in html
 
 
+ADMIN_TEMPLATE = "tunables/admin/panel.html"
+
+
+def test_the_admin_template_renders_the_rows_in_admin_markup(synced: SyncResult) -> None:
+    apply(Change("pricing.vat_rate", 0.2))
+    html = render_tag(writer(), f'{{% tunables_panel "pricing.vat_rate" template="{ADMIN_TEMPLATE}" %}}')
+    assert '<section class="tunables-panel tunables-panel--edit" id="tunables-panel">' in html
+    assert token_in(html) == PanelConfig(("pricing.vat_rate",), template=ADMIN_TEMPLATE)
+    assert '<fieldset class="module aligned">' in html and '<div class="flex-container">' in html
+    assert '<label class="vCheckboxLabel tunables-reset">' in html
+    assert 'name="reason"' in html and '<div class="submit-row">' in html
+    assert "tunables-panel__row" not in html
+
+
+def test_the_admin_template_keeps_a_hidden_reason_hidden(synced: SyncResult) -> None:
+    tag = f'{{% tunables_panel "pricing.vat_rate" reason="hidden" template="{ADMIN_TEMPLATE}" %}}'
+    html = render_tag(writer(), tag)
+    assert '<input type="hidden" name="reason"' in html and "Reason" not in html
+
+
+def test_the_admin_template_shows_values_to_a_viewer(synced: SyncResult) -> None:
+    html = render_tag(viewer(), f'{{% tunables_panel "pricing.vat_rate" template="{ADMIN_TEMPLATE}" %}}')
+    assert "tunables-panel--read" in html and '<dd class="tunables-panel__value">' in html
+
+
+def test_the_admin_template_reports_errors_in_admin_markup(synced: SyncResult) -> None:
+    data = post_data(panel=token(template=ADMIN_TEMPLATE), expected_version="x", **{"pricing.vat_rate": "5"})
+    html = client_for(writer()).post(SAVE, data).content.decode()
+    assert '<div class="form-row errors">' in html and '<ul class="errorlist"' in html
+    assert '<p class="errornote">Enter a whole number.</p>' in html
+
+
 def test_an_unknown_key_is_refused_even_for_a_user_who_would_see_nothing(synced: SyncResult) -> None:
     with pytest.raises(UnknownKey):
         render_tag(AnonymousUser(), '{% tunables_panel "pricing.nope" %}')

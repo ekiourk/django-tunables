@@ -130,6 +130,34 @@ author required, and an altered token is a `400`. The save view renders the same
 template, so a custom template keeps its markup across partial responses and the error
 page. A custom template must keep the three hidden fields.
 
+Besides `form_attrs`, the panel template has a `fields` block around the hidden version
+field, the errors, the rows and the reason, and a `submit` block around the Save button.
+A template that extends it can replace the form body and keep the token, `next` and the
+form tag.
+
+### Inside the Django admin
+
+A panel on an admin page, for example in an overridden change form of one of your own
+models, can use the admin's form markup instead of the `tunables-panel__*` classes:
+
+```django
+{% tunables_panel "pricing.vat_rate" "thermostat.mode" template="tunables/admin/panel.html" %}
+```
+
+`tunables/admin/panel.html` extends the panel template and fills its `fields` and
+`submit` blocks with the rows of the tunables edit page: a `module aligned` fieldset with
+one `form-row` per key, errors in the admin's `errornote` and `errorlist`, and a
+`submit-row`. Read mode is the same list as in the default template. The rows come from
+`tunables/admin/form_rows.html`, which the edit page includes too.
+
+The markup needs the admin's `forms.css`. A change form loads it already. On other admin
+pages, load it with the package's tag, which also adds the stylesheet for the reset box:
+
+```django
+{% load tunables_admin %}
+{% block extrastyle %}{{ block.super }}{% tunables_admin_css %}{% endblock %}
+```
+
 ## Building a form in your own view
 
 The form builder behind the panel is available for a view that wants full control:

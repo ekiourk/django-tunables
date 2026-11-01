@@ -2,13 +2,21 @@
 
 ## Unreleased
 
-Errors on hidden form fields reach the page.
+The panel fits into the Django admin, and errors on hidden form fields reach the page.
 
 Changes to existing behaviour:
 
 - The panel and the admin edit page show errors on their hidden fields, such as a
   malformed `expected_version` or a hidden reason that is too long. Before, the form came
   back with no message.
+
+Additions:
+
+- `tunables/admin/panel.html`, a panel template in the admin's form markup, for a panel
+  placed on an admin page with `template="tunables/admin/panel.html"`. Its rows come from
+  `tunables/admin/form_rows.html`, which the admin edit page now includes as well.
+- The panel template has a `fields` block around the form body and a `submit` block around
+  the Save button.
 
 ## 0.6.1, 2026-11-01
 
