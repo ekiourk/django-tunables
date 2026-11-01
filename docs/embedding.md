@@ -9,7 +9,9 @@ snapshot as the admin and the API, with the same audit trail and version check.
 
 ## Setup
 
-Mount the save endpoint once, anywhere in the host's URL conf:
+Panels on pages served by the Django admin post to the admin and need no setup, see
+[Inside the Django admin](#inside-the-django-admin). Panels on other pages need the save
+endpoint, mounted once, anywhere in the host's URL conf:
 
 ```python
 urlpatterns = [
@@ -118,7 +120,7 @@ as `template=`. The template receives one variable, `panel`, with:
 | `rows` | one per key: `tunable`, `field` (the bound form field), `reset` (the bound reset box, or `None` when the value is at its default), `shown` (the value as text with its unit) |
 | `form` | the Django form, for `expected_version`, `reason` and non-field errors |
 | `token` | the signed panel configuration the form must post back as `panel` |
-| `action_url`, `next_url` | the save URL and the return URL |
+| `action_url`, `next_url` | the save URL, the admin's on an admin page, and the return URL |
 | `notice` | the conflict or out-of-sync text, or empty |
 | `saved_version` | the version just written, in a partial response after a successful save |
 
@@ -137,8 +139,15 @@ form tag.
 
 ### Inside the Django admin
 
-A panel on an admin page, for example in an overridden change form of one of your own
-models, can use the admin's form markup instead of the `tunables-panel__*` classes:
+A panel on a page served by an admin site, for example in an overridden change form of
+one of your own models, posts to that admin site's
+`tunables/tunabledefinition/panel/save/` URL when the site registers the tunables admin.
+The save then runs behind the admin's login, a signed-out user is sent to the admin's
+login page, and a failed save renders as an admin page with the panel and a link back.
+On an admin site without the tunables admin, the panel posts to the `tunables_ui`
+endpoint as on any other page.
+
+The panel can also use the admin's form markup instead of the `tunables-panel__*` classes:
 
 ```django
 {% tunables_panel "pricing.vat_rate" "thermostat.mode" template="tunables/admin/panel.html" %}

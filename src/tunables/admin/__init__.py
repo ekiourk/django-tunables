@@ -26,6 +26,7 @@ from tunables.errors import (
 )
 from tunables.forms import build_form
 from tunables.models import ChangeItem, ChangeSet, Snapshot, Tag, TunableDefinition, TunableDefinitionTag
+from tunables.panel import PanelState
 from tunables.registry import get_catalogue
 from tunables.search import match_definitions, tags_by_key
 from tunables.services import (
@@ -36,6 +37,7 @@ from tunables.services import (
 )
 from tunables.sync import OUT_OF_SYNC_MESSAGE, is_synced
 from tunables.tags import log_admin_delete, log_admin_save, set_manual_tags
+from tunables.views import PanelSave
 
 if TYPE_CHECKING:
     ModelAdmin = admin.ModelAdmin[Any]
@@ -56,6 +58,24 @@ class ReadOnlyAdmin(ModelAdmin):
         return False
 
 
+class AdminPanelSave(PanelSave):
+    """The embedded panel's save view, mounted in the admin so a failed save renders as an admin page."""
+
+    model_admin: "TunableDefinitionAdmin | None" = None
+
+    def render_errors(self, request: HttpRequest, panel: PanelState) -> HttpResponse:
+        assert self.model_admin is not None and request.resolver_match is not None
+        index = reverse("admin:tunables_tunabledefinition_changelist", current_app=request.resolver_match.namespace)
+        context = {
+            **self.model_admin.admin_site.each_context(request),
+            "title": _("Save changes"),
+            "opts": self.model_admin.model._meta,
+            "breadcrumbs": [(_("Tunables"), index), (_("Save changes"), "")],
+            "panel": panel,
+        }
+        return TemplateResponse(request, "tunables/admin/panel_errors.html", context)
+
+
 @admin.register(TunableDefinition)
 class TunableDefinitionAdmin(ReadOnlyAdmin):
     """The app's entry in the admin: a group index and a per-group edit form instead of a changelist."""
@@ -66,6 +86,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             path("edit/<str:group>/", view(self.edit_group), name="tunables_group_edit"),
             path("definitions/", view(self.definitions), name="tunables_definitions"),
             path("definitions/<str:key>/tags/", view(self.definition_tags), name="tunables_definition_tags"),
+            path("panel/save/", view(AdminPanelSave.as_view(model_admin=self)), name="tunables_panel_save"),
             *super().get_urls(),
         ]
 

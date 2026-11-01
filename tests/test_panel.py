@@ -10,6 +10,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.db import connection
 from django.template import Context, Template, TemplateDoesNotExist
 from django.test import Client, RequestFactory, override_settings
+from django.urls import resolve
 
 from tests.conftest import user_with
 from tests.test_admin import messages_of
@@ -45,9 +46,11 @@ def client_for(user: User) -> Client:
     return client
 
 
-def render_tag(user: Any, tag: str) -> str:
-    request = RequestFactory().get(PAGE)
+def render_tag(user: Any, tag: str, page: str = PAGE) -> str:
+    request = RequestFactory().get(page)
     request.user = user
+    if page != PAGE:
+        request.resolver_match = resolve(page)
     return Template("{% load tunables %}" + tag).render(Context({"request": request}))
 
 
@@ -532,3 +535,56 @@ def test_a_panel_over_no_key_is_a_bad_request(synced: SyncResult) -> None:
 
 def test_the_save_view_only_accepts_post(synced: SyncResult) -> None:
     assert client_for(writer()).get(SAVE).status_code == 405
+
+
+# Saving through the admin
+
+ADMIN_SAVE = "/admin/tunables/tunabledefinition/panel/save/"
+
+
+def staff_writer() -> User:
+    return user_with("tunables.add_changeset", username="staff", is_staff=True)
+
+
+def test_a_panel_on_an_admin_page_posts_to_that_admin(synced: SyncResult) -> None:
+    html = render_tag(writer(), '{% tunables_panel "pricing.vat_rate" %}', page="/admin/")
+    assert f'action="{ADMIN_SAVE}"' in html
+
+
+@override_settings(ROOT_URLCONF="tests.urls_two_admins")
+def test_a_panel_on_a_second_admin_mount_posts_to_that_mount(synced: SyncResult) -> None:
+    html = render_tag(writer(), '{% tunables_panel "pricing.vat_rate" %}', page="/ops/")
+    assert 'action="/ops/tunables/tunabledefinition/panel/save/"' in html
+
+
+@override_settings(ROOT_URLCONF="tests.urls_bare_admin")
+def test_a_panel_on_an_admin_without_the_tunables_admin_posts_to_the_package_endpoint(synced: SyncResult) -> None:
+    html = render_tag(writer(), '{% tunables_panel "pricing.vat_rate" %}', page="/bare/")
+    assert f'action="{SAVE}"' in html
+
+
+def test_saving_through_the_admin_redirects_to_next(synced: SyncResult) -> None:
+    response = client_for(staff_writer()).post(ADMIN_SAVE, post_data(**{"thermostat.mode": "heat"}))
+    assert response.status_code == 302 and response["Location"] == PAGE
+    assert ChangeSet.objects.get(version=1).source == "panel"
+
+
+def test_a_failed_save_through_the_admin_renders_an_admin_page(synced: SyncResult) -> None:
+    response = client_for(staff_writer()).post(ADMIN_SAVE, post_data(**{"pricing.vat_rate": "5"}))
+    html = response.content.decode()
+    assert response.status_code == 200 and 'id="site-name"' in html
+    assert 'href="/admin/tunables/tunabledefinition/">Tunables</a>' in html
+    assert f'<a href="{PAGE}">Back</a>' in html and "must be &lt;= 1.0" in html
+    assert f'action="{ADMIN_SAVE}"' in html
+
+
+def test_a_partial_save_through_the_admin_keeps_posting_to_the_admin(synced: SyncResult) -> None:
+    data = post_data(**{"thermostat.mode": "heat"})
+    html = client_for(staff_writer()).post(ADMIN_SAVE, data, HTTP_HX_REQUEST="true").content.decode()
+    assert "Saved version 1." in html and f'action="{ADMIN_SAVE}"' in html
+
+
+def test_the_admin_endpoint_sends_a_signed_out_user_to_the_admin_login(synced: SyncResult) -> None:
+    response = Client().post(ADMIN_SAVE, post_data(**{"thermostat.mode": "heat"}))
+    assert response.status_code == 302 and response["Location"].startswith("/admin/login/")
+    assert ChangeSet.objects.count() == 0

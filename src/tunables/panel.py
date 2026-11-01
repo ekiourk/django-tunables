@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 
 from django.core import signing
 from django.http import HttpRequest
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 from django.utils.translation import gettext as _
 
 from tunables.access import check_keys_editable
@@ -71,9 +71,16 @@ class PanelState:
     form: TunablesForm | None = None
     notice: str = ""
     saved_version: int | None = None
+    admin_site: str = ""
 
     @property
     def action_url(self) -> str:
+        """The save URL of the admin site that served the page when it registers the tunables admin, else the package's."""
+        if self.admin_site:
+            try:
+                return reverse("admin:tunables_panel_save", current_app=self.admin_site)
+            except NoReverseMatch:
+                pass
         return reverse("tunables_ui:panel-save")
 
     @property
@@ -119,7 +126,14 @@ def build_panel(
         document = latest_snapshot().document if synced else live_document()
     form_class = build_form(config.keys, document, reason=config.reason)
     form = form_class(data) if data is not None else form_class()
-    return PanelState(config, mode, next_url, form=form, notice="" if synced else str(OUT_OF_SYNC_MESSAGE))
+    notice = "" if synced else str(OUT_OF_SYNC_MESSAGE)
+    return PanelState(config, mode, next_url, form=form, notice=notice, admin_site=_admin_site(request))
+
+
+def _admin_site(request: HttpRequest) -> str:
+    """The instance namespace of the admin site that served ``request``, or empty."""
+    match = request.resolver_match
+    return match.namespace if match is not None and match.app_name == "admin" else ""
 
 
 def _editable(request: HttpRequest, keys: tuple[str, ...]) -> bool:

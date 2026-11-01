@@ -13,7 +13,7 @@ from tunables.access import check_keys_editable
 from tunables.changes import Actor
 from tunables.errors import GroupNotEditable, UnknownKey
 from tunables.models import ChangeSource, State
-from tunables.panel import ERRORS_TEMPLATE, PanelConfig, build_panel, default_reason, page_path
+from tunables.panel import ERRORS_TEMPLATE, PanelConfig, PanelState, build_panel, default_reason, page_path
 from tunables.services import latest_snapshot
 from tunables.sync import OUT_OF_SYNC_MESSAGE, is_current
 
@@ -37,6 +37,10 @@ class PanelSave(View):
     """Apply the changes of one embedded panel as a change set with source ``panel``."""
 
     http_method_names = ["post"]
+
+    def render_errors(self, request: HttpRequest, panel: PanelState) -> HttpResponse:
+        """The page that shows a failed save: the panel with its errors and a link back."""
+        return render(request, ERRORS_TEMPLATE, {"panel": panel})
 
     def post(self, request: HttpRequest) -> HttpResponse:
         if not request.user.has_perm("tunables.add_changeset"):
@@ -89,4 +93,6 @@ class PanelSave(View):
             if form.conflict is not None:
                 panel.form = form.rebound()
                 panel.notice = panel.form.conflict_text()
-        return render(request, config.template if partial else ERRORS_TEMPLATE, {"panel": panel})
+        if partial:
+            return render(request, config.template, {"panel": panel})
+        return self.render_errors(request, panel)

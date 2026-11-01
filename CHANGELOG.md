@@ -9,12 +9,19 @@ Changes to existing behaviour:
 - The panel and the admin edit page show errors on their hidden fields, such as a
   malformed `expected_version` or a hidden reason that is too long. Before, the form came
   back with no message.
+- A panel on a page served by an admin site that registers the tunables admin posts to
+  that site's `tunables/tunabledefinition/panel/save/` URL instead of the `tunables_ui`
+  endpoint. The save runs behind the admin's login, so a signed-out user is redirected to
+  the admin login page instead of getting a 403, and a failed save renders as an admin page.
+  Panels on other pages are unchanged.
 
 Additions:
 
 - `tunables/admin/panel.html`, a panel template in the admin's form markup, for a panel
   placed on an admin page with `template="tunables/admin/panel.html"`. Its rows come from
   `tunables/admin/form_rows.html`, which the admin edit page now includes as well.
+- `PanelSave.render_errors(request, panel)`, the hook that renders the page for a failed
+  save, for a host that subclasses the view.
 - The panel template has a `fields` block around the form body and a `submit` block around
   the Save button.
 

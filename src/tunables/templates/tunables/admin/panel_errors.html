@@ -1,0 +1,10 @@
+{% extends "admin/base_site.html" %}
+{% load i18n tunables_admin %}
+{% block breadcrumbs %}{% tunables_breadcrumbs breadcrumbs %}{% endblock %}
+{% block extrastyle %}{{ block.super }}{% tunables_admin_css %}{% endblock %}
+{% block content %}
+<div id="content-main">
+  <p><a href="{{ panel.next_url }}">{% translate "Back" %}</a></p>
+  {% include panel.config.template %}
+</div>
+{% endblock %}
