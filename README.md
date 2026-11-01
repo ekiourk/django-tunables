@@ -276,7 +276,8 @@ admin. `{% tunable_value "pricing.vat_rate" %}` prints a value, and
 `{% tunables_panel "pricing.vat_rate" "thermostat.mode" %}` renders a small form for
 users who may change them and a read-only list for users who may only view, following
 the admin's permissions and `EDITABLE_GROUPS`. Saves create a change set with source
-`panel` and record the page they came from. See [docs/embedding.md](docs/embedding.md).
+`panel` and record the page they came from. On an admin page the panel saves through
+the admin and can use the admin's form markup. See [docs/embedding.md](docs/embedding.md).
 The [demo project](demo/README.md) has a page with three panels to click through.
 
 ## Documentation
