@@ -39,7 +39,7 @@
     {% endblock %}
     {% block submit %}<button type="submit" class="tunables-panel__save">{% translate "Save" %}</button>{% endblock %}
   </form>
-  {% else %}
+  {% elif panel.rows %}
   <dl class="tunables-panel__values">
     {% for row in panel.rows %}
     <dt class="tunables-panel__key">{{ row.field.label }}</dt>

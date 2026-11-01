@@ -77,6 +77,7 @@ tunables the panel does not show.
 | `title` | `""` | A heading above the panel. |
 | `id` | `"tunables-panel"` | The `id` of the panel's `<section>`. Give each panel on a page its own. |
 | `template` | `"tunables/panel.html"` | The template that renders the panel. |
+| `only` | none | `edit` shows the panel only to users who would get the form. Everyone else sees nothing, and a user without `tunables.add_changeset` costs no database query beyond the permission check. A writer on an out-of-sync catalogue sees the out-of-sync notice without the values. |
 
 ### After a save
 
@@ -116,7 +117,7 @@ as `template=`. The template receives one variable, `panel`, with:
 | Attribute | Content |
 |---|---|
 | `mode` | `edit`, `read` or `hidden` |
-| `config` | the options as given to the tag: `keys`, `reason`, `title`, `id`, `template` |
+| `config` | the options as given to the tag: `keys`, `reason`, `title`, `id`, `template`, `only` |
 | `rows` | one per key: `tunable`, `field` (the bound form field), `reset` (the bound reset box, or `None` when the value is at its default), `shown` (the value as text with its unit) |
 | `form` | the Django form, for `expected_version`, `reason` and non-field errors |
 | `token` | the signed panel configuration the form must post back as `panel` |
@@ -126,9 +127,9 @@ as `template=`. The template receives one variable, `panel`, with:
 
 The form posts `panel`, `next` and `expected_version` as hidden fields, plus one field
 per key named by the full key and a `reset_<key>` box per override. `panel` holds the
-keys, reason mode, title, id and template the tag was given, signed with the project's
-`SECRET_KEY`. A browser therefore cannot add keys to a panel or drop a reason the page
-author required, and an altered token is a `400`. The save view renders the same
+options the tag was given, signed with the project's `SECRET_KEY`. A browser therefore
+cannot add keys to a panel or drop a reason the page author required, and an altered
+token is a `400`. The save view renders the same
 template, so a custom template keeps its markup across partial responses and the error
 page. A custom template must keep the three hidden fields.
 

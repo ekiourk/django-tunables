@@ -26,6 +26,7 @@ from tunables.services import latest_snapshot, live_document
 from tunables.sync import OUT_OF_SYNC_MESSAGE, is_current
 
 Mode = Literal["edit", "read", "hidden"]
+Only = Literal["edit"]
 
 PANEL_TEMPLATE = "tunables/panel.html"
 ERRORS_TEMPLATE = "tunables/panel_errors.html"
@@ -41,29 +42,32 @@ class PanelConfig:
     title: str = ""
     id: str = "tunables-panel"
     template: str = PANEL_TEMPLATE
+    only: Only | None = None
 
     def __post_init__(self) -> None:
         if self.reason not in REASON_MODES:
             raise ValueError(f"reason must be one of {REASON_MODES}, not {self.reason!r}")
+        if self.only not in (None, "edit"):
+            raise ValueError(f"only must be 'edit' when given, not {self.only!r}")
         object.__setattr__(self, "keys", tuple(dict.fromkeys(self.keys)))
 
     def token(self) -> str:
-        fields = [list(self.keys), self.reason, self.title, self.id, self.template]
+        fields = [list(self.keys), self.reason, self.title, self.id, self.template, self.only]
         return signing.dumps(fields, salt=TOKEN_SALT, compress=True)
 
     @classmethod
     def from_token(cls, token: str) -> "PanelConfig":
         """Raises signing.BadSignature for a missing, altered or foreign token."""
         try:
-            keys, reason, title, element_id, template = signing.loads(token, salt=TOKEN_SALT)
-            return cls(tuple(keys), cast(ReasonMode, reason), title, element_id, template)
+            keys, reason, title, element_id, template, *only = signing.loads(token, salt=TOKEN_SALT)
+            return cls(tuple(keys), cast(ReasonMode, reason), title, element_id, template, *only)
         except (TypeError, ValueError) as bad:
             raise signing.BadSignature(str(bad)) from bad
 
 
 @dataclass
 class PanelState:
-    """Everything the panel template needs. ``form`` is None only in hidden mode."""
+    """Everything the panel template needs. ``form`` is None in hidden mode and for an edit-only notice."""
 
     config: PanelConfig
     mode: Mode
@@ -106,28 +110,34 @@ def build_panel(
 
     Left to decide, the panel is in edit mode for a writer whose groups are all editable on a synced
     catalogue, read mode for a viewer or when out of sync, and hidden otherwise, without touching the
-    database for a hidden panel. A caller that already decided passes ``mode`` and ``synced``, and
-    ``document`` when it already holds the one to show. Unknown keys raise UnknownKey, for every user.
+    database for a hidden panel. With ``only="edit"`` read mode becomes hidden, except for a writer on
+    an out-of-sync catalogue, who gets the notice without values. A caller that already decided passes
+    ``mode`` and ``synced``, and ``document`` when it already holds the one to show. Unknown keys raise
+    UnknownKey, for every user.
     """
     require_keys(get_catalogue(), config.keys)
     next_url = next_url or request.get_full_path()
+    admin_site = _admin_site(request)
+    version = None
     if mode is None:
         user = request.user
         can_write = user.has_perm("tunables.add_changeset")
-        if not can_write and not user.has_perm("tunables.view_tunabledefinition"):
+        if not can_write and (config.only == "edit" or not user.has_perm("tunables.view_tunabledefinition")):
             return PanelState(config, "hidden", next_url)
         state = State.objects.filter(pk=1).first()
         synced = is_current(state)
         mode = "edit" if can_write and synced and _editable(request, config.keys) else "read"
         if synced:
             assert state is not None
-            document = latest_snapshot(state.current_version).document
+            version = state.current_version
+    notice = "" if synced else str(OUT_OF_SYNC_MESSAGE)
+    if mode == "read" and config.only == "edit":
+        return PanelState(config, "read" if notice else "hidden", next_url, notice=notice, admin_site=admin_site)
     if document is None:
-        document = latest_snapshot().document if synced else live_document()
+        document = latest_snapshot(version).document if synced else live_document()
     form_class = build_form(config.keys, document, reason=config.reason)
     form = form_class(data) if data is not None else form_class()
-    notice = "" if synced else str(OUT_OF_SYNC_MESSAGE)
-    return PanelState(config, mode, next_url, form=form, notice=notice, admin_site=_admin_site(request))
+    return PanelState(config, mode, next_url, form=form, notice=notice, admin_site=admin_site)
 
 
 def _admin_site(request: HttpRequest) -> str:

@@ -193,6 +193,53 @@ def test_a_group_outside_the_editable_set_turns_the_whole_panel_read_only(synced
         )
 
 
+def test_edit_only_gives_a_writer_the_form(synced: SyncResult) -> None:
+    html = render_tag(writer(), '{% tunables_panel "pricing.vat_rate" only="edit" %}')
+    assert "tunables-panel--edit" in html
+
+
+def test_edit_only_shows_a_viewer_nothing_without_reading_the_tunables(
+    synced: SyncResult, django_assert_max_num_queries: Any
+) -> None:
+    user = viewer()
+    user.has_perm("tunables.add_changeset")  # load the permission cache before counting
+    with django_assert_max_num_queries(0):
+        assert render_tag(user, '{% tunables_panel "pricing.vat_rate" only="edit" %}').strip() == ""
+
+
+def test_edit_only_shows_nothing_for_a_group_outside_the_editable_set(synced: SyncResult) -> None:
+    with restricted():
+        html = render_tag(writer(), '{% tunables_panel "pricing.vat_rate" "thermostat.mode" only="edit" %}')
+    assert html.strip() == ""
+
+
+def test_edit_only_gives_a_writer_the_notice_alone_when_out_of_sync(db: None) -> None:
+    html = render_tag(writer(), '{% tunables_panel "pricing.vat_rate" only="edit" %}')
+    assert OUT_OF_SYNC in html
+    assert "<form" not in html and "tunables-panel__value" not in html
+
+
+def test_edit_only_answers_an_unsynced_partial_save_with_the_notice_alone(db: None) -> None:
+    data = post_data(panel=PanelConfig(KEYS, only="edit").token(), expected_version=0, partial="1")
+    html = client_for(writer()).post(SAVE, data).content.decode()
+    assert OUT_OF_SYNC in html and "tunables-panel__value" not in html
+
+
+def test_the_only_option_travels_in_the_token(synced: SyncResult) -> None:
+    html = render_tag(writer(), '{% tunables_panel "pricing.vat_rate" only="edit" %}')
+    assert token_in(html) == PanelConfig(("pricing.vat_rate",), only="edit")
+
+
+def test_a_token_signed_before_the_only_option_still_loads(synced: SyncResult) -> None:
+    old = signing.dumps([["pricing.vat_rate"], "required", "", "tunables-panel", PANEL_TEMPLATE], salt=TOKEN_SALT)
+    assert PanelConfig.from_token(old) == PanelConfig(("pricing.vat_rate",))
+
+
+def test_an_unknown_only_value_is_refused(synced: SyncResult) -> None:
+    with pytest.raises(ValueError, match="only must be"):
+        render_tag(writer(), '{% tunables_panel "pricing.vat_rate" only="read" %}')
+
+
 # Rendering: the form
 
 
