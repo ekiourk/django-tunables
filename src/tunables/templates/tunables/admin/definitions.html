@@ -1,10 +1,9 @@
 {% extends "admin/base_site.html" %}
 {% load i18n tunables_admin %}
 {% block breadcrumbs %}{% tunables_breadcrumbs breadcrumbs %}{% endblock %}
-{% block extrastyle %}{{ block.super }}{% tunables_admin_css %}{% endblock %}
 {% block content %}
 <div id="content-main">
-  <form method="get" class="aligned">
+  <form method="get">
     <label>{% translate "Category" %}
       <select name="category">
         <option value="">{% translate "any" %}</option>

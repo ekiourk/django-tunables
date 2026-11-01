@@ -229,6 +229,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             messages.error(request, str(OUT_OF_SYNC_MESSAGE))
             return HttpResponseRedirect(index)
         found = catalogue.groups[group]
+        label = str(found.title) or found.name
         keys = [f"{found.name}.{tunable.name}" for tunable in found.tunables]
         form_class = build_form(keys, latest_snapshot().document, catalogue=catalogue)
         form = form_class(request.POST) if request.method == "POST" else form_class()
@@ -237,8 +238,7 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             if result is not None:
                 messages.success(
                     request,
-                    _("Saved version %(version)s of %(group)s.")
-                    % {"version": result.version, "group": str(found.title) or found.name},
+                    _("Saved version %(version)s of %(group)s.") % {"version": result.version, "group": label},
                 )
                 return HttpResponseRedirect(index)
             if form.conflict is not None:
@@ -246,13 +246,13 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
                 form = form.rebound()
         context = {
             **self.admin_site.each_context(request),
-            "title": _("Edit %(group)s") % {"group": str(found.title) or found.name},
+            "title": _("Edit %(group)s") % {"group": label},
             "opts": self.model._meta,
             "group": found,
             "form": form,
             "rows": form.rows(),
             "index_url": index,
-            "breadcrumbs": [(_("Tunables"), index), (str(found.title) or found.name, "")],
+            "breadcrumbs": [(_("Tunables"), index), (label, "")],
         }
         return TemplateResponse(request, "tunables/admin/group_edit.html", context)
 

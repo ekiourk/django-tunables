@@ -7,10 +7,11 @@ the running Django version.
 
 Changes to existing behaviour:
 
-- The edit page, the rollback confirmation, the definitions page and the definition tags
-  page load `admin/css/forms.css` and the package's `tunables/admin/tunables.css`, so
-  their labels, help text and Save bar line up as on a stock change form. On Django 6.1
-  the links carry the CSP nonce.
+- The edit page, the rollback confirmation and the definition tags page load
+  `admin/css/forms.css` and the package's `tunables/admin/tunables.css`, so their labels,
+  help text and Save bar line up as on a stock change form. On Django 6.1 the links carry
+  the CSP nonce. The filter form on the definitions page drops its `aligned` class, which
+  stacked the filters on one line each wherever `forms.css` was loaded.
 - On Django 6.1 the breadcrumbs render as `<ol class="breadcrumbs">` with
   `aria-current="page"` on the last step, the markup the admin styles. Django 5.2 and 6.0
   keep the `<div class="breadcrumbs">` markup.
