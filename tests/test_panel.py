@@ -336,6 +336,12 @@ def test_a_required_reason_left_empty_shows_the_error_page(synced: SyncResult) -
     assert ChangeSet.objects.count() == 0
 
 
+def test_a_malformed_expected_version_is_reported_on_the_error_page(synced: SyncResult) -> None:
+    response = client_for(writer()).post(SAVE, post_data(expected_version="x", **{"thermostat.mode": "heat"}))
+    assert '<ul class="tunables-panel__errors"><li>Enter a whole number.</li></ul>' in response.content.decode()
+    assert ChangeSet.objects.count() == 0
+
+
 def test_an_invalid_value_is_reported_on_its_field_and_the_rest_is_kept(synced: SyncResult) -> None:
     response = client_for(writer()).post(SAVE, post_data(**{"pricing.vat_rate": "5"}))
     form = response.context["panel"].form

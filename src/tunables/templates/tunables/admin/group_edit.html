@@ -11,6 +11,9 @@
     {% if form.non_field_errors %}
     <p class="errornote">{% for error in form.non_field_errors %}{{ error }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>
     {% endif %}
+    {% for field in form.hidden_fields %}{% if field.errors %}
+    <p class="errornote">{% for error in field.errors %}{{ error }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>
+    {% endif %}{% endfor %}
     <fieldset class="module aligned">
       {% for row in rows %}
       <div class="form-row{% if row.field.errors %} errors{% endif %}">

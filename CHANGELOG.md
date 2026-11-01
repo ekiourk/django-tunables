@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+Errors on hidden form fields reach the page.
+
+Changes to existing behaviour:
+
+- The panel and the admin edit page show errors on their hidden fields, such as a
+  malformed `expected_version` or a hidden reason that is too long. Before, the form came
+  back with no message.
+
 ## 0.6.1, 2026-11-01
 
 The admin pages load the admin's form stylesheet and render breadcrumbs in the markup of

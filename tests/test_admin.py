@@ -137,6 +137,13 @@ def test_missing_reason_and_emptied_value(admin_client: Client, synced: SyncResu
     assert ChangeSet.objects.count() == 0
 
 
+def test_malformed_expected_version_is_shown(admin_client: Client, synced: SyncResult) -> None:
+    response = admin_client.post(edit_url("pricing"), form_data("pricing", vat_rate="0.1", expected_version="x"))
+    assert response.status_code == 200
+    assert '<p class="errornote">Enter a whole number.</p>' in response.content.decode()
+    assert ChangeSet.objects.count() == 0
+
+
 def test_unchanged_submit_is_an_error(admin_client: Client, synced: SyncResult) -> None:
     response = admin_client.post(edit_url("pricing"), form_data("pricing"))
     assert response.status_code == 200
