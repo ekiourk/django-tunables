@@ -40,7 +40,8 @@ jobs:
           enable-cache: true
       - run: uv sync --all-extras --frozen
       - run: uv pip install "Django~=${{ matrix.django }}.0"
-      - run: uv run pytest --cov=tunables --cov-branch --cov-report=term --cov-report=xml
+      # --no-sync keeps the matrix's Django; a plain `uv run` reinstalls the locked one first.
+      - run: uv run --no-sync pytest --cov=tunables --cov-branch --cov-report=term --cov-report=xml
       - uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
