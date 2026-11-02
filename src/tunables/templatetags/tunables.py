@@ -35,7 +35,8 @@ def tunables_panel(
 
     ``reason`` is ``required``, ``optional`` or ``hidden``; an empty reason is filled with the page the change
     came from. ``next`` is where the save returns to, by default the current page. ``template`` overrides the
-    panel template. ``only="edit"`` shows the panel only to users who get the form. Needs ``request`` in the context, from ``django.template.context_processors.request``.
+    panel template. ``only="edit"`` shows the panel only to users who get the form.
+    Needs ``request`` in the context, from ``django.template.context_processors.request``.
     """
     request = context.get("request")
     if request is None:

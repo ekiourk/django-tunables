@@ -1,10 +1,11 @@
 import json
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, QuerySet
-from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path, reverse
 from django.utils.html import format_html
@@ -37,7 +38,7 @@ from tunables.services import (
 )
 from tunables.sync import OUT_OF_SYNC_MESSAGE, is_synced
 from tunables.tags import log_admin_delete, log_admin_save, set_manual_tags
-from tunables.views import PanelSave
+from tunables.views import PanelSave, wants_partial
 
 if TYPE_CHECKING:
     ModelAdmin = admin.ModelAdmin[Any]
@@ -86,9 +87,20 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             path("edit/<str:group>/", view(self.edit_group), name="tunables_group_edit"),
             path("definitions/", view(self.definitions), name="tunables_definitions"),
             path("definitions/<str:key>/tags/", view(self.definition_tags), name="tunables_definition_tags"),
-            path("panel/save/", view(AdminPanelSave.as_view(model_admin=self)), name="tunables_panel_save"),
+            path("panel/save/", self.panel_save_view(), name="tunables_panel_save"),
             *super().get_urls(),
         ]
+
+    def panel_save_view(self) -> Callable[[HttpRequest], HttpResponseBase]:
+        """The panel save view behind the admin's login, answering a partial request it would redirect with 403."""
+        guarded = self.admin_site.admin_view(AdminPanelSave.as_view(model_admin=self))
+
+        def view(request: HttpRequest) -> HttpResponseBase:
+            if wants_partial(request) and not self.admin_site.has_permission(request):
+                raise PermissionDenied  # an HTMX client would swap the login page into the panel
+            return guarded(request)
+
+        return view
 
     def definitions(self, request: HttpRequest) -> HttpResponse:
         """Browse every definition with its category, group and tags; filter and search."""

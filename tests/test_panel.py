@@ -635,3 +635,18 @@ def test_the_admin_endpoint_sends_a_signed_out_user_to_the_admin_login(synced: S
     response = Client().post(ADMIN_SAVE, post_data(**{"thermostat.mode": "heat"}))
     assert response.status_code == 302 and response["Location"].startswith("/admin/login/")
     assert ChangeSet.objects.count() == 0
+
+
+def test_a_partial_save_by_a_signed_out_user_through_the_admin_is_forbidden(synced: SyncResult) -> None:
+    response = Client().post(ADMIN_SAVE, post_data(**{"thermostat.mode": "heat"}), HTTP_HX_REQUEST="true")
+    assert response.status_code == 403
+
+
+def test_a_partial_save_by_a_non_staff_writer_through_the_admin_is_forbidden(synced: SyncResult) -> None:
+    response = client_for(writer()).post(ADMIN_SAVE, post_data(partial="1", **{"thermostat.mode": "heat"}))
+    assert response.status_code == 403
+    assert ChangeSet.objects.count() == 0
+
+
+def test_a_token_without_the_only_option_keeps_the_five_fields_older_code_reads(synced: SyncResult) -> None:
+    assert len(signing.loads(PanelConfig(("pricing.vat_rate",)).token(), salt=TOKEN_SALT)) == 5

@@ -52,7 +52,9 @@ class PanelConfig:
         object.__setattr__(self, "keys", tuple(dict.fromkeys(self.keys)))
 
     def token(self) -> str:
-        fields = [list(self.keys), self.reason, self.title, self.id, self.template, self.only]
+        fields = [list(self.keys), self.reason, self.title, self.id, self.template]
+        if self.only is not None:  # without it the token stays readable by releases that predate the option
+            fields.append(self.only)
         return signing.dumps(fields, salt=TOKEN_SALT, compress=True)
 
     @classmethod
@@ -75,17 +77,7 @@ class PanelState:
     form: TunablesForm | None = None
     notice: str = ""
     saved_version: int | None = None
-    admin_site: str = ""
-
-    @property
-    def action_url(self) -> str:
-        """The save URL of the admin site that served the page when it registers the tunables admin, else the package's."""
-        if self.admin_site:
-            try:
-                return reverse("admin:tunables_panel_save", current_app=self.admin_site)
-            except NoReverseMatch:
-                pass
-        return reverse("tunables_ui:panel-save")
+    action_url: str = ""
 
     @property
     def token(self) -> str:
@@ -117,7 +109,6 @@ def build_panel(
     """
     require_keys(get_catalogue(), config.keys)
     next_url = next_url or request.get_full_path()
-    admin_site = _admin_site(request)
     version = None
     if mode is None:
         user = request.user
@@ -132,18 +123,24 @@ def build_panel(
             version = state.current_version
     notice = "" if synced else str(OUT_OF_SYNC_MESSAGE)
     if mode == "read" and config.only == "edit":
-        return PanelState(config, "read" if notice else "hidden", next_url, notice=notice, admin_site=admin_site)
+        return PanelState(config, "read" if notice else "hidden", next_url, notice=notice)
     if document is None:
         document = latest_snapshot(version).document if synced else live_document()
     form_class = build_form(config.keys, document, reason=config.reason)
     form = form_class(data) if data is not None else form_class()
-    return PanelState(config, mode, next_url, form=form, notice=notice, admin_site=admin_site)
+    action_url = save_url(request) if mode == "edit" else ""
+    return PanelState(config, mode, next_url, form=form, notice=notice, action_url=action_url)
 
 
-def _admin_site(request: HttpRequest) -> str:
-    """The instance namespace of the admin site that served ``request``, or empty."""
+def save_url(request: HttpRequest) -> str:
+    """The save URL of the admin site that served ``request`` if it has the tunables admin, else the package's."""
     match = request.resolver_match
-    return match.namespace if match is not None and match.app_name == "admin" else ""
+    if match is not None and match.app_name == "admin":
+        try:
+            return reverse("admin:tunables_panel_save", current_app=match.namespace)
+        except NoReverseMatch:
+            pass
+    return reverse("tunables_ui:panel-save")
 
 
 def _editable(request: HttpRequest, keys: tuple[str, ...]) -> bool:

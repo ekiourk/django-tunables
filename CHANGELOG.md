@@ -12,7 +12,8 @@ Changes to existing behaviour:
 - A panel on a page served by an admin site that registers the tunables admin posts to
   that site's `tunables/tunabledefinition/panel/save/` URL instead of the `tunables_ui`
   endpoint. The save runs behind the admin's login, so a signed-out user is redirected to
-  the admin login page instead of getting a 403, and a failed save renders as an admin page.
+  the admin login page instead of getting a 403, except on a partial request, which still
+  gets the 403. A failed save renders as an admin page.
   Panels on other pages are unchanged.
 
 Additions:

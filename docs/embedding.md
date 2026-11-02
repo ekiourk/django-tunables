@@ -9,9 +9,9 @@ snapshot as the admin and the API, with the same audit trail and version check.
 
 ## Setup
 
-Panels on pages served by the Django admin post to the admin and need no setup, see
-[Inside the Django admin](#inside-the-django-admin). Panels on other pages need the save
-endpoint, mounted once, anywhere in the host's URL conf:
+A panel on a page served by an admin site that registers the tunables admin posts to that
+site, see [Inside the Django admin](#inside-the-django-admin). Every other panel needs the
+save endpoint, mounted once, anywhere in the host's URL conf:
 
 ```python
 urlpatterns = [
@@ -143,8 +143,9 @@ form tag.
 A panel on a page served by an admin site, for example in an overridden change form of
 one of your own models, posts to that admin site's
 `tunables/tunabledefinition/panel/save/` URL when the site registers the tunables admin.
-The save then runs behind the admin's login, a signed-out user is sent to the admin's
-login page, and a failed save renders as an admin page with the panel and a link back.
+The save then runs behind the admin's login. A signed-out user is sent to the admin's
+login page, or gets a `403` on a partial request, and a failed save renders as an admin
+page with the panel and a link back.
 On an admin site without the tunables admin, the panel posts to the `tunables_ui`
 endpoint as on any other page.
 
