@@ -411,7 +411,7 @@ wheels = [
 
 [[package]]
 name = "django-tunables"
-version = "0.6.1"
+version = "0.6.2"
 source = { editable = "." }
 dependencies = [
     { name = "django" },
