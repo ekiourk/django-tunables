@@ -1,0 +1,7 @@
+{% extends "tunables/panel.html" %}
+{% load i18n %}
+{% block heading %}{% if panel.config.title %}<h2>{{ panel.config.title }}</h2>{% endif %}{% endblock %}
+{% block notice %}{% if panel.notice %}<p class="errornote">{{ panel.notice }}</p>{% endif %}{% endblock %}
+{% block saved %}{% if panel.saved_version %}<ul class="messagelist"><li class="success">{% blocktranslate with version=panel.saved_version %}Saved version {{ version }}.{% endblocktranslate %}</li></ul>{% endif %}{% endblock %}
+{% block fields %}{% include "tunables/admin/form_rows.html" with form=panel.form rows=panel.rows %}{% endblock %}
+{% block submit %}<div class="submit-row"><input type="submit" class="default" value="{% translate 'Save' %}"></div>{% endblock %}

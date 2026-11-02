@@ -9,7 +9,9 @@ snapshot as the admin and the API, with the same audit trail and version check.
 
 ## Setup
 
-Mount the save endpoint once, anywhere in the host's URL conf:
+A panel on a page of an admin site that registers the tunables admin posts to that site
+(see [Inside the Django admin](#inside-the-django-admin)). Every other panel needs the
+save endpoint, mounted once anywhere in the host's URL conf:
 
 ```python
 urlpatterns = [
@@ -75,6 +77,7 @@ tunables the panel does not show.
 | `title` | `""` | A heading above the panel. |
 | `id` | `"tunables-panel"` | The `id` of the panel's `<section>`. Give each panel on a page its own. |
 | `template` | `"tunables/panel.html"` | The template that renders the panel. |
+| `only` | none | `edit` shows the panel only to users who would get the form. Everyone else sees nothing, and a user without `tunables.add_changeset` costs no database query beyond the permission check. A writer on an out-of-sync catalogue sees the out-of-sync notice without the values. |
 
 ### After a save
 
@@ -114,21 +117,58 @@ as `template=`. The template receives one variable, `panel`, with:
 | Attribute | Content |
 |---|---|
 | `mode` | `edit`, `read` or `hidden` |
-| `config` | the options as given to the tag: `keys`, `reason`, `title`, `id`, `template` |
+| `config` | the options as given to the tag: `keys`, `reason`, `title`, `id`, `template`, `only` |
 | `rows` | one per key: `tunable`, `field` (the bound form field), `reset` (the bound reset box, or `None` when the value is at its default), `shown` (the value as text with its unit) |
-| `form` | the Django form, for `expected_version`, `reason` and non-field errors |
+| `form` | the Django form, for `expected_version`, `reason` and non-field errors, which include the errors of hidden fields |
 | `token` | the signed panel configuration the form must post back as `panel` |
-| `action_url`, `next_url` | the save URL and the return URL |
+| `action_url`, `next_url` | the save URL (the admin site's own on an admin page) and the return URL |
 | `notice` | the conflict or out-of-sync text, or empty |
 | `saved_version` | the version just written, in a partial response after a successful save |
 
 The form posts `panel`, `next` and `expected_version` as hidden fields, plus one field
 per key named by the full key and a `reset_<key>` box per override. `panel` holds the
-keys, reason mode, title, id and template the tag was given, signed with the project's
-`SECRET_KEY`. A browser therefore cannot add keys to a panel or drop a reason the page
-author required, and an altered token is a `400`. The save view renders the same
-template, so a custom template keeps its markup across partial responses and the error
-page. A custom template must keep the three hidden fields.
+options the tag was given, signed with the project's `SECRET_KEY`. A browser therefore
+cannot add keys to a panel or drop a reason the page author required, and an altered
+token is a `400`. The save view renders the same template, so a custom template keeps its
+markup across partial responses and the error page. A custom template must keep the three
+hidden fields.
+
+Besides `form_attrs`, the panel template has a block for each of its parts: `heading` for
+the title, `notice` for the conflict or out-of-sync text, `saved` for the saved-version
+line, `fields` for the hidden version field, the errors, the rows and the reason, and
+`submit` for the Save button. A template that extends it replaces the parts it needs and
+keeps the token, `next` and the form tag.
+
+### Inside the Django admin
+
+A panel on a page served by an admin site, for example in an overridden change form of
+one of your own models, posts to that admin site's
+`tunables/tunabledefinition/panel/save/` URL when the site registers the tunables admin.
+The save then runs behind the admin's login: a signed-out user is sent to the admin's
+login page, or gets a `403` on a partial request. A failed save renders as an admin page
+with the panel and a link back. On an admin site without the tunables admin, the panel
+posts to the `tunables_ui` endpoint as on any other page.
+
+The panel can also use the admin's form markup instead of the `tunables-panel__*` classes:
+
+```django
+{% tunables_panel "pricing.vat_rate" "thermostat.mode" template="tunables/admin/panel.html" %}
+```
+
+`tunables/admin/panel.html` extends the panel template and fills its blocks with admin
+markup. The title is an `<h2>`, as for the sections of a change form. The rows are those
+of the tunables edit page, a `module aligned` fieldset with one `form-row` per key and a
+`submit-row`. Non-field errors and the notice go in the admin's `errornote`, field errors
+in its `errorlist`, and the saved version in its `messagelist`. Read mode is the same list as in the default template. The rows come from
+`tunables/admin/form_rows.html`, which the edit page includes too.
+
+The markup needs the admin's `forms.css`. A change form loads it already. On other admin
+pages, load it with the package's tag, which also adds the stylesheet for the reset box:
+
+```django
+{% load tunables_admin %}
+{% block extrastyle %}{{ block.super }}{% tunables_admin_css %}{% endblock %}
+```
 
 ## Building a form in your own view
 

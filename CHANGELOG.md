@@ -1,5 +1,36 @@
 # Changelog
 
+## Unreleased
+
+The panel fits into the Django admin, and errors on hidden form fields reach the page.
+
+Changes to existing behaviour:
+
+- Errors on hidden fields, such as a malformed `expected_version` or a hidden reason that
+  is too long, move to the form's non-field errors, so the panel and the admin edit page
+  show them. Before, the form came back with no message.
+- A panel on a page served by an admin site that registers the tunables admin posts to
+  that site's `tunables/tunabledefinition/panel/save/` URL instead of the `tunables_ui`
+  endpoint. The save runs behind the admin's login, so a signed-out user who used to get a
+  403 is redirected to the admin login page. A partial request still gets the 403. A
+  failed save renders as an admin page. Panels on other pages are unchanged.
+
+Additions:
+
+- `tunables/admin/panel.html`, a panel template in the admin's form markup, for a panel
+  placed on an admin page with `template="tunables/admin/panel.html"`. Its rows come from
+  `tunables/admin/form_rows.html`, which the admin edit page now includes as well.
+- `{% tunables_panel ... only="edit" %}` shows the panel only to users who would get the
+  form, for a page where read-only values are noise. Others see nothing, without a
+  database query for users who cannot write. A writer on an out-of-sync catalogue sees
+  the notice alone.
+- `PanelSave.render_errors(request, panel)`, the hook that renders the page for a failed
+  save, for a host that subclasses the view.
+- The panel template has a block for each part: `heading`, `notice`, `saved`, `fields`
+  around the form body and `submit` around the Save button. The admin template uses them
+  for an `<h2>` title, the notice in an `errornote` and the saved version in a
+  `messagelist`.
+
 ## 0.6.1, 2026-11-01
 
 The admin pages load the admin's form stylesheet and render breadcrumbs in the markup of

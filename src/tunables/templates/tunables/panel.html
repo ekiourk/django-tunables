@@ -1,13 +1,14 @@
 {% load i18n %}{% if panel.mode != "hidden" %}
 <section class="tunables-panel tunables-panel--{{ panel.mode }}" id="{{ panel.config.id }}">
-  {% if panel.config.title %}<h3 class="tunables-panel__title">{{ panel.config.title }}</h3>{% endif %}
-  {% if panel.notice %}<p class="tunables-panel__notice">{{ panel.notice }}</p>{% endif %}
-  {% if panel.saved_version %}<p class="tunables-panel__saved">{% blocktranslate with version=panel.saved_version %}Saved version {{ version }}.{% endblocktranslate %}</p>{% endif %}
+  {% block heading %}{% if panel.config.title %}<h3 class="tunables-panel__title">{{ panel.config.title }}</h3>{% endif %}{% endblock %}
+  {% block notice %}{% if panel.notice %}<p class="tunables-panel__notice">{{ panel.notice }}</p>{% endif %}{% endblock %}
+  {% block saved %}{% if panel.saved_version %}<p class="tunables-panel__saved">{% blocktranslate with version=panel.saved_version %}Saved version {{ version }}.{% endblocktranslate %}</p>{% endif %}{% endblock %}
   {% if panel.mode == "edit" %}
   <form method="post" action="{{ panel.action_url }}" class="tunables-panel__form"{% block form_attrs %}{% endblock %}>
     {% csrf_token %}
     <input type="hidden" name="panel" value="{{ panel.token }}">
     <input type="hidden" name="next" value="{{ panel.next_url }}">
+    {% block fields %}
     {{ panel.form.expected_version }}
     {% if panel.form.non_field_errors %}
     <ul class="tunables-panel__errors">{% for error in panel.form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>
@@ -32,9 +33,10 @@
       {% if panel.form.reason.errors %}<ul class="tunables-panel__errors">{% for error in panel.form.reason.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
     </div>
     {% endif %}
-    <button type="submit" class="tunables-panel__save">{% translate "Save" %}</button>
+    {% endblock %}
+    {% block submit %}<button type="submit" class="tunables-panel__save">{% translate "Save" %}</button>{% endblock %}
   </form>
-  {% else %}
+  {% elif panel.form %}
   <dl class="tunables-panel__values">
     {% for row in panel.rows %}
     <dt class="tunables-panel__key">{{ row.field.label }}</dt>

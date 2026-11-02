@@ -7,31 +7,7 @@
   {% if group.description %}<p>{{ group.description }}</p>{% endif %}
   <form method="post">
     {% csrf_token %}
-    {{ form.expected_version }}
-    {% if form.non_field_errors %}
-    <p class="errornote">{% for error in form.non_field_errors %}{{ error }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>
-    {% endif %}
-    <fieldset class="module aligned">
-      {% for row in rows %}
-      <div class="form-row{% if row.field.errors %} errors{% endif %}">
-        {{ row.field.errors }}
-        <div class="flex-container">
-          {{ row.field.label_tag }}
-          {{ row.field }}
-          {% if row.reset %}<label class="vCheckboxLabel tunables-reset">{{ row.reset }} {{ row.reset.label }}</label>{% endif %}
-        </div>
-        {% if row.field.help_text %}<div class="help">{{ row.field.help_text }}</div>{% endif %}
-        {% if row.reset.help_text %}<div class="help">{% translate "Default:" %} {{ row.reset.help_text }}</div>{% endif %}
-        {% if row.tunable.deprecated %}<div class="help">{% translate "Deprecated:" %} {{ row.tunable.deprecated }}</div>{% endif %}
-      </div>
-      {% endfor %}
-    </fieldset>
-    <fieldset class="module aligned">
-      <div class="form-row{% if form.reason.errors %} errors{% endif %}">
-        {{ form.reason.errors }}
-        <div class="flex-container">{{ form.reason.label_tag }} {{ form.reason }}</div>
-      </div>
-    </fieldset>
+    {% include "tunables/admin/form_rows.html" %}
     <div class="submit-row">
       <input type="submit" class="default" value="{% translate 'Save' %}">
       <a class="closelink" href="{{ index_url }}">{% translate "Cancel" %}</a>

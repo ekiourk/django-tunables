@@ -1,10 +1,11 @@
 import json
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from django.contrib import admin, messages
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, QuerySet
-from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path, reverse
 from django.utils.html import format_html
@@ -26,6 +27,7 @@ from tunables.errors import (
 )
 from tunables.forms import build_form
 from tunables.models import ChangeItem, ChangeSet, Snapshot, Tag, TunableDefinition, TunableDefinitionTag
+from tunables.panel import PanelState
 from tunables.registry import get_catalogue
 from tunables.search import match_definitions, tags_by_key
 from tunables.services import (
@@ -36,6 +38,7 @@ from tunables.services import (
 )
 from tunables.sync import OUT_OF_SYNC_MESSAGE, is_synced
 from tunables.tags import log_admin_delete, log_admin_save, set_manual_tags
+from tunables.views import PanelSave, wants_partial
 
 if TYPE_CHECKING:
     ModelAdmin = admin.ModelAdmin[Any]
@@ -56,6 +59,24 @@ class ReadOnlyAdmin(ModelAdmin):
         return False
 
 
+class AdminPanelSave(PanelSave):
+    """The embedded panel's save view, mounted in the admin so a failed save renders as an admin page."""
+
+    model_admin: "TunableDefinitionAdmin | None" = None
+
+    def render_errors(self, request: HttpRequest, panel: PanelState) -> HttpResponse:
+        assert self.model_admin is not None and request.resolver_match is not None
+        index = reverse("admin:tunables_tunabledefinition_changelist", current_app=request.resolver_match.namespace)
+        context = {
+            **self.model_admin.admin_site.each_context(request),
+            "title": _("Save changes"),
+            "opts": self.model_admin.model._meta,
+            "breadcrumbs": [(_("Tunables"), index), (_("Save changes"), "")],
+            "panel": panel,
+        }
+        return TemplateResponse(request, "tunables/admin/panel_errors.html", context)
+
+
 @admin.register(TunableDefinition)
 class TunableDefinitionAdmin(ReadOnlyAdmin):
     """The app's entry in the admin: a group index and a per-group edit form instead of a changelist."""
@@ -66,8 +87,20 @@ class TunableDefinitionAdmin(ReadOnlyAdmin):
             path("edit/<str:group>/", view(self.edit_group), name="tunables_group_edit"),
             path("definitions/", view(self.definitions), name="tunables_definitions"),
             path("definitions/<str:key>/tags/", view(self.definition_tags), name="tunables_definition_tags"),
+            path("panel/save/", self.panel_save_view(), name="tunables_panel_save"),
             *super().get_urls(),
         ]
+
+    def panel_save_view(self) -> Callable[[HttpRequest], HttpResponseBase]:
+        """The panel save view behind the admin's login, answering a partial request it would redirect with 403."""
+        guarded = self.admin_site.admin_view(AdminPanelSave.as_view(model_admin=self))
+
+        def view(request: HttpRequest) -> HttpResponseBase:
+            if wants_partial(request) and not self.admin_site.has_permission(request):
+                raise PermissionDenied  # an HTMX client would swap the login page into the panel
+            return guarded(request)
+
+        return view
 
     def definitions(self, request: HttpRequest) -> HttpResponse:
         """Browse every definition with its category, group and tags; filter and search."""
