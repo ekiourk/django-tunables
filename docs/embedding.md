@@ -9,9 +9,9 @@ snapshot as the admin and the API, with the same audit trail and version check.
 
 ## Setup
 
-A panel on a page served by an admin site that registers the tunables admin posts to that
-site, see [Inside the Django admin](#inside-the-django-admin). Every other panel needs the
-save endpoint, mounted once, anywhere in the host's URL conf:
+A panel on a page of an admin site that registers the tunables admin posts to that site
+(see [Inside the Django admin](#inside-the-django-admin)). Every other panel needs the
+save endpoint, mounted once anywhere in the host's URL conf:
 
 ```python
 urlpatterns = [
@@ -121,7 +121,7 @@ as `template=`. The template receives one variable, `panel`, with:
 | `rows` | one per key: `tunable`, `field` (the bound form field), `reset` (the bound reset box, or `None` when the value is at its default), `shown` (the value as text with its unit) |
 | `form` | the Django form, for `expected_version`, `reason` and non-field errors, which include the errors of hidden fields |
 | `token` | the signed panel configuration the form must post back as `panel` |
-| `action_url`, `next_url` | the save URL, the admin's on an admin page, and the return URL |
+| `action_url`, `next_url` | the save URL (the admin site's own on an admin page) and the return URL |
 | `notice` | the conflict or out-of-sync text, or empty |
 | `saved_version` | the version just written, in a partial response after a successful save |
 
@@ -129,9 +129,9 @@ The form posts `panel`, `next` and `expected_version` as hidden fields, plus one
 per key named by the full key and a `reset_<key>` box per override. `panel` holds the
 options the tag was given, signed with the project's `SECRET_KEY`. A browser therefore
 cannot add keys to a panel or drop a reason the page author required, and an altered
-token is a `400`. The save view renders the same
-template, so a custom template keeps its markup across partial responses and the error
-page. A custom template must keep the three hidden fields.
+token is a `400`. The save view renders the same template, so a custom template keeps its
+markup across partial responses and the error page. A custom template must keep the three
+hidden fields.
 
 Besides `form_attrs`, the panel template has a `fields` block around the hidden version
 field, the errors, the rows and the reason, and a `submit` block around the Save button.
@@ -143,11 +143,10 @@ form tag.
 A panel on a page served by an admin site, for example in an overridden change form of
 one of your own models, posts to that admin site's
 `tunables/tunabledefinition/panel/save/` URL when the site registers the tunables admin.
-The save then runs behind the admin's login. A signed-out user is sent to the admin's
-login page, or gets a `403` on a partial request, and a failed save renders as an admin
-page with the panel and a link back.
-On an admin site without the tunables admin, the panel posts to the `tunables_ui`
-endpoint as on any other page.
+The save then runs behind the admin's login: a signed-out user is sent to the admin's
+login page, or gets a `403` on a partial request. A failed save renders as an admin page
+with the panel and a link back. On an admin site without the tunables admin, the panel
+posts to the `tunables_ui` endpoint as on any other page.
 
 The panel can also use the admin's form markup instead of the `tunables-panel__*` classes:
 
