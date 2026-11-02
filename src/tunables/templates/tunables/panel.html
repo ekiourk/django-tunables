@@ -1,8 +1,8 @@
 {% load i18n %}{% if panel.mode != "hidden" %}
 <section class="tunables-panel tunables-panel--{{ panel.mode }}" id="{{ panel.config.id }}">
-  {% if panel.config.title %}<h3 class="tunables-panel__title">{{ panel.config.title }}</h3>{% endif %}
-  {% if panel.notice %}<p class="tunables-panel__notice">{{ panel.notice }}</p>{% endif %}
-  {% if panel.saved_version %}<p class="tunables-panel__saved">{% blocktranslate with version=panel.saved_version %}Saved version {{ version }}.{% endblocktranslate %}</p>{% endif %}
+  {% block heading %}{% if panel.config.title %}<h3 class="tunables-panel__title">{{ panel.config.title }}</h3>{% endif %}{% endblock %}
+  {% block notice %}{% if panel.notice %}<p class="tunables-panel__notice">{{ panel.notice }}</p>{% endif %}{% endblock %}
+  {% block saved %}{% if panel.saved_version %}<p class="tunables-panel__saved">{% blocktranslate with version=panel.saved_version %}Saved version {{ version }}.{% endblocktranslate %}</p>{% endif %}{% endblock %}
   {% if panel.mode == "edit" %}
   <form method="post" action="{{ panel.action_url }}" class="tunables-panel__form"{% block form_attrs %}{% endblock %}>
     {% csrf_token %}

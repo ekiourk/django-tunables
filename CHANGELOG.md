@@ -26,8 +26,10 @@ Additions:
   the notice alone.
 - `PanelSave.render_errors(request, panel)`, the hook that renders the page for a failed
   save, for a host that subclasses the view.
-- The panel template has a `fields` block around the form body and a `submit` block around
-  the Save button.
+- The panel template has a block for each part: `heading`, `notice`, `saved`, `fields`
+  around the form body and `submit` around the Save button. The admin template uses them
+  for an `<h2>` title, the notice in an `errornote` and the saved version in a
+  `messagelist`.
 
 ## 0.6.1, 2026-11-01
 

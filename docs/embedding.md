@@ -133,10 +133,11 @@ token is a `400`. The save view renders the same template, so a custom template 
 markup across partial responses and the error page. A custom template must keep the three
 hidden fields.
 
-Besides `form_attrs`, the panel template has a `fields` block around the hidden version
-field, the errors, the rows and the reason, and a `submit` block around the Save button.
-A template that extends it can replace the form body and keep the token, `next` and the
-form tag.
+Besides `form_attrs`, the panel template has a block for each of its parts: `heading` for
+the title, `notice` for the conflict or out-of-sync text, `saved` for the saved-version
+line, `fields` for the hidden version field, the errors, the rows and the reason, and
+`submit` for the Save button. A template that extends it replaces the parts it needs and
+keeps the token, `next` and the form tag.
 
 ### Inside the Django admin
 
@@ -154,10 +155,11 @@ The panel can also use the admin's form markup instead of the `tunables-panel__*
 {% tunables_panel "pricing.vat_rate" "thermostat.mode" template="tunables/admin/panel.html" %}
 ```
 
-`tunables/admin/panel.html` extends the panel template and fills its `fields` and
-`submit` blocks with the rows of the tunables edit page: a `module aligned` fieldset with
-one `form-row` per key, errors in the admin's `errornote` and `errorlist`, and a
-`submit-row`. Read mode is the same list as in the default template. The rows come from
+`tunables/admin/panel.html` extends the panel template and fills its blocks with admin
+markup. The title is an `<h2>`, as for the sections of a change form. The rows are those
+of the tunables edit page, a `module aligned` fieldset with one `form-row` per key and a
+`submit-row`. Non-field errors and the notice go in the admin's `errornote`, field errors
+in its `errorlist`, and the saved version in its `messagelist`. Read mode is the same list as in the default template. The rows come from
 `tunables/admin/form_rows.html`, which the edit page includes too.
 
 The markup needs the admin's `forms.css`. A change form loads it already. On other admin

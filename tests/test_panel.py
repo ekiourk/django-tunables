@@ -331,6 +331,22 @@ def test_the_admin_template_shows_values_to_a_viewer(synced: SyncResult) -> None
     assert "tunables-panel--read" in html and '<dd class="tunables-panel__value">' in html
 
 
+def test_the_admin_template_titles_the_panel_like_an_admin_section(synced: SyncResult) -> None:
+    html = render_tag(writer(), f'{{% tunables_panel "pricing.vat_rate" title="Prices" template="{ADMIN_TEMPLATE}" %}}')
+    assert "<h2>Prices</h2>" in html and "tunables-panel__title" not in html
+
+
+def test_the_admin_template_shows_a_notice_in_the_admin_error_box(db: None) -> None:
+    html = render_tag(viewer(), f'{{% tunables_panel "pricing.vat_rate" template="{ADMIN_TEMPLATE}" %}}')
+    assert f'<p class="errornote">{OUT_OF_SYNC}</p>' in html and "tunables-panel__notice" not in html
+
+
+def test_the_admin_template_shows_the_saved_version_as_an_admin_message(synced: SyncResult) -> None:
+    data = post_data(panel=token(template=ADMIN_TEMPLATE), partial="1", **{"thermostat.mode": "heat"})
+    html = client_for(writer()).post(SAVE, data).content.decode()
+    assert '<ul class="messagelist"><li class="success">Saved version 1.</li></ul>' in html
+
+
 def test_the_admin_template_reports_errors_in_admin_markup(synced: SyncResult) -> None:
     data = post_data(panel=token(template=ADMIN_TEMPLATE), expected_version="x", **{"pricing.vat_rate": "5"})
     html = client_for(writer()).post(SAVE, data).content.decode()
