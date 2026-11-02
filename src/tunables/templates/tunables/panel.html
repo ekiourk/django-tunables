@@ -13,9 +13,6 @@
     {% if panel.form.non_field_errors %}
     <ul class="tunables-panel__errors">{% for error in panel.form.non_field_errors %}<li>{{ error }}</li>{% endfor %}</ul>
     {% endif %}
-    {% for field in panel.form.hidden_fields %}{% if field.errors %}
-    <ul class="tunables-panel__errors">{% for error in field.errors %}<li>{{ error }}</li>{% endfor %}</ul>
-    {% endif %}{% endfor %}
     {% for row in panel.rows %}
     <div class="tunables-panel__row{% if row.field.errors %} tunables-panel__row--error{% endif %}">
       {{ row.field.label_tag }}
@@ -39,7 +36,7 @@
     {% endblock %}
     {% block submit %}<button type="submit" class="tunables-panel__save">{% translate "Save" %}</button>{% endblock %}
   </form>
-  {% elif panel.rows %}
+  {% elif panel.form %}
   <dl class="tunables-panel__values">
     {% for row in panel.rows %}
     <dt class="tunables-panel__key">{{ row.field.label }}</dt>

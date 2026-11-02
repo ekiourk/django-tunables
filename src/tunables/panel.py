@@ -8,7 +8,7 @@ signed token, so a browser cannot widen a panel or drop a reason the page author
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import Literal, cast, get_args
 from urllib.parse import urlsplit
 
 from django.core import signing
@@ -27,6 +27,7 @@ from tunables.sync import OUT_OF_SYNC_MESSAGE, is_current
 
 Mode = Literal["edit", "read", "hidden"]
 Only = Literal["edit"]
+ONLY_MODES: tuple[str, ...] = get_args(Only)
 
 PANEL_TEMPLATE = "tunables/panel.html"
 ERRORS_TEMPLATE = "tunables/panel_errors.html"
@@ -47,8 +48,8 @@ class PanelConfig:
     def __post_init__(self) -> None:
         if self.reason not in REASON_MODES:
             raise ValueError(f"reason must be one of {REASON_MODES}, not {self.reason!r}")
-        if self.only not in (None, "edit"):
-            raise ValueError(f"only must be 'edit' when given, not {self.only!r}")
+        if self.only is not None and self.only not in ONLY_MODES:
+            raise ValueError(f"only must be one of {ONLY_MODES} when given, not {self.only!r}")
         object.__setattr__(self, "keys", tuple(dict.fromkeys(self.keys)))
 
     def token(self) -> str:

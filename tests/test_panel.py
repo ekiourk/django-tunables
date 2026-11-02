@@ -13,7 +13,7 @@ from django.test import Client, RequestFactory, override_settings
 from django.urls import resolve
 
 from tests.conftest import user_with
-from tests.test_admin import messages_of
+from tests.test_admin import messages_of, staff
 from tests.test_services import apply
 from tunables import Change
 from tunables.errors import UnknownKey
@@ -46,11 +46,12 @@ def client_for(user: User) -> Client:
     return client
 
 
-def render_tag(user: Any, tag: str, page: str = PAGE) -> str:
-    request = RequestFactory().get(page)
+def render_tag(user: Any, tag: str, admin_page: str = "") -> str:
+    """Render ``tag`` on the host page, or on ``admin_page`` as if the admin had served it."""
+    request = RequestFactory().get(admin_page or PAGE)
     request.user = user
-    if page != PAGE:
-        request.resolver_match = resolve(page)
+    if admin_page:
+        request.resolver_match = resolve(admin_page)
     return Template("{% load tunables %}" + tag).render(Context({"request": request}))
 
 
@@ -228,6 +229,10 @@ def test_edit_only_answers_an_unsynced_partial_save_with_the_notice_alone(db: No
 def test_the_only_option_travels_in_the_token(synced: SyncResult) -> None:
     html = render_tag(writer(), '{% tunables_panel "pricing.vat_rate" only="edit" %}')
     assert token_in(html) == PanelConfig(("pricing.vat_rate",), only="edit")
+
+
+def test_a_token_without_the_only_option_keeps_the_five_fields_older_code_reads(synced: SyncResult) -> None:
+    assert len(signing.loads(PanelConfig(("pricing.vat_rate",)).token(), salt=TOKEN_SALT)) == 5
 
 
 def test_a_token_signed_before_the_only_option_still_loads(synced: SyncResult) -> None:
@@ -589,45 +594,40 @@ def test_the_save_view_only_accepts_post(synced: SyncResult) -> None:
 ADMIN_SAVE = "/admin/tunables/tunabledefinition/panel/save/"
 
 
-def staff_writer() -> User:
-    return user_with("tunables.add_changeset", username="staff", is_staff=True)
-
-
 def test_a_panel_on_an_admin_page_posts_to_that_admin(synced: SyncResult) -> None:
-    html = render_tag(writer(), '{% tunables_panel "pricing.vat_rate" %}', page="/admin/")
+    html = render_tag(writer(), '{% tunables_panel "pricing.vat_rate" %}', admin_page="/admin/")
     assert f'action="{ADMIN_SAVE}"' in html
 
 
 @override_settings(ROOT_URLCONF="tests.urls_two_admins")
 def test_a_panel_on_a_second_admin_mount_posts_to_that_mount(synced: SyncResult) -> None:
-    html = render_tag(writer(), '{% tunables_panel "pricing.vat_rate" %}', page="/ops/")
+    html = render_tag(writer(), '{% tunables_panel "pricing.vat_rate" %}', admin_page="/ops/")
     assert 'action="/ops/tunables/tunabledefinition/panel/save/"' in html
 
 
 @override_settings(ROOT_URLCONF="tests.urls_bare_admin")
 def test_a_panel_on_an_admin_without_the_tunables_admin_posts_to_the_package_endpoint(synced: SyncResult) -> None:
-    html = render_tag(writer(), '{% tunables_panel "pricing.vat_rate" %}', page="/bare/")
+    html = render_tag(writer(), '{% tunables_panel "pricing.vat_rate" %}', admin_page="/bare/")
     assert f'action="{SAVE}"' in html
 
 
 def test_saving_through_the_admin_redirects_to_next(synced: SyncResult) -> None:
-    response = client_for(staff_writer()).post(ADMIN_SAVE, post_data(**{"thermostat.mode": "heat"}))
+    response = staff("tunables.add_changeset").post(ADMIN_SAVE, post_data(**{"thermostat.mode": "heat"}))
     assert response.status_code == 302 and response["Location"] == PAGE
     assert ChangeSet.objects.get(version=1).source == "panel"
 
 
 def test_a_failed_save_through_the_admin_renders_an_admin_page(synced: SyncResult) -> None:
-    response = client_for(staff_writer()).post(ADMIN_SAVE, post_data(**{"pricing.vat_rate": "5"}))
+    response = staff("tunables.add_changeset").post(ADMIN_SAVE, post_data(**{"pricing.vat_rate": "5"}))
     html = response.content.decode()
     assert response.status_code == 200 and 'id="site-name"' in html
-    assert 'href="/admin/tunables/tunabledefinition/">Tunables</a>' in html
     assert f'<a href="{PAGE}">Back</a>' in html and "must be &lt;= 1.0" in html
     assert f'action="{ADMIN_SAVE}"' in html
 
 
 def test_a_partial_save_through_the_admin_keeps_posting_to_the_admin(synced: SyncResult) -> None:
     data = post_data(**{"thermostat.mode": "heat"})
-    html = client_for(staff_writer()).post(ADMIN_SAVE, data, HTTP_HX_REQUEST="true").content.decode()
+    html = staff("tunables.add_changeset").post(ADMIN_SAVE, data, HTTP_HX_REQUEST="true").content.decode()
     assert "Saved version 1." in html and f'action="{ADMIN_SAVE}"' in html
 
 
@@ -646,7 +646,3 @@ def test_a_partial_save_by_a_non_staff_writer_through_the_admin_is_forbidden(syn
     response = client_for(writer()).post(ADMIN_SAVE, post_data(partial="1", **{"thermostat.mode": "heat"}))
     assert response.status_code == 403
     assert ChangeSet.objects.count() == 0
-
-
-def test_a_token_without_the_only_option_keeps_the_five_fields_older_code_reads(synced: SyncResult) -> None:
-    assert len(signing.loads(PanelConfig(("pricing.vat_rate",)).token(), salt=TOKEN_SALT)) == 5

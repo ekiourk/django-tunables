@@ -119,7 +119,7 @@ as `template=`. The template receives one variable, `panel`, with:
 | `mode` | `edit`, `read` or `hidden` |
 | `config` | the options as given to the tag: `keys`, `reason`, `title`, `id`, `template`, `only` |
 | `rows` | one per key: `tunable`, `field` (the bound form field), `reset` (the bound reset box, or `None` when the value is at its default), `shown` (the value as text with its unit) |
-| `form` | the Django form, for `expected_version`, `reason` and non-field errors |
+| `form` | the Django form, for `expected_version`, `reason` and non-field errors, which include the errors of hidden fields |
 | `token` | the signed panel configuration the form must post back as `panel` |
 | `action_url`, `next_url` | the save URL, the admin's on an admin page, and the return URL |
 | `notice` | the conflict or out-of-sync text, or empty |

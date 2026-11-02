@@ -46,6 +46,9 @@ class TunablesForm(forms.Form):
 
     def clean(self) -> dict[str, Any]:
         cleaned = super().clean() or {}
+        for field in self.hidden_fields():  # no template shows errors next to a field the user cannot see
+            for error in self.errors.pop(field.name, []):
+                self.add_error(None, error)
         for key in self.keys:
             if key in self.errors or cleaned.get(f"reset_{key}"):
                 continue

@@ -11,6 +11,7 @@ from tests.conftest import user_with
 from tests.test_services import apply
 from tunables import Change
 from tunables.models import ChangeSet, State, TunableValue
+from tunables.panel import PanelConfig
 from tunables.services import latest_snapshot
 from tunables.sync import SyncResult
 from tunables.templatetags.tunables_admin import DJANGO_6_1
@@ -717,12 +718,19 @@ def rollback_page(client: Client) -> Any:
     return client.post(CHANGESETS, {"action": "rollback", "_selected_action": [first.changeset.pk], "index": "0"})
 
 
+def panel_errors_page(client: Client) -> Any:
+    data = form_data("pricing", vat_rate="5")
+    data.update(panel=PanelConfig(("pricing.vat_rate",)).token(), next="/admin/")
+    return client.post(f"{INDEX}panel/save/", data)
+
+
 PAGES: dict[str, Any] = {
     "edit": lambda client: client.get(edit_url("pricing")),
     "definition_tags": lambda client: client.get(tags_url("pricing.vat_rate")),
     "rollback": rollback_page,
     "definitions": lambda client: client.get(DEFINITIONS),
     "index": lambda client: client.get(INDEX),
+    "panel_errors": panel_errors_page,
 }
 
 HOME = [("Home", "/admin/"), ("Tunables", "/admin/tunables/")]
@@ -732,10 +740,11 @@ TRAILS = {
     "rollback": [*HOME, ("Change sets", CHANGESETS), ("Roll back", "")],
     "definitions": [*HOME, ("Tunables", INDEX), ("Definitions", "")],
     "index": [*HOME, ("Tunables", "")],
+    "panel_errors": [*HOME, ("Tunables", INDEX), ("Save changes", "")],
 }
 
 
-@pytest.mark.parametrize("page", ["edit", "definition_tags", "rollback"])
+@pytest.mark.parametrize("page", ["edit", "definition_tags", "rollback", "panel_errors"])
 def test_form_pages_load_the_admin_form_styles(admin_client: Client, synced: SyncResult, page: str) -> None:
     content = PAGES[page](admin_client).content.decode()
     assert stylesheet(content, "admin/css/forms.css")
